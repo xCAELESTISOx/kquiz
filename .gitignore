@@ -9,3 +9,6 @@ data/
 *.sqlite-*
 __pycache__/
 .venv/
+
+# personal voice recordings for the scorer eval (docs/PLAN.md stage 0)
+services/scorer/recordings/

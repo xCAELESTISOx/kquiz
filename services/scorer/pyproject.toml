@@ -1,0 +1,15 @@
+[project]
+name = "kquiz-scorer"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]  # Hangul and IPA in strings and comments are intended

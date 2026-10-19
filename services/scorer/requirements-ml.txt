@@ -1,0 +1,4 @@
+# Acoustic model. On a CPU-only server install torch from the CPU index first:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch==2.14.1
+transformers==5.20.1
