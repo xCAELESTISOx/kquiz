@@ -10,7 +10,7 @@ import numpy as np
 from app.audio import to_wav
 from app.phones import normalize_token
 
-DATA = Path(__file__).parent / "data"
+DATA = Path(__file__).parent / "fixtures"
 
 # The real label set of the default model (Apache-2.0), so tests exercise its mapping.
 _vocab = json.loads((DATA / "slplab_vocab.json").read_text(encoding="utf-8"))
