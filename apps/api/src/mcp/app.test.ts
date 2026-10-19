@@ -12,22 +12,26 @@ const verifier = "v".repeat(50);
 const challenge = createHash("sha256").update(verifier).digest("base64url");
 
 let clock: number;
-let session: { authenticatedAt: Date } | null;
+let session: { authenticatedAt: Date; userId: number } | null;
 let cards: MemoryCardStore;
 let drills: MemoryDrillStore;
+// Another person's deck, and whether they are still allowed in.
+let friendCards: MemoryCardStore;
+let friendActive: boolean;
 let oauth: MemoryOAuthStore;
 let app: ReturnType<typeof createMcpApp>;
 
 beforeEach(() => {
   clock = Date.parse("2026-10-19T10:00:00Z");
-  session = { authenticatedAt: new Date(clock) };
+  session = { authenticatedAt: new Date(clock), userId: 1 };
   cards = new MemoryCardStore();
   drills = new MemoryDrillStore();
+  friendCards = new MemoryCardStore();
+  friendActive = true;
   oauth = new MemoryOAuthStore();
   app = createMcpApp({
     publicUrl: ORIGIN,
-    cards,
-    drills,
+    stores: (userId) => (userId === 1 ? { cards, drills } : friendActive ? { cards: friendCards } : null),
     oauth,
     owner: { session: async () => session, loginUrl: (r) => `/login?return_to=${encodeURIComponent(r)}` },
     maxClients: 3,
@@ -138,7 +142,7 @@ describe("oauth", () => {
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toMatch(/^\/login\?return_to=%2Foauth%2Fauthorize/);
 
-    session = { authenticatedAt: new Date(clock - 10 * 60_000) };
+    session = { authenticatedAt: new Date(clock - 10 * 60_000), userId: 1 };
     res = await call(authorizeUrl(body.client_id));
     expect(res.headers.get("location")).toMatch(/^\/login/);
   });
@@ -364,5 +368,30 @@ describe("mcp tools", () => {
     expect(result.duplicates).toEqual([{ contrast: "ㅂ/ㅍ/ㅃ", words: ["뿔", "불", "풀"], existingId: 1 }]);
     expect(result.rejected).toHaveLength(2);
     expect(parse(await client.callTool({ name: "list_sound_drills", arguments: {} })).drills).toHaveLength(1);
+  });
+});
+
+describe("several people", () => {
+  it("works on the cards of whoever approved the connector, and stops when they are disabled", async () => {
+    const owner = await mcpClient((await connect()).access_token);
+    await owner.callTool({ name: "add_cards", arguments: { cards: [{ korean: "물", meaning: "вода", examples }] } });
+
+    session = { authenticatedAt: new Date(clock), userId: 2 };
+    const friendToken = (await connect()).access_token;
+    const friend = await mcpClient(friendToken);
+    expect(parse(await friend.callTool({ name: "find_cards", arguments: {} })).cards).toEqual([]);
+    await friend.callTool({ name: "add_cards", arguments: { cards: [{ korean: "불", meaning: "огонь", examples }] } });
+    expect([...friendCards.cards.values()].map((c) => c.korean)).toEqual(["불"]);
+    expect([...cards.cards.values()].map((c) => c.korean)).toEqual(["물"]);
+    // No drill store for this person: the drill tools aren't offered.
+    expect((await friend.listTools()).tools.map((t) => t.name)).not.toContain("add_sound_drills");
+
+    friendActive = false;
+    const res = await call("/mcp", {
+      method: "POST",
+      headers: { authorization: `Bearer ${friendToken}`, "content-type": "application/json", accept: "application/json, text/event-stream" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    });
+    expect(res.status).toBe(401);
   });
 });

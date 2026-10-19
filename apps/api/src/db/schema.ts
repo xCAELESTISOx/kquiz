@@ -4,10 +4,42 @@ import { blob, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex 
 
 const timestamp = (name: string) => integer(name, { mode: "timestamp_ms" });
 
+// People who can sign in. The owner (id 1, made by migration 0008) runs the server and invites
+// others; a member has their own cards, schedule and stats and nothing else. Disabled members
+// can't sign in, their data stays until the owner deletes it.
+export const users = sqliteTable("users", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  role: text("role", { enum: ["owner", "member"] }).notNull(),
+  // WebAuthn user handle, so each person's passkey is a separate entry on a shared device.
+  webauthnId: text("webauthn_id").notNull().unique(),
+  createdAt: timestamp("created_at").notNull(),
+  disabledAt: timestamp("disabled_at"),
+});
+
+const userId = () =>
+  integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" });
+
+// One-time links that let a new member bind their first passkey (auth/invites.ts).
+export const invites = sqliteTable("invites", {
+  // SHA-256 of the code in the link; the code itself is never stored.
+  codeHash: text("code_hash").primaryKey(),
+  createdBy: integer("created_by")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  usedBy: integer("used_by").references(() => users.id, { onDelete: "set null" }),
+});
+
 export const cards = sqliteTable(
   "cards",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: userId(),
     korean: text("korean").notNull(),
     // Normalized Korean, the key for duplicate detection.
     koreanKey: text("korean_key").notNull(),
@@ -30,14 +62,19 @@ export const cards = sqliteTable(
     createdAt: timestamp("created_at").notNull(),
     updatedAt: timestamp("updated_at").notNull(),
   },
-  (t) => [uniqueIndex("cards_korean_key").on(t.koreanKey), index("cards_introduced").on(t.introducedAt)],
+  (t) => [uniqueIndex("cards_user_korean_key").on(t.userId, t.koreanKey), index("cards_introduced").on(t.introducedAt)],
 );
 
-// Owner's settings as key → JSON value (settings.ts).
-export const settings = sqliteTable("settings", {
-  key: text("key").primaryKey(),
-  value: text("value", { mode: "json" }).notNull(),
-});
+// Each user's settings as key → JSON value (settings.ts).
+export const settings = sqliteTable(
+  "settings",
+  {
+    userId: userId(),
+    key: text("key").notNull(),
+    value: text("value", { mode: "json" }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.key] })],
+);
 
 // Reference audio from services/scorer's /tts, one MP3 per card. `text` is the Korean it was
 // made from: when the card's Korean changes, the audio is stale and gets made again.
@@ -90,19 +127,25 @@ export const reviewLog = sqliteTable(
 
 // Per-mode FSRS setup. No row means FSRS defaults at 90 % retention. `weights` stays null until
 // the optimizer has fitted the owner's own review history and the fit beat the current weights.
-export const fsrsSettings = sqliteTable("fsrs_settings", {
-  mode: text("mode", { enum: ["meaning", "speech", "listening"] }).primaryKey(),
-  desiredRetention: real("desired_retention").notNull().default(0.9),
-  weights: text("weights", { mode: "json" }).$type<number[]>(),
-  // Size of the history behind `weights`, and when the optimizer last ran (accepted or not).
-  trainedOnReviews: integer("trained_on_reviews"),
-  optimizedAt: timestamp("optimized_at"),
-  checkedAt: timestamp("checked_at"),
-  checkedOnReviews: integer("checked_on_reviews"),
-});
+export const fsrsSettings = sqliteTable(
+  "fsrs_settings",
+  {
+    userId: userId(),
+    mode: text("mode", { enum: ["meaning", "speech", "listening"] }).notNull(),
+    desiredRetention: real("desired_retention").notNull().default(0.9),
+    weights: text("weights", { mode: "json" }).$type<number[]>(),
+    // Size of the history behind `weights`, and when the optimizer last ran (accepted or not).
+    trainedOnReviews: integer("trained_on_reviews"),
+    optimizedAt: timestamp("optimized_at"),
+    checkedAt: timestamp("checked_at"),
+    checkedOnReviews: integer("checked_on_reviews"),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.mode] })],
+);
 
 export const authCredentials = sqliteTable("auth_credentials", {
   id: text("id").primaryKey(),
+  userId: userId(),
   publicKey: text("public_key").notNull(),
   counter: integer("counter").notNull(),
   transports: text("transports", { mode: "json" }).$type<string[]>(),
@@ -117,12 +160,15 @@ export const authChallenges = sqliteTable("auth_challenges", {
   id: text("id").primaryKey(),
   challenge: text("challenge").notNull(),
   kind: text("kind", { enum: ["register", "login"] }).notNull(),
+  // The WebAuthn user handle a registration was offered with, so verify stores the same one.
+  userHandle: text("user_handle"),
   expiresAt: timestamp("expires_at").notNull(),
 });
 
 export const authSessions = sqliteTable("auth_sessions", {
   // SHA-256 of the cookie value; the cookie itself is never stored.
   tokenHash: text("token_hash").primaryKey(),
+  userId: userId(),
   csrfToken: text("csrf_token").notNull(),
   credentialId: text("credential_id"),
   createdAt: timestamp("created_at").notNull(),
@@ -148,13 +194,18 @@ export const attempts = sqliteTable(
   (t) => [index("attempts_card").on(t.cardId, t.createdAt)],
 );
 
-// Filled by pronunciation attempts (stage 4); read by the weak-sounds stats and Claude.
-export const phoneStats = sqliteTable("phone_stats", {
-  phone: text("phone").primaryKey(),
-  attempts: integer("attempts").notNull().default(0),
-  errors: integer("errors").notNull().default(0),
-  lastSeen: timestamp("last_seen"),
-});
+// Filled by pronunciation attempts (stage 4), per user; read by the weak-sounds stats and Claude.
+export const phoneStats = sqliteTable(
+  "phone_stats",
+  {
+    userId: userId(),
+    phone: text("phone").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    errors: integer("errors").notNull().default(0),
+    lastSeen: timestamp("last_seen"),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.phone] })],
+);
 
 // OAuth for Claude's MCP connector. Times are epoch milliseconds, secrets are SHA-256 hashes.
 export const oauthClients = sqliteTable("oauth_clients", {
@@ -168,6 +219,8 @@ export const oauthClients = sqliteTable("oauth_clients", {
 
 export const oauthCodes = sqliteTable("oauth_codes", {
   codeHash: text("code_hash").primaryKey(),
+  // Who approved the client on the consent page: the grant works on that person's cards.
+  userId: userId(),
   clientId: text("client_id")
     .notNull()
     .references(() => oauthClients.clientId, { onDelete: "cascade" }),
@@ -181,6 +234,7 @@ export const oauthGrants = sqliteTable(
   "oauth_grants",
   {
     id: text("id").primaryKey(),
+    userId: userId(),
     clientId: text("client_id")
       .notNull()
       .references(() => oauthClients.clientId, { onDelete: "cascade" }),
@@ -210,6 +264,7 @@ export const soundDrills = sqliteTable(
   "sound_drills",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: userId(),
     // What the words contrast, as shown to the owner, e.g. "ㄱ/ㅋ/ㄲ".
     contrast: text("contrast").notNull(),
     words: text("words", { mode: "json" }).$type<{ korean: string; meaning?: string }[]>().notNull(),
@@ -221,5 +276,5 @@ export const soundDrills = sqliteTable(
     lastPracticedAt: timestamp("last_practiced_at"),
     createdAt: timestamp("created_at").notNull(),
   },
-  (t) => [uniqueIndex("sound_drills_words").on(t.wordsKey)],
+  (t) => [uniqueIndex("sound_drills_user_words").on(t.userId, t.wordsKey)],
 );

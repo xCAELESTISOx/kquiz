@@ -152,6 +152,27 @@ export interface AuthStatus {
   authenticated: boolean;
   setupRequired: boolean;
   csrfToken?: string;
+  user?: { id: number; name: string; role: "owner" | "member" };
+}
+
+/** Whether an invite link still works: "full" when the server already has as many people as it allows. */
+export type InviteStatus = "ok" | "invalid" | "full";
+
+export interface AccessUser {
+  id: number;
+  name: string;
+  role: "owner" | "member";
+  createdAt: string;
+  disabled: boolean;
+  cards: number;
+  lastSignInAt: string | null;
+}
+
+export interface AccessInfo {
+  users: AccessUser[];
+  invites: { createdAt: string; expiresAt: string }[];
+  maxUsers: number;
+  memberLimits: { cardsPerDay: number; cards: number; scoresPerDay: number };
 }
 
 export type SyllableStatus = "ok" | "weak" | "wrong";

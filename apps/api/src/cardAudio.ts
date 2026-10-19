@@ -2,10 +2,11 @@
 // background worker asks for it once and keeps it in card_audio (examples and drill words go to
 // speech_audio, see practice.ts). Until it is there, or when the
 // scorer is down, the web app falls back to the phone's own voice.
-import { and, asc, eq, isNull, ne, notInArray, or } from "drizzle-orm";
+import { and, asc, eq, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import type { Db } from "./db/client.js";
 import { cardAudio, cards } from "./db/schema.js";
 import { nextTextWithoutAudio, pruneSpeechAudio, saveSpeechAudio } from "./practice.js";
+import { OWNER_ID } from "./users.js";
 
 export interface Speaker {
   /** MP3 of `text` read aloud. */
@@ -34,27 +35,35 @@ export function httpSpeaker(baseUrl: string, fetchImpl: typeof fetch = fetch): S
 
 export type StoredAudio = { data: Uint8Array; mime: string; etag: string };
 
-/** The card's audio, if it was made from the card's current Korean. */
-export function getCardAudio(db: Db, cardId: number): StoredAudio | undefined {
+/** The card's audio, if the card is `userId`'s and the audio was made from its current Korean. */
+export function getCardAudio(db: Db, userId: number, cardId: number): StoredAudio | undefined {
   const row = db
     .select({ data: cardAudio.data, mime: cardAudio.mime, createdAt: cardAudio.createdAt })
     .from(cardAudio)
     .innerJoin(cards, and(eq(cards.id, cardAudio.cardId), eq(cards.korean, cardAudio.text)))
-    .where(eq(cardAudio.cardId, cardId))
+    .where(and(eq(cardAudio.cardId, cardId), eq(cards.userId, userId)))
     .get();
   return row && { data: row.data, mime: row.mime, etag: `"${cardId}-${row.createdAt.getTime()}"` };
 }
 
-/** The oldest card with no audio or audio of an earlier version of its Korean. */
+/**
+ * The oldest card with no audio or audio of an earlier version of its Korean. The owner's cards go
+ * first, so a member's big batch doesn't hold up the owner's new words.
+ */
 export function nextCardWithoutAudio(db: Db, skip: number[] = []): { id: number; korean: string } | undefined {
   return db
     .select({ id: cards.id, korean: cards.korean })
     .from(cards)
     .leftJoin(cardAudio, eq(cardAudio.cardId, cards.id))
     .where(and(or(isNull(cardAudio.cardId), ne(cardAudio.text, cards.korean)), skip.length ? notInArray(cards.id, skip) : undefined))
-    .orderBy(asc(cards.id))
+    .orderBy(sql`${cards.userId} <> ${OWNER_ID}`, asc(cards.id))
     .limit(1)
     .get();
+}
+
+/** Audio another card already has for exactly this Korean (two people learning the same word). */
+export function audioForText(db: Db, text: string): Uint8Array | undefined {
+  return db.select({ data: cardAudio.data }).from(cardAudio).where(eq(cardAudio.text, text)).limit(1).get()?.data;
 }
 
 export function saveCardAudio(db: Db, cardId: number, text: string, data: Uint8Array, now: Date) {
@@ -68,7 +77,7 @@ export function saveCardAudio(db: Db, cardId: number, text: string, data: Uint8A
 // A text the scorer refused is tried again after a day, in case the model or the text changed.
 const BAD_TEXT_RETRY_MS = 24 * 60 * 60 * 1000;
 
-type Job = { key: string; text: string; save(mp3: Uint8Array): void };
+type Job = { key: string; text: string; save(mp3: Uint8Array): void; ready?: Uint8Array };
 
 /**
  * Makes audio for every card that lacks it, one at a time, then for example sentences and drill
@@ -87,6 +96,7 @@ export function audioWorker(db: Db, speaker: Speaker, now: () => Date = () => ne
       return {
         key: `card:${card.id}`,
         text: card.korean,
+        ready: audioForText(db, card.korean),
         save(mp3) {
           // The card may have changed or gone while the audio was being made.
           const current = db.select({ korean: cards.korean }).from(cards).where(eq(cards.id, card.id)).get();
@@ -111,6 +121,10 @@ export function audioWorker(db: Db, speaker: Speaker, now: () => Date = () => ne
         if (!job) {
           pruneSpeechAudio(db);
           break;
+        }
+        if (job.ready) {
+          job.save(job.ready);
+          continue;
         }
         try {
           job.save(await speaker.speak(job.text));

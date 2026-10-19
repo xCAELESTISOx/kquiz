@@ -46,15 +46,15 @@ export function introduce(tx: Tx, ids: number[], how: "direct" | "daily" | "earl
 
 export type NewCardsToday = { introduced: number; limit: number; queued: number };
 
-export function newCardsToday(db: Db, now: Date, timeZone: string): NewCardsToday {
+export function newCardsToday(db: Db, userId: number, now: Date, timeZone: string): NewCardsToday {
   const introduced =
     db
       .select({ n: count() })
       .from(cards)
-      .where(and(eq(cards.introduction, "daily"), gte(cards.introducedAt, startOfDay(now, timeZone))))
+      .where(and(eq(cards.userId, userId), eq(cards.introduction, "daily"), gte(cards.introducedAt, startOfDay(now, timeZone))))
       .get()?.n ?? 0;
-  const queued = db.select({ n: count() }).from(cards).where(isNull(cards.introducedAt)).get()?.n ?? 0;
-  return { introduced, limit: getSettings(db).newPerDay, queued };
+  const queued = db.select({ n: count() }).from(cards).where(and(eq(cards.userId, userId), isNull(cards.introducedAt))).get()?.n ?? 0;
+  return { introduced, limit: getSettings(db, userId).newPerDay, queued };
 }
 
 /**
@@ -62,15 +62,15 @@ export function newCardsToday(db: Db, now: Date, timeZone: string): NewCardsToda
  * read, so there is no timer: the day's cards arrive the first time the app is opened that day.
  * Paused cards stay in the queue.
  */
-export function introduceDailyCards(db: Db, now: Date, timeZone: string): number {
+export function introduceDailyCards(db: Db, userId: number, now: Date, timeZone: string): number {
   return db.transaction((tx) => {
-    const today = newCardsToday(tx as unknown as Db, now, timeZone);
+    const today = newCardsToday(tx as unknown as Db, userId, now, timeZone);
     const room = today.limit - today.introduced;
     if (room <= 0 || today.queued === 0) return 0;
     const ids = tx
       .select({ id: cards.id })
       .from(cards)
-      .where(and(isNull(cards.introducedAt), eq(cards.suspended, false)))
+      .where(and(eq(cards.userId, userId), isNull(cards.introducedAt), eq(cards.suspended, false)))
       .orderBy(sql`random()`)
       .limit(room)
       .all()
@@ -81,9 +81,13 @@ export function introduceDailyCards(db: Db, now: Date, timeZone: string): number
 }
 
 /** Pulls one queued card into reviews now; it doesn't count against the daily allowance. */
-export function introduceEarly(db: Db, id: number, now: Date): "introduced" | "not_queued" | "not_found" {
+export function introduceEarly(db: Db, userId: number, id: number, now: Date): "introduced" | "not_queued" | "not_found" {
   return db.transaction((tx) => {
-    const row = tx.select({ introducedAt: cards.introducedAt }).from(cards).where(eq(cards.id, id)).get();
+    const row = tx
+      .select({ introducedAt: cards.introducedAt })
+      .from(cards)
+      .where(and(eq(cards.id, id), eq(cards.userId, userId)))
+      .get();
     if (!row) return "not_found";
     if (row.introducedAt) return "not_queued";
     introduce(tx, [id], "early", now);

@@ -7,17 +7,17 @@ import type { CardStore, DrillStore, NewDrill } from "./store.js";
 export const MAX_CARDS_PER_CALL = 50;
 
 // Told to Claude once per connection, so cards from chat match the ones made in the app.
-const instructions = `KQuiz is the owner's personal Korean flashcard deck. Cards are reviewed for meaning and, when speakable, for pronunciation.
-- korean: the word or phrase in Hangul only (no hanja, Latin letters or brackets). Use dictionary form for verbs and adjectives unless the owner asks otherwise.
+const instructions = `KQuiz is the user's personal Korean flashcard deck; each person who connects it sees only their own cards. Cards are reviewed for meaning and, when speakable, for pronunciation.
+- korean: the word or phrase in Hangul only (no hanja, Latin letters or brackets). Use dictionary form for verbs and adjectives unless the user asks otherwise.
 - meaning: a short Russian translation, the most common sense first.
 - pronunciation (optional): how it is actually said, in Hangul, only when it differs from the spelling (e.g. 읽다 → [익따]).
-- examples (required, exactly ${EXAMPLES_PER_CARD}): short natural Korean sentences that use the word, each with its Russian translation, as {"ko", "ru"}. Vary the forms and situations, keep them at the owner's level. Every add_cards card and every update_card call must carry all ${EXAMPLES_PER_CARD}; when editing, send the card's current examples again if they stay as they are.
+- examples (required, exactly ${EXAMPLES_PER_CARD}): short natural Korean sentences that use the word, each with its Russian translation, as {"ko", "ru"}. Vary the forms and situations, keep them at the user's level. Every add_cards card and every update_card call must carry all ${EXAMPLES_PER_CARD}; when editing, send the card's current examples again if they stay as they are.
 - notes (optional): grammar, usage or anything else worth remembering.
 - tags: lowercase topics such as "еда" or "глаголы".
-Cards added here don't enter reviews at once: they wait in a new-card queue and come in a few a day, mixed at random (the owner sets how many and can pull cards in early). So adding many words at once is fine.
-Call find_cards before adding words the owner may already have; add_cards also reports duplicates. To fix a card, use update_card instead of adding a new one: any field can be changed, and an empty string clears pronunciation, romanization or notes. Cards cannot be deleted from here.
-When the owner asks to fix hard cards, call get_leeches and rework each with update_card: a clearer meaning, a mnemonic or the confusing neighbour in notes, ${EXAMPLES_PER_CARD} fresh examples. A card that mixes two senses can be split: narrow it with update_card and add the other sense with add_cards. If a card should go, tell the owner; only they can delete it in the app.
-When the owner asks for practice on sounds they confuse (ㄱ/ㅋ/ㄲ, ㅓ/ㅗ…), add listening drills with add_sound_drills.`;
+Cards added here don't enter reviews at once: they wait in a new-card queue and come in a few a day, mixed at random (the user sets how many and can pull cards in early). So adding many words at once is fine.
+Call find_cards before adding words the user may already have; add_cards also reports duplicates. To fix a card, use update_card instead of adding a new one: any field can be changed, and an empty string clears pronunciation, romanization or notes. Cards cannot be deleted from here.
+When the user asks to fix hard cards, call get_leeches and rework each with update_card: a clearer meaning, a mnemonic or the confusing neighbour in notes, ${EXAMPLES_PER_CARD} fresh examples. A card that mixes two senses can be split: narrow it with update_card and add the other sense with add_cards. If a card should go, tell the user; only they can delete it in the app.
+When the user asks for practice on sounds they confuse (ㄱ/ㅋ/ㄲ, ㅓ/ㅗ…), add listening drills with add_sound_drills.`;
 
 const cardInput = z.object({
   korean: z.string(),
@@ -129,7 +129,7 @@ export function createMcpServer(store: CardStore, drills?: DrillStore): McpServe
     "get_weak_sounds",
     {
       title: "Get weak sounds",
-      description: "Sounds the owner mispronounces most often, to pick practice words for them.",
+      description: "Sounds the user mispronounces most often, to pick practice words for them.",
       inputSchema: { limit: z.number().int().min(1).max(30).default(10) },
       annotations: { readOnlyHint: true },
     },
@@ -141,7 +141,7 @@ export function createMcpServer(store: CardStore, drills?: DrillStore): McpServe
     {
       title: "Get hard cards",
       description:
-        "Cards the owner keeps forgetting (leeches): forgotten on several different days since the card was last edited, per mode (meaning: recalling the translation; speech: saying it in Korean; listening: understanding it by ear). Rework them with update_card; an edit gives a card a fresh start and takes it off this list.",
+        "Cards the user keeps forgetting (leeches): forgotten on several different days since the card was last edited, per mode (meaning: recalling the translation; speech: saying it in Korean; listening: understanding it by ear). Rework them with update_card; an edit gives a card a fresh start and takes it off this list.",
       inputSchema: { limit: z.number().int().min(1).max(50).default(20) },
       annotations: { readOnlyHint: true },
     },
@@ -164,13 +164,13 @@ export function createMcpServer(store: CardStore, drills?: DrillStore): McpServe
   return server;
 }
 
-// Sound drills: the app plays one word of a set aloud and the owner picks which one it was.
+// Sound drills: the app plays one word of a set aloud and the user picks which one it was.
 function registerDrillTools(server: McpServer, drills: DrillStore) {
   server.registerTool(
     "add_sound_drills",
     {
       title: "Add sound drills",
-      description: `Adds up to ${MAX_DRILLS_PER_CALL} listening drills on sounds the owner confuses. Each drill is 2-4 Korean words that differ in exactly one sound, e.g. 불/풀/뿔 for ㅂ/ㅍ/ㅃ or 거리/고리 for ㅓ/ㅗ; the app plays one and the owner picks which. Prefer real, common words and the owner's own cards (find_cards); use get_weak_sounds to choose the contrasts. contrast names the sounds as shown to the owner, e.g. "ㅂ/ㅍ/ㅃ". meaning is a short Russian gloss. Drills cannot be deleted from here; list_sound_drills shows existing ones.`,
+      description: `Adds up to ${MAX_DRILLS_PER_CALL} listening drills on sounds the user confuses. Each drill is 2-4 Korean words that differ in exactly one sound, e.g. 불/풀/뿔 for ㅂ/ㅍ/ㅃ or 거리/고리 for ㅓ/ㅗ; the app plays one and the user picks which. Prefer real, common words and the user's own cards (find_cards); use get_weak_sounds to choose the contrasts. contrast names the sounds as shown to the user, e.g. "ㅂ/ㅍ/ㅃ". meaning is a short Russian gloss. Drills cannot be deleted from here; list_sound_drills shows existing ones.`,
       inputSchema: {
         drills: z
           .array(
@@ -204,7 +204,7 @@ function registerDrillTools(server: McpServer, drills: DrillStore) {
     "list_sound_drills",
     {
       title: "List sound drills",
-      description: "All listening drills with how often the owner picked the right word, the hardest first.",
+      description: "All listening drills with how often the user picked the right word, the hardest first.",
       annotations: { readOnlyHint: true },
     },
     async () => json({ drills: await drills.list() }),

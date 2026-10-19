@@ -1,4 +1,4 @@
-import { and, desc, gte, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ne, sql } from "drizzle-orm";
 import type { Db } from "./db/client.js";
 import { attempts, cards, phoneStats, reviewLog, reviewStates } from "./db/schema.js";
 import { getFsrsSetup } from "./fsrs.js";
@@ -62,18 +62,21 @@ export function zoneOffset(timeZone: string, at = new Date()): number {
 }
 
 /** `tzOffsetMinutes` is minutes east of UTC (540 for Seoul), so days start at the owner's midnight. */
-export function statsOverview(db: Db, now = new Date(), tzOffsetMinutes = 0): StatsOverview {
+export function statsOverview(db: Db, userId: number, now = new Date(), tzOffsetMinutes = 0): StatsOverview {
   const shift = tzOffsetMinutes * 60_000;
   const dayOf = (ms: number) => Math.floor((ms + shift) / DAY);
   const dateOf = (day: number) => new Date(day * DAY).toISOString().slice(0, 10);
   const startOf = (day: number) => new Date(day * DAY - shift);
   const today = dayOf(now.getTime());
   const localDay = sql<number>`cast((${reviewLog.reviewedAt} + ${shift}) / ${DAY} as integer)`;
+  const mine = eq(cards.userId, userId);
 
   // Streak: days with at least one review; it is still alive today until the day is over.
   const reviewDays = db
     .selectDistinct({ day: localDay })
     .from(reviewLog)
+    .innerJoin(cards, eq(cards.id, reviewLog.cardId))
+    .where(mine)
     .orderBy(desc(localDay))
     .limit(3660)
     .all()
@@ -84,7 +87,8 @@ export function statsOverview(db: Db, now = new Date(), tzOffsetMinutes = 0): St
     db
       .select({ day: localDay, n: sql<number>`count(*)` })
       .from(reviewLog)
-      .where(gte(reviewLog.reviewedAt, startOf(today - ACTIVITY_DAYS + 1)))
+      .innerJoin(cards, eq(cards.id, reviewLog.cardId))
+      .where(and(mine, gte(reviewLog.reviewedAt, startOf(today - ACTIVITY_DAYS + 1))))
       .groupBy(localDay)
       .all()
       .map((r) => [r.day, r.n]),
@@ -100,7 +104,7 @@ export function statsOverview(db: Db, now = new Date(), tzOffsetMinutes = 0): St
     .select({ mode: reviewStates.mode, day: dueDay, n: sql<number>`count(*)` })
     .from(reviewStates)
     .innerJoin(cards, sql`${cards.id} = ${reviewStates.cardId}`)
-    .where(and(reviewable, ne(reviewStates.state, 0), sql`${reviewStates.due} < ${startOf(today + FORECAST_DAYS).getTime()}`))
+    .where(and(mine, reviewable, ne(reviewStates.state, 0), sql`${reviewStates.due} < ${startOf(today + FORECAST_DAYS).getTime()}`))
     .groupBy(reviewStates.mode, dueDay)
     .all();
   const modes = new Set<string>();
@@ -113,7 +117,7 @@ export function statsOverview(db: Db, now = new Date(), tzOffsetMinutes = 0): St
     })
     .from(reviewStates)
     .innerJoin(cards, sql`${cards.id} = ${reviewStates.cardId}`)
-    .where(reviewable)
+    .where(and(mine, reviewable))
     .groupBy(reviewStates.mode, reviewStates.state, sql`3`)
     .all();
   const byMode: StatsOverview["cards"]["byMode"] = {};
@@ -141,7 +145,8 @@ export function statsOverview(db: Db, now = new Date(), tzOffsetMinutes = 0): St
   const recallRows = db
     .select({ mode: reviewLog.mode, rating: reviewLog.rating, at: reviewLog.reviewedAt, previous })
     .from(reviewLog)
-    .where(gte(reviewLog.reviewedAt, new Date(now.getTime() - RETENTION_DAYS * DAY)))
+    .innerJoin(cards, eq(cards.id, reviewLog.cardId))
+    .where(and(mine, gte(reviewLog.reviewedAt, new Date(now.getTime() - RETENTION_DAYS * DAY))))
     .all();
   for (const { mode, rating, at, previous: prev } of recallRows) {
     if (prev === null || at.getTime() - prev < MIN_RECALL_GAP) continue;
@@ -156,14 +161,15 @@ export function statsOverview(db: Db, now = new Date(), tzOffsetMinutes = 0): St
     activity,
     forecast,
     retention,
-    targetRetention: Object.fromEntries([...modes].map((mode) => [mode, getFsrsSetup(db, mode as ReviewMode).desiredRetention])),
-    cards: { total: db.select({ n: sql<number>`count(*)` }).from(cards).get()?.n ?? 0, byMode },
-    speech: speechStats(db, today, startOf, dateOf, dayOf),
+    targetRetention: Object.fromEntries([...modes].map((mode) => [mode, getFsrsSetup(db, userId, mode as ReviewMode).desiredRetention])),
+    cards: { total: db.select({ n: sql<number>`count(*)` }).from(cards).where(mine).get()?.n ?? 0, byMode },
+    speech: speechStats(db, userId, today, startOf, dateOf, dayOf),
   };
 }
 
 function speechStats(
   db: Db,
+  userId: number,
   today: number,
   startOf: (day: number) => Date,
   dateOf: (day: number) => string,
@@ -173,7 +179,8 @@ function speechStats(
   const rows = db
     .select({ at: attempts.createdAt, score: attempts.score, targetPhones: attempts.targetPhones, errors: attempts.errors })
     .from(attempts)
-    .where(gte(attempts.createdAt, startOf(firstWeekDay)))
+    .innerJoin(cards, eq(cards.id, attempts.cardId))
+    .where(and(eq(cards.userId, userId), gte(attempts.createdAt, startOf(firstWeekDay))))
     .all();
 
   const weeks = Array.from({ length: SPEECH_WEEKS }, (_, i) => ({
@@ -200,7 +207,7 @@ function speechStats(
   const overall = db
     .select({ phone: phoneStats.phone, attempts: phoneStats.attempts, errors: phoneStats.errors })
     .from(phoneStats)
-    .where(and(gte(phoneStats.attempts, MIN_SOUND_ATTEMPTS), sql`${phoneStats.errors} > 0`))
+    .where(and(eq(phoneStats.userId, userId), gte(phoneStats.attempts, MIN_SOUND_ATTEMPTS), sql`${phoneStats.errors} > 0`))
     .orderBy(desc(sql`cast(${phoneStats.errors} as real) / ${phoneStats.attempts}`), desc(phoneStats.attempts))
     .limit(8)
     .all();

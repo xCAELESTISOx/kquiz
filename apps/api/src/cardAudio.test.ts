@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { audioWorker, BadTextError, httpSpeaker, type Speaker } from "./cardAudio.js";
+import { createCards } from "./cardStore.js";
+import { users } from "./db/schema.js";
 import { testApp } from "./testing.js";
+import { OWNER_ID } from "./users.js";
 
 const mp3 = (text: string) => new TextEncoder().encode(`mp3:${text}`);
 
@@ -45,6 +48,21 @@ describe("card audio", () => {
 
     t.jar.clear();
     expect((await t.request(`/cards/${t.ids[1]}/audio`)).status).toBe(401);
+  });
+
+  it("is made once for a word two people both have, the owner's cards first", async () => {
+    const t = testApp();
+    const friend = t.db
+      .insert(users)
+      .values({ name: "Миша", role: "member", webauthnId: "friend", createdAt: t.clock.now })
+      .returning()
+      .get();
+    createCards(t.db, friend.id, [{ korean: "불", meaning: "огонь", tags: [] }, { korean: "물", meaning: "вода", tags: [] }], "app");
+    createCards(t.db, OWNER_ID, [{ korean: "물", meaning: "вода", tags: [] }], "app");
+
+    const { speaker, calls } = fakeSpeaker();
+    expect(await audioWorker(t.db, speaker, () => t.clock.now).runOnce()).toBe(2);
+    expect(calls).toEqual(["물", "불"]);
   });
 
   it("is made again when the Korean changes and goes with the card", async () => {

@@ -18,7 +18,7 @@ export type Leech = {
  * Cards forgotten again and again. Several "again" on one day are one forgetting, so relearning steps
  * don't add up. Editing a card gives it a fresh start: only forgetting after its last change counts.
  */
-export function findLeeches(db: Db, limit = 50): Leech[] {
+export function findLeeches(db: Db, userId: number, limit = 50): Leech[] {
   const day = sql<number>`cast(${reviewLog.reviewedAt} / 86400000 as integer)`;
   const forgotten = sql<number>`count(distinct ${day})`;
   const rows = db
@@ -32,6 +32,7 @@ export function findLeeches(db: Db, limit = 50): Leech[] {
     .innerJoin(cards, eq(cards.id, reviewLog.cardId))
     .where(
       and(
+        eq(cards.userId, userId),
         eq(reviewLog.rating, "again"),
         // A paused card isn't reviewed, so there is nothing to fix until it comes back.
         eq(cards.suspended, false),

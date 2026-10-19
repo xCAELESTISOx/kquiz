@@ -1,5 +1,5 @@
 // SQLite implementations of the stores the MCP server needs; `index.ts` passes them to createMcpApp.
-import { desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import type { Context } from "hono";
 import { readSession } from "../auth/sessions.js";
 import { createCards, toCardDto, updateCard, type CardDto, type CardSource } from "../cardStore.js";
@@ -7,7 +7,8 @@ import { koreanKey, normalizeKorean, type CardPatch, type NewCard } from "../car
 import type { Config } from "../config.js";
 import type { Db } from "../db/client.js";
 import { cards, oauthClients, oauthCodes, oauthGrants, phoneStats, reviewLog } from "../db/schema.js";
-import type { OwnerAuth } from "../mcp/app.js";
+import { activeUser } from "../users.js";
+import type { OwnerAuth, UserStores } from "../mcp/app.js";
 import type { OAuthStore } from "../mcp/oauth-store.js";
 import type { CardStore, DrillStore, NewDrill } from "../mcp/store.js";
 import { findLeeches } from "../leeches.js";
@@ -46,10 +47,12 @@ function toStoredCard(card: CardDto): StoredCard {
 }
 
 /** Consecutive days with at least one review, ending today or yesterday (UTC). */
-export function streakDays(db: Db, now: Date): number {
+export function streakDays(db: Db, userId: number, now: Date): number {
   const days = db
     .selectDistinct({ day: sql<number>`cast(${reviewLog.reviewedAt} / 86400000 as integer)` })
     .from(reviewLog)
+    .innerJoin(cards, eq(cards.id, reviewLog.cardId))
+    .where(eq(cards.userId, userId))
     .orderBy(desc(sql`1`))
     .limit(3660)
     .all()
@@ -66,9 +69,11 @@ export function streakDays(db: Db, now: Date): number {
   return streak;
 }
 
+/** One user's cards, for the connector that user approved. */
 export class SqliteCardStore implements CardStore {
   constructor(
     private readonly db: Db,
+    private readonly userId: number,
     private readonly timeZone = "UTC",
   ) {}
 
@@ -76,17 +81,21 @@ export class SqliteCardStore implements CardStore {
     const keys = new Map(korean.map((text) => [koreanKey(text), normalizeKorean(text)]));
     const found = new Map<string, StoredCard>();
     if (keys.size === 0) return found;
-    const rows = this.db.select().from(cards).where(inArray(cards.koreanKey, [...keys.keys()])).all();
+    const rows = this.db
+      .select()
+      .from(cards)
+      .where(and(eq(cards.userId, this.userId), inArray(cards.koreanKey, [...keys.keys()])))
+      .all();
     for (const row of rows) found.set(keys.get(row.koreanKey)!, toStoredCard(toCardDto(row)));
     return found;
   }
 
   async insert(input: NewCard[], source: CardSource): Promise<StoredCard[]> {
-    return createCards(this.db, input, source).created.map(toStoredCard);
+    return createCards(this.db, this.userId, input, source).created.map(toStoredCard);
   }
 
   async find({ text, tag, limit }: { text?: string; tag?: string; limit: number }): Promise<StoredCard[]> {
-    const conditions = [];
+    const conditions = [sql`${cards.userId} = ${this.userId}`];
     if (text) {
       const pattern = `%${text.toLocaleLowerCase().replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
       conditions.push(
@@ -96,7 +105,7 @@ export class SqliteCardStore implements CardStore {
       );
     }
     if (tag) conditions.push(sql`exists (select 1 from json_each(${cards.tags}) where value = ${tag})`);
-    const where = conditions.length ? sql.join(conditions, sql` and `) : undefined;
+    const where = sql.join(conditions, sql` and `);
     return this.db
       .select()
       .from(cards)
@@ -110,16 +119,16 @@ export class SqliteCardStore implements CardStore {
   async update(id: string, patch: Partial<NewCard> & { speakable?: boolean }): Promise<StoredCard | null> {
     const numericId = Number(id);
     if (!Number.isSafeInteger(numericId) || numericId <= 0) return null;
-    const result = updateCard(this.db, numericId, patch as CardPatch);
+    const result = updateCard(this.db, this.userId, numericId, patch as CardPatch);
     if ("card" in result) return toStoredCard(result.card);
     if (result.error === "duplicate") throw new Error(`Card ${result.existingId} already has this Korean text`);
     return null;
   }
 
   async stats(now: Date) {
-    introduceDailyCards(this.db, now, this.timeZone);
-    const stats = getStats(this.db, now, this.timeZone);
-    const overview = statsOverview(this.db, now, zoneOffset(this.timeZone, now));
+    introduceDailyCards(this.db, this.userId, now, this.timeZone);
+    const stats = getStats(this.db, this.userId, now, this.timeZone);
+    const overview = statsOverview(this.db, this.userId, now, zoneOffset(this.timeZone, now));
     const dueNext7Days: Record<string, number> = {};
     for (const { due } of overview.forecast.slice(0, 7)) {
       for (const [mode, n] of Object.entries(due)) dueNext7Days[mode] = (dueNext7Days[mode] ?? 0) + n;
@@ -134,7 +143,7 @@ export class SqliteCardStore implements CardStore {
       dueListening: stats.due.listening,
       queued: stats.newCards.queued,
       newPerDay: stats.newCards.limit,
-      streakDays: streakDays(this.db, now),
+      streakDays: streakDays(this.db, this.userId, now),
       dueNext7Days,
       retention30d,
     };
@@ -144,7 +153,7 @@ export class SqliteCardStore implements CardStore {
     return this.db
       .select({ phone: phoneStats.phone, attempts: phoneStats.attempts, errors: phoneStats.errors })
       .from(phoneStats)
-      .where(sql`${phoneStats.attempts} > 0`)
+      .where(and(eq(phoneStats.userId, this.userId), sql`${phoneStats.attempts} > 0`))
       .orderBy(desc(sql`cast(${phoneStats.errors} as real) / ${phoneStats.attempts}`), desc(phoneStats.attempts))
       .limit(limit)
       .all()
@@ -152,19 +161,22 @@ export class SqliteCardStore implements CardStore {
   }
 
   async hardCards(limit: number) {
-    return findLeeches(this.db, limit).map(({ card, ...rest }) => ({ card: toStoredCard(card), ...rest }));
+    return findLeeches(this.db, this.userId, limit).map(({ card, ...rest }) => ({ card: toStoredCard(card), ...rest }));
   }
 }
 
 export class SqliteDrillStore implements DrillStore {
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    private readonly userId: number,
+  ) {}
 
   async add(drills: NewDrill[]) {
-    return addDrills(this.db, drills, "claude");
+    return addDrills(this.db, this.userId, drills, "claude");
   }
 
   async list() {
-    return listDrills(this.db).map(({ id, contrast, words, correct, wrong }) => ({
+    return listDrills(this.db, this.userId).map(({ id, contrast, words, correct, wrong }) => ({
       id,
       contrast,
       words: words.map((w) => (w.meaning ? { korean: w.korean, meaning: w.meaning } : { korean: w.korean })),
@@ -262,15 +274,21 @@ export class SqliteOAuthStore implements OAuthStore {
   }
 }
 
+/** Each active user's own stores; a disabled user's connector stops working at once. */
+export function sqliteStores(db: Db, timeZone: string): UserStores {
+  return (userId) =>
+    activeUser(db, userId) ? { cards: new SqliteCardStore(db, userId, timeZone), drills: new SqliteDrillStore(db, userId) } : null;
+}
+
 /**
- * The owner's passkey session for the OAuth consent page. `authenticatedAt` is when the
+ * The signed-in user's passkey session for the OAuth consent page. `authenticatedAt` is when the
  * session was created, i.e. the moment of the passkey assertion.
  */
 export function ownerAuth(db: Db, config: Config, now: () => Date = () => new Date()): OwnerAuth {
   return {
     async session(c: Context) {
       const session = readSession(c, db, config.secureCookies, now());
-      return session ? { authenticatedAt: session.createdAt } : null;
+      return session ? { authenticatedAt: session.createdAt, userId: session.userId } : null;
     },
     // The web app's /login always asks for a passkey, then goes to return_to (same-origin paths only).
     loginUrl(returnTo: string) {

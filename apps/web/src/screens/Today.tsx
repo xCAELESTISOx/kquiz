@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { api, lastToday, pendingReviewCount, rememberToday } from "../lib/api";
+import { api, auth, lastToday, pendingReviewCount, rememberToday } from "../lib/api";
 import { cardsWord } from "../lib/plural";
 import { hideSplash } from "../lib/splash";
 import type { QueueItem, Stats } from "../lib/types";
@@ -16,6 +16,7 @@ export function TodayScreen() {
   const [preview, setPreview] = useState<QueueItem[]>(saved?.preview ?? []);
   const [error, setError] = useState<string>();
   const [leeches, setLeeches] = useState(0);
+  const [owner, setOwner] = useState(false);
 
   useEffect(() => {
     document.title = "KQuiz";
@@ -32,6 +33,7 @@ export function TodayScreen() {
       (e: Error) => setError(e.message),
     );
     api.leeches().then(({ items }) => setLeeches(items.length), () => {});
+    auth.status().then((s) => setOwner(s.user?.role === "owner"), () => {});
   }, []);
 
   useEffect(() => {
@@ -131,6 +133,13 @@ export function TodayScreen() {
       {stats && <PracticeLinks />}
 
       {stats && <ScheduleSettings />}
+
+      {stats && owner && (
+        <a className="queue-link" href="#/access">
+          <span>Доступ для друзей</span>
+          <span className="muted">пригласить</span>
+        </a>
+      )}
 
       <div aria-live="polite">
         {error && <p className="notice notice-error">Не получилось загрузить данные: {error}. Обнови страницу.</p>}

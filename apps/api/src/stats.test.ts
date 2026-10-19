@@ -4,6 +4,7 @@ import { recordAttempt } from "./attemptStore.js";
 import type { ScoreResult } from "./scorer.js";
 import { ACTIVITY_DAYS, FORECAST_DAYS, streaks, zoneOffset } from "./statsStore.js";
 import { testApp } from "./testing.js";
+import { OWNER_ID } from "./users.js";
 
 const DAY = 86_400_000;
 
@@ -109,9 +110,9 @@ describe("GET /stats", () => {
     const card = (await t.request("/cards", { body: { korean: "국물", meaning: "бульон" } })).json.card;
     const now = t.clock.now.getTime();
     // Two weeks ago the coda was always wrong; this week only once in three.
-    for (const age of [20, 19, 18]) recordAttempt(t.db, card.id, attempt(60, true), new Date(now - age * DAY));
+    for (const age of [20, 19, 18]) recordAttempt(t.db, OWNER_ID, card.id, attempt(60, true), new Date(now - age * DAY));
     for (const [age, wrong] of [[2, true], [1, false], [0, false]] as const) {
-      recordAttempt(t.db, card.id, attempt(wrong ? 70 : 90, wrong), new Date(now - age * DAY));
+      recordAttempt(t.db, OWNER_ID, card.id, attempt(wrong ? 70 : 90, wrong), new Date(now - age * DAY));
     }
     const { speech } = (await t.request("/stats")).json;
     expect(speech.weeks).toHaveLength(8);
@@ -129,7 +130,7 @@ describe("MCP get_stats data", () => {
     const t = testApp();
     await t.signIn();
     await t.request("/cards", { body: { korean: "물", meaning: "вода" } });
-    const stats = await new SqliteCardStore(t.db).stats(t.clock.now);
+    const stats = await new SqliteCardStore(t.db, OWNER_ID).stats(t.clock.now);
     expect(stats).toMatchObject({ cards: 1, dueNext7Days: { meaning: 0, speech: 0 }, retention30d: { meaning: null, speech: null } });
   });
 });

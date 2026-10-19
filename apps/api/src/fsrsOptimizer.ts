@@ -1,8 +1,8 @@
 import { computeParameters, FSRSBinding, FSRSBindingItem, FSRSBindingReview } from "@open-spaced-repetition/binding";
-import { and, asc, count, eq } from "drizzle-orm";
+import { and, asc, count, eq, isNull } from "drizzle-orm";
 import { createEmptyCard, type Card } from "ts-fsrs";
 import type { Db } from "./db/client.js";
-import { fsrsSettings, reviewLog, reviewStates } from "./db/schema.js";
+import { cards as cardRows, fsrsSettings, reviewLog, reviewStates, users } from "./db/schema.js";
 import { currentWeights, getFsrsSetup, schedulerFor } from "./fsrs.js";
 import { reviewModes } from "./newCards.js";
 import { applyRating, ratings, type RatingName, type ReviewMode } from "./review.js";
@@ -63,34 +63,56 @@ export type OptimizeResult =
   | { status: "updated"; reviews: number; logLoss: number; previousLogLoss: number }
   | { status: "failed"; reviews: number; error: string };
 
-function modeLogs(db: Pick<Db, "select">, mode: ReviewMode): LoggedReview[] {
+const ofUser = (userId: number, mode: ReviewMode) => and(eq(cardRows.userId, userId), eq(reviewLog.mode, mode));
+
+function countReviews(db: Pick<Db, "select">, userId: number, mode: ReviewMode): number {
+  return (
+    db
+      .select({ n: count() })
+      .from(reviewLog)
+      .innerJoin(cardRows, eq(cardRows.id, reviewLog.cardId))
+      .where(ofUser(userId, mode))
+      .get()?.n ?? 0
+  );
+}
+
+const settingsRow = (db: Pick<Db, "select">, userId: number, mode: ReviewMode) =>
+  db
+    .select()
+    .from(fsrsSettings)
+    .where(and(eq(fsrsSettings.userId, userId), eq(fsrsSettings.mode, mode)))
+    .get();
+
+function modeLogs(db: Pick<Db, "select">, userId: number, mode: ReviewMode): LoggedReview[] {
   return db
     .select({ cardId: reviewLog.cardId, rating: reviewLog.rating, reviewedAt: reviewLog.reviewedAt })
     .from(reviewLog)
-    .where(eq(reviewLog.mode, mode))
+    .innerJoin(cardRows, eq(cardRows.id, reviewLog.cardId))
+    .where(ofUser(userId, mode))
     .orderBy(asc(reviewLog.reviewedAt))
     .all();
 }
 
 /**
- * Fits FSRS weights to the owner's history in one mode, once there is enough of it. New weights
+ * Fits FSRS weights to one user's history in one mode, once there is enough of it. New weights
  * are kept only if they predict that same history better than the current ones; then every
  * card's memory state is replayed with them so the next intervals use them from the start.
  */
 export async function optimizeMode(
   db: Db,
+  userId: number,
   mode: ReviewMode,
   { timeZone, now = new Date(), force = false }: { timeZone: string; now?: Date; force?: boolean },
 ): Promise<OptimizeResult> {
-  const reviews = db.select({ n: count() }).from(reviewLog).where(eq(reviewLog.mode, mode)).get()?.n ?? 0;
+  const reviews = countReviews(db, userId, mode);
   if (reviews < MIN_REVIEWS) return { status: "not_enough_reviews", reviews };
-  const row = db.select().from(fsrsSettings).where(eq(fsrsSettings.mode, mode)).get();
+  const row = settingsRow(db, userId, mode);
   const fresh = row?.checkedAt && now.getTime() - row.checkedAt.getTime() < REFIT_AFTER_MS;
   if (!force && (fresh || row?.checkedOnReviews === reviews)) return { status: "up_to_date", reviews };
 
-  const logs = modeLogs(db, mode);
+  const logs = modeLogs(db, userId, mode);
   const items = trainingItems(logs, timeZone);
-  const setup = getFsrsSetup(db, mode);
+  const setup = getFsrsSetup(db, userId, mode);
   const checked = { checkedAt: now, checkedOnReviews: reviews };
   let candidate: number[], logLoss: number, previousLogLoss: number;
   try {
@@ -99,7 +121,10 @@ export async function optimizeMode(
     logLoss = new FSRSBinding(candidate).evaluate(items).logLoss;
   } catch (err) {
     // Usually too few long-term reviews; the defaults stay, and the next try is a month away.
-    db.insert(fsrsSettings).values({ mode, ...checked }).onConflictDoUpdate({ target: fsrsSettings.mode, set: checked }).run();
+    db.insert(fsrsSettings)
+      .values({ userId, mode, ...checked })
+      .onConflictDoUpdate({ target: [fsrsSettings.userId, fsrsSettings.mode], set: checked })
+      .run();
     return { status: "failed", reviews, error: (err as Error).message };
   }
   const better = candidate.every(Number.isFinite) && logLoss < previousLogLoss;
@@ -107,11 +132,11 @@ export async function optimizeMode(
   db.transaction((tx) => {
     const set = better ? { ...checked, weights: candidate, trainedOnReviews: reviews, optimizedAt: now } : checked;
     tx.insert(fsrsSettings)
-      .values({ mode, ...set })
-      .onConflictDoUpdate({ target: fsrsSettings.mode, set })
+      .values({ userId, mode, ...set })
+      .onConflictDoUpdate({ target: [fsrsSettings.userId, fsrsSettings.mode], set })
       .run();
     // Re-read: reviews made while the fit was running must be replayed too.
-    if (better) replayMemoryStates(tx, mode, modeLogs(tx, mode), { ...setup, weights: candidate });
+    if (better) replayMemoryStates(tx, mode, modeLogs(tx, userId, mode), { ...setup, weights: candidate });
   });
   return better
     ? { status: "updated", reviews, logLoss, previousLogLoss }
@@ -153,13 +178,13 @@ export type FsrsStatus = {
   optimizedAt: string | null;
 };
 
-export function fsrsStatus(db: Db): FsrsStatus[] {
+export function fsrsStatus(db: Db, userId: number): FsrsStatus[] {
   return reviewModes.map((mode) => {
-    const row = db.select().from(fsrsSettings).where(eq(fsrsSettings.mode, mode)).get();
-    const reviews = db.select({ n: count() }).from(reviewLog).where(eq(reviewLog.mode, mode)).get()?.n ?? 0;
+    const row = settingsRow(db, userId, mode);
+    const reviews = countReviews(db, userId, mode);
     return {
       mode,
-      desiredRetention: getFsrsSetup(db, mode).desiredRetention,
+      desiredRetention: getFsrsSetup(db, userId, mode).desiredRetention,
       personal: Boolean(row?.weights),
       reviews,
       minReviews: MIN_REVIEWS,
@@ -176,9 +201,12 @@ export function optimizerWorker(db: Db, timeZone: string, now: () => Date = () =
     if (running) return;
     running = true;
     try {
-      for (const mode of reviewModes) {
-        const result = await optimizeMode(db, mode, { timeZone, now: now() });
-        if (result.status !== "not_enough_reviews" && result.status !== "up_to_date") console.log(`fsrs ${mode}:`, result);
+      const active = db.select({ id: users.id }).from(users).where(isNull(users.disabledAt)).all();
+      for (const { id } of active) {
+        for (const mode of reviewModes) {
+          const result = await optimizeMode(db, id, mode, { timeZone, now: now() });
+          if (result.status !== "not_enough_reviews" && result.status !== "up_to_date") console.log(`fsrs user ${id} ${mode}:`, result);
+        }
       }
     } catch (err) {
       console.error("fsrs optimizer failed", err);

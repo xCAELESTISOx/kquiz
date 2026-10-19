@@ -3,12 +3,13 @@ import { openDb } from "../db/client.js";
 import { reviewLog } from "../db/schema.js";
 import { phoneStats } from "../db/schema.js";
 import { SqliteCardStore, SqliteOAuthStore, streakDays } from "./mcp.js";
+import { OWNER_ID } from "../users.js";
 
 const card = (korean: string, meaning: string) => ({ korean, meaning, tags: [] as string[] });
 
 describe("SqliteCardStore", () => {
   it("finds existing cards by normalized Korean, ignoring punctuation", async () => {
-    const store = new SqliteCardStore(openDb(":memory:"));
+    const store = new SqliteCardStore(openDb(":memory:"), OWNER_ID);
     const [water] = await store.insert([card("물", "вода")], "claude");
     expect(water).toMatchObject({ id: expect.any(String), korean: "물", source: "claude", speakable: true });
     const found = await store.findByKorean(["물!", "불"]);
@@ -17,7 +18,7 @@ describe("SqliteCardStore", () => {
   });
 
   it("finds by text in any field and by tag, newest first", async () => {
-    const store = new SqliteCardStore(openDb(":memory:"));
+    const store = new SqliteCardStore(openDb(":memory:"), OWNER_ID);
     await store.insert([{ ...card("사과", "Яблоко"), romanization: "sagwa", tags: ["еда"] }, card("책", "книга")], "claude");
     expect((await store.find({ text: "SAGWA", limit: 10 })).map((c) => c.korean)).toEqual(["사과"]);
     expect((await store.find({ text: "яблоко", limit: 10 })).map((c) => c.korean)).toEqual(["사과"]);
@@ -26,7 +27,7 @@ describe("SqliteCardStore", () => {
   });
 
   it("updates a card, returns null for an unknown id and throws on a duplicate", async () => {
-    const store = new SqliteCardStore(openDb(":memory:"));
+    const store = new SqliteCardStore(openDb(":memory:"), OWNER_ID);
     const [a, b] = await store.insert([card("물", "вода"), card("불", "огонь")], "claude");
     expect((await store.update(a!.id, { meaning: "вода!" }))?.meaning).toBe("вода!");
     expect(await store.update("999", { meaning: "x" })).toBeNull();
@@ -36,7 +37,7 @@ describe("SqliteCardStore", () => {
 
   it("counts due cards, streak and weak sounds", async () => {
     const db = openDb(":memory:");
-    const store = new SqliteCardStore(db);
+    const store = new SqliteCardStore(db, OWNER_ID);
     const [water] = await store.insert([card("물", "вода"), card("TV", "телевизор")], "claude");
     // Cards get the real clock as their creation time, so "now" must not be a fixed date.
     const now = new Date();
@@ -47,12 +48,12 @@ describe("SqliteCardStore", () => {
         .run();
     }
     db.insert(phoneStats).values([
-      { phone: "ʌ", attempts: 10, errors: 6 },
-      { phone: "k͈", attempts: 4, errors: 1 },
+      { userId: OWNER_ID, phone: "ʌ", attempts: 10, errors: 6 },
+      { userId: OWNER_ID, phone: "k͈", attempts: 4, errors: 1 },
     ]).run();
     expect(await store.stats(new Date(now.getTime() + 60_000))).toMatchObject({ cards: 2, dueSpeech: 1, streakDays: 3 });
-    expect(streakDays(db, new Date(now.getTime() + day))).toBe(3);
-    expect(streakDays(db, new Date(now.getTime() + 2 * day))).toBe(0);
+    expect(streakDays(db, OWNER_ID, new Date(now.getTime() + day))).toBe(3);
+    expect(streakDays(db, OWNER_ID, new Date(now.getTime() + 2 * day))).toBe(0);
     expect(await store.weakSounds(1)).toEqual([{ phone: "ʌ", attempts: 10, errors: 6, errorRate: 0.6 }]);
   });
 });
@@ -71,13 +72,13 @@ describe("SqliteOAuthStore", () => {
     expect(await store.evictOldestUnapprovedClient()).toBe(false);
     expect(await store.countClients()).toBe(1);
 
-    const code = { codeHash: "h", clientId: "c1", redirectUri: "https://claude.ai/cb", codeChallenge: "x", scope: "cards", expiresAt: Date.now() + 60_000 };
+    const code = { codeHash: "h", userId: OWNER_ID, clientId: "c1", redirectUri: "https://claude.ai/cb", codeChallenge: "x", scope: "cards", expiresAt: Date.now() + 60_000 };
     await store.saveCode(code);
     expect(await store.takeCode("h")).toEqual(code);
     expect(await store.takeCode("h")).toBeNull();
 
     const grant = {
-      id: "g1", clientId: "c1", scope: "cards", createdAt: 1, lastUsedAt: 1,
+      id: "g1", userId: OWNER_ID, clientId: "c1", scope: "cards", createdAt: 1, lastUsedAt: 1,
       accessHash: "a1", accessExpiresAt: 2, refreshHash: "r1", refreshExpiresAt: 3, usedRefreshHashes: [] as string[],
     };
     await store.saveGrant(grant);

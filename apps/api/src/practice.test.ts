@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { audioWorker, type Speaker } from "./cardAudio.js";
 import { addDrills } from "./practice.js";
 import { testApp } from "./testing.js";
+import { OWNER_ID } from "./users.js";
 
 const mp3 = (text: string) => new TextEncoder().encode(`mp3:${text}`);
 
@@ -27,7 +28,7 @@ async function setup() {
   await t.signIn();
   const id = (await t.request("/cards", { body: { korean: "물", meaning: "вода", examples } })).json.card.id as number;
   await t.request("/cards", { body: { korean: "밥", meaning: "рис" } });
-  addDrills(t.db, [{ contrast: "ㅂ/ㅍ/ㅃ", words: [{ korean: "불", meaning: "огонь" }, { korean: "풀" }] }], "claude");
+  addDrills(t.db, OWNER_ID, [{ contrast: "ㅂ/ㅍ/ㅃ", words: [{ korean: "불", meaning: "огонь" }, { korean: "풀" }] }], "claude");
   return { ...t, id };
 }
 
@@ -82,7 +83,7 @@ describe("shadowing", () => {
 describe("sound drills", () => {
   it("are listed with readiness, counted and deleted from the app", async () => {
     const t = await setup();
-    addDrills(t.db, [{ contrast: "ㄱ/ㅋ/ㄲ", words: [{ korean: "기" }, { korean: "키" }, { korean: "끼" }] }], "claude");
+    addDrills(t.db, OWNER_ID, [{ contrast: "ㄱ/ㅋ/ㄲ", words: [{ korean: "기" }, { korean: "키" }, { korean: "끼" }] }], "claude");
     let { drills } = (await t.request("/practice/drills")).json;
     expect(drills.map((d: { ready: boolean }) => d.ready)).toEqual([false, false]);
 
@@ -107,8 +108,8 @@ describe("sound drills", () => {
   it("skips a set of words that is already there", () => {
     const t = testApp();
     const words = [{ korean: "달" }, { korean: "탈" }];
-    expect(addDrills(t.db, [{ contrast: "ㄷ/ㅌ", words }], "claude").created).toHaveLength(1);
-    expect(addDrills(t.db, [{ contrast: "ㄷ/ㅌ", words: [...words].reverse() }], "app").duplicates).toEqual([
+    expect(addDrills(t.db, OWNER_ID, [{ contrast: "ㄷ/ㅌ", words }], "claude").created).toHaveLength(1);
+    expect(addDrills(t.db, OWNER_ID, [{ contrast: "ㄷ/ㅌ", words: [...words].reverse() }], "app").duplicates).toEqual([
       { contrast: "ㄷ/ㅌ", words: ["탈", "달"], existingId: 1 },
     ]);
   });

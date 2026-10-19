@@ -70,9 +70,9 @@ export function LoginScreen() {
     setBusy(true);
     setError(undefined);
     try {
-      const optionsJSON = (await auth.registerOptions(code)) as unknown as Parameters<typeof startRegistration>[0]["optionsJSON"];
+      const optionsJSON = (await auth.registerOptions({ setupCode: code })) as unknown as Parameters<typeof startRegistration>[0]["optionsJSON"];
       const response = await startRegistration({ optionsJSON });
-      const result = await auth.registerVerify(code, response);
+      const result = await auth.registerVerify({ setupCode: code }, response);
       setCsrfToken(result.csrfToken);
       location.replace(returnTo);
     } catch (e) {
