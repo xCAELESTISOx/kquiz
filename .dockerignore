@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+**/.venv
+**/__pycache__
+**/data
+.git
+.env
+deploy/.env
+services/scorer/recordings

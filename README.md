@@ -2,7 +2,7 @@
 
 Личное приложение для изучения корейского: карточки с интервальным повторением, добавление карточек из Claude через MCP и тренировка произношения с разбором по звукам. Тёмная тема, PWA для iPhone, один пользователь.
 
-План, архитектура и этапы: [docs/PLAN.md](docs/PLAN.md).
+План, архитектура и этапы: [docs/PLAN.md](docs/PLAN.md). Развёртывание на сервер: [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## Структура
 
@@ -11,6 +11,7 @@
 | `apps/web` | PWA: React + Vite + TypeScript |
 | `apps/api` | Бэкенд: Hono на Node, FSRS, позже SQLite, вход по passkey и MCP для Claude |
 | `services/scorer` | Внутренний Python-сервис оценки произношения |
+| `deploy` | Docker Compose, Caddy, firewall и бэкапы для сервера |
 
 ## Запуск
 
