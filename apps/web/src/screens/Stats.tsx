@@ -197,13 +197,15 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
 }
 
 function Retention({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
-  const target = Math.round(stats.targetRetention * 100);
+  const targetOf = (mode: string) => Math.round((stats.targetRetention[mode] ?? 0.9) * 100);
+  const targets = new Set(modes.map((m) => targetOf(m.mode)));
   return (
     <ul className="retention">
       {modes.map((m) => {
         const r = stats.retention[m.mode] ?? { reviews: 0, recalled: 0 };
         const enough = r.reviews >= MIN_RETENTION_REVIEWS;
         const pct = r.reviews ? Math.round((r.recalled / r.reviews) * 100) : 0;
+        const target = targetOf(m.mode);
         return (
           <li key={m.mode}>
             <div className="retention-head">
@@ -224,7 +226,7 @@ function Retention({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
         );
       })}
       <li className="stats-note retention-target">
-        <i aria-hidden="true" /> цель FSRS — {target}%. Первые показы и шаги заучивания не считаются.
+        <i aria-hidden="true" /> цель FSRS{targets.size === 1 ? ` — ${[...targets][0]}%` : ", своя для каждого режима"}. Первые показы и шаги заучивания не считаются.
       </li>
     </ul>
   );

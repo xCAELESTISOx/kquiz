@@ -8,6 +8,7 @@ import type {
   CardList,
   CardPatch,
   CardSummary,
+  FsrsStatus,
   Leech,
   NewCard,
   QueueItem,
@@ -211,6 +212,14 @@ export const api = {
     request<StatsOverview>("GET", `/stats?tz=${-new Date().getTimezoneOffset()}`, { fallback: (m) => m.statsOverview() }),
 
   leeches: () => request<{ items: Leech[] }>("GET", "/reviews/leeches", { fallback: () => ({ items: [] }) }),
+
+  fsrs: () => request<FsrsStatus>("GET", "/reviews/fsrs", { fallback: (m) => m.fsrs() }),
+
+  setRetention: (mode: ReviewMode, desiredRetention: number) =>
+    request<FsrsStatus>("PUT", "/reviews/fsrs", {
+      body: { mode, desiredRetention },
+      fallback: (m) => m.setRetention(mode, desiredRetention),
+    }),
 
   /** Scores a recording against the card. It is not a review: the rating is sent separately. */
   score: (cardId: number, wav: Uint8Array<ArrayBuffer>) =>

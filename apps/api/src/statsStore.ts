@@ -1,6 +1,8 @@
 import { and, desc, gte, ne, sql } from "drizzle-orm";
 import type { Db } from "./db/client.js";
 import { attempts, cards, phoneStats, reviewLog, reviewStates } from "./db/schema.js";
+import { getFsrsSetup } from "./fsrs.js";
+import type { ReviewMode } from "./review.js";
 import { reviewable } from "./reviewStore.js";
 
 const DAY = 86_400_000;
@@ -31,8 +33,8 @@ export type StatsOverview = {
   forecast: { day: string; due: ByMode<number> }[];
   /** Share of reviews in the last 30 days not rated "again", leaving out first sightings and learning steps. */
   retention: ByMode<{ reviews: number; recalled: number }>;
-  /** Target retention FSRS schedules for (ts-fsrs default). */
-  targetRetention: number;
+  /** Retention FSRS schedules for, per mode (set on the FSRS settings screen). */
+  targetRetention: ByMode<number>;
   cards: { total: number; byMode: ByMode<{ new: number; learning: number; young: number; mature: number }> };
   speech: {
     /** Pronunciation attempts per week, oldest first, the last one ending today. */
@@ -154,7 +156,7 @@ export function statsOverview(db: Db, now = new Date(), tzOffsetMinutes = 0): St
     activity,
     forecast,
     retention,
-    targetRetention: 0.9,
+    targetRetention: Object.fromEntries([...modes].map((mode) => [mode, getFsrsSetup(db, mode as ReviewMode).desiredRetention])),
     cards: { total: db.select({ n: sql<number>`count(*)` }).from(cards).get()?.n ?? 0, byMode },
     speech: speechStats(db, today, startOf, dateOf, dayOf),
   };

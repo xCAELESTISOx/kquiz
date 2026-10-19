@@ -43,6 +43,13 @@
       "when": 1792413319009,
       "tag": "0005_card_queue",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1792413728975,
+      "tag": "0006_fsrs_settings",
+      "breakpoints": true
     }
   ]
 }

@@ -6,6 +6,7 @@ import { count } from "drizzle-orm";
 import { audioWorker, httpSpeaker } from "./cardAudio.js";
 import { loadConfig } from "./config.js";
 import { openDb } from "./db/client.js";
+import { optimizerWorker } from "./fsrsOptimizer.js";
 import { authCredentials } from "./db/schema.js";
 import { createServer } from "./server.js";
 
@@ -28,6 +29,8 @@ const server = createServer({
 
 // Reference audio for new and changed cards, made by the scorer in the background.
 audioWorker(db, httpSpeaker(config.scorerUrl)).start();
+// Personal FSRS weights once a mode has enough reviews; FSRS defaults until then.
+optimizerWorker(db, config.timeZone).start();
 
 const port = Number(process.env.PORT ?? 8787);
 // Bound to localhost: only Caddy on the same host may reach the API.

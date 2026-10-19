@@ -8,6 +8,7 @@ import type {
   CardPatch,
   CardSource,
   CardSummary,
+  FsrsStatus,
   NewCard,
   QueueItem,
   RatingName,
@@ -224,6 +225,28 @@ export class MockApi {
     return { results };
   }
 
+  private retention: Record<ReviewMode, number> = { meaning: 0.9, speech: 0.9, listening: 0.9 };
+
+  fsrs(): FsrsStatus {
+    return {
+      modes: (["meaning", "speech", "listening"] as const).map((mode) => ({
+        mode,
+        desiredRetention: this.retention[mode],
+        personal: false,
+        reviews: this.state.reviewIds.length,
+        minReviews: 1000,
+        trainedOnReviews: null,
+        optimizedAt: null,
+      })),
+      retentionRange: { min: 0.85, max: 0.95 },
+    };
+  }
+
+  setRetention(mode: ReviewMode, retention: number): FsrsStatus {
+    this.retention[mode] = retention;
+    return this.fsrs();
+  }
+
   stats(): Stats {
     const day = this.now().toISOString().slice(0, 10);
     return {
@@ -267,7 +290,7 @@ export class MockApi {
       activity,
       forecast,
       retention: { meaning: { reviews: 412, recalled: 361 }, speech: { reviews: 96, recalled: 88 }, listening: { reviews: 64, recalled: 51 } },
-      targetRetention: 0.9,
+      targetRetention: { meaning: 0.9, speech: 0.9, listening: 0.88 },
       cards: {
         total: 238,
         byMode: {
