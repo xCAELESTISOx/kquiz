@@ -1,8 +1,8 @@
-import { and, desc, eq, lt, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, isNull, lt, sql, type SQL } from "drizzle-orm";
 import { isKoreanOnly, isSpeakable, koreanKey, normalizeKorean, type CardPatch, type Example, type NewCard } from "./cards.js";
 import type { Db } from "./db/client.js";
-import { cards, reviewStates } from "./db/schema.js";
-import { newReviewState, toStateRow, type ReviewMode } from "./review.js";
+import { cards } from "./db/schema.js";
+import { introduce } from "./newCards.js";
 
 export type CardSource = "app" | "claude" | "bulk";
 type CardRow = typeof cards.$inferSelect;
@@ -20,6 +20,10 @@ export type CardDto = {
   /** False when `korean` has non-Hangul text: the card can't enter the pronunciation queue. */
   readyForSpeech: boolean;
   source: CardSource;
+  /** Paused: out of every review queue, schedule kept. */
+  suspended: boolean;
+  /** Waiting in the new-card queue, not yet in reviews. */
+  queued: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -37,6 +41,8 @@ export function toCardDto(row: CardRow): CardDto {
     speakable: row.speakable,
     readyForSpeech: isKoreanOnly(row.korean),
     source: row.source,
+    suspended: row.suspended,
+    queued: row.introducedAt === null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -48,11 +54,10 @@ export type CreateResult = { created: CardDto[]; duplicates: Duplicate[] };
 const emptyToNull = (value: string | undefined) => (value ? value : null);
 const uniqueTags = (tags: string[]) => [...new Set(tags)];
 
-export const reviewModes: ReviewMode[] = ["meaning", "speech"];
-
 /**
- * Stores new cards with a fresh schedule in both modes. A card whose Korean already
- * exists (or repeats earlier in the batch) is reported as a duplicate, not stored.
+ * Stores new cards. Cards added in the app get a fresh schedule in both modes at once; cards from
+ * Claude wait in the new-card queue (newCards.ts). A card whose Korean already exists (or repeats
+ * earlier in the batch) is reported as a duplicate, not stored.
  */
 export function createCards(db: Db, inputs: NewCard[], source: CardSource, now = new Date()): CreateResult {
   return db.transaction((tx) => {
@@ -84,11 +89,12 @@ export function createCards(db: Db, inputs: NewCard[], source: CardSource, now =
         })
         .returning()
         .get();
-      const state = toStateRow(newReviewState(now));
-      tx.insert(reviewStates)
-        .values(reviewModes.map((mode) => ({ cardId: row.id, mode, ...state })))
-        .run();
-      created.push(toCardDto(row));
+      if (source === "claude") {
+        created.push(toCardDto(row));
+        continue;
+      }
+      introduce(tx, [row.id], "direct", now);
+      created.push(toCardDto({ ...row, introducedAt: now, introduction: "direct" }));
     }
     return { created, duplicates };
   });
@@ -105,6 +111,8 @@ export type CardQuery = {
   tag?: string;
   /** Only cards with non-Hangul `korean`, the "not ready for checking" filter. */
   notReady?: boolean;
+  /** Only queued cards (not yet in reviews), or only paused ones. */
+  status?: "queued" | "paused";
   limit?: number;
   /** Id of the last card on the previous page; pages go from newest to oldest. */
   before?: number;
@@ -119,6 +127,8 @@ export function listCards(db: Db, query: CardQuery = {}): { cards: CardDto[]; ne
   }
   if (query.tag) where.push(sql`exists (select 1 from json_each(${cards.tags}) where value = ${query.tag})`);
   if (query.before) where.push(lt(cards.id, query.before));
+  if (query.status === "queued") where.push(isNull(cards.introducedAt));
+  if (query.status === "paused") where.push(eq(cards.suspended, true));
 
   // Hangul-only is checked in JS (SQLite has no Unicode script classes), so this filter scans.
   const rows = db
@@ -134,9 +144,33 @@ export function listCards(db: Db, query: CardQuery = {}): { cards: CardDto[]; ne
   return { cards: page.map(toCardDto), nextBefore: rows.length > limit ? (page.at(-1)?.id ?? null) : null };
 }
 
+/** Every tag in use, most used first. */
+export function listTags(db: Db): { tag: string; count: number }[] {
+  return db
+    .select({ tag: sql<string>`j.value`, count: count() })
+    .from(sql`${cards}, json_each(${cards.tags}) as j`)
+    .groupBy(sql`j.value`)
+    .orderBy(desc(count()), sql`j.value`)
+    .all();
+}
+
+/** Cards in the new-card queue and paused cards, for the filter chips. */
+export function cardCounts(db: Db): { all: number; queued: number; paused: number } {
+  const row = db
+    .select({
+      all: count(),
+      queued: sql<number>`coalesce(sum(${cards.introducedAt} is null), 0)`,
+      paused: sql<number>`coalesce(sum(${cards.suspended}), 0)`,
+    })
+    .from(cards)
+    .get();
+  return { all: row?.all ?? 0, queued: row?.queued ?? 0, paused: row?.paused ?? 0 };
+}
+
 export type UpdateResult = { card: CardDto } | { error: "not_found" } | { error: "duplicate"; existingId: number };
 
-export function updateCard(db: Db, id: number, patch: CardPatch, now = new Date()): UpdateResult {
+/** `suspended` comes only from the app: Claude can't pause cards. */
+export function updateCard(db: Db, id: number, patch: CardPatch & { suspended?: boolean }, now = new Date()): UpdateResult {
   return db.transaction((tx) => {
     const current = tx.select().from(cards).where(eq(cards.id, id)).get();
     if (!current) return { error: "not_found" };
@@ -158,6 +192,7 @@ export function updateCard(db: Db, id: number, patch: CardPatch, now = new Date(
         examples: patch.examples ?? current.examples,
         notes: optional(patch.notes, current.notes),
         tags: patch.tags ? uniqueTags(patch.tags) : current.tags,
+        suspended: patch.suspended ?? current.suspended,
         speakable: (patch.speakable ?? (patch.korean === undefined ? current.speakable : isSpeakable(korean))) && isKoreanOnly(korean),
         updatedAt: now,
       })

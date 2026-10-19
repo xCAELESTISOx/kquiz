@@ -10,11 +10,14 @@ import { cards, oauthClients, oauthCodes, oauthGrants, phoneStats, reviewLog } f
 import type { OwnerAuth } from "../mcp/app.js";
 import type { OAuthStore } from "../mcp/oauth-store.js";
 import type { CardStore } from "../mcp/store.js";
+import { introduceDailyCards } from "../newCards.js";
 import { getStats } from "../reviewStore.js";
 
 export type StoredCard = NewCard & {
   id: string;
   speakable: boolean;
+  /** Waiting in the new-card queue (newCards.ts), not yet in reviews. */
+  queued: boolean;
   source: CardSource;
   createdAt: string;
   updatedAt: string;
@@ -32,6 +35,7 @@ function toStoredCard(card: CardDto): StoredCard {
     notes: optional(card.notes),
     tags: card.tags,
     speakable: card.speakable,
+    queued: card.queued,
     source: card.source,
     createdAt: card.createdAt,
     updatedAt: card.updatedAt,
@@ -60,7 +64,10 @@ export function streakDays(db: Db, now: Date): number {
 }
 
 export class SqliteCardStore implements CardStore {
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    private readonly timeZone = "UTC",
+  ) {}
 
   async findByKorean(korean: string[]): Promise<Map<string, StoredCard>> {
     const keys = new Map(korean.map((text) => [koreanKey(text), normalizeKorean(text)]));
@@ -107,8 +114,16 @@ export class SqliteCardStore implements CardStore {
   }
 
   async stats(now: Date) {
-    const stats = getStats(this.db, now);
-    return { cards: stats.cards, dueMeaning: stats.due.meaning, dueSpeech: stats.due.speech, streakDays: streakDays(this.db, now) };
+    introduceDailyCards(this.db, now, this.timeZone);
+    const stats = getStats(this.db, now, this.timeZone);
+    return {
+      cards: stats.cards,
+      dueMeaning: stats.due.meaning,
+      dueSpeech: stats.due.speech,
+      queued: stats.newCards.queued,
+      newPerDay: stats.newCards.limit,
+      streakDays: streakDays(this.db, now),
+    };
   }
 
   async weakSounds(limit: number) {

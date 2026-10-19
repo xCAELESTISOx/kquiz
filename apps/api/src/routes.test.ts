@@ -108,7 +108,7 @@ describe("reviews", () => {
     expect(resent.json.results[0].status).toBe("duplicate");
     expect((await t.request("/reviews/queue?mode=meaning")).json.items).toHaveLength(0);
     expect((await t.request("/reviews/queue?mode=speech")).json.items).toHaveLength(1);
-    expect((await t.request("/reviews/stats")).json).toEqual({ cards: 1, due: { meaning: 0, speech: 1 }, reviewedToday: 1 });
+    expect((await t.request("/reviews/stats")).json).toEqual({ cards: 1, due: { meaning: 0, speech: 1 }, reviewedToday: 1, newCards: { introduced: 0, limit: 15, queued: 0 } });
   });
 
   it("applies offline reviews in the order they happened", async () => {

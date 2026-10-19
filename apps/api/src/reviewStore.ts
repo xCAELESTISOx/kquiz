@@ -2,13 +2,18 @@ import { and, asc, count, eq, lte, sql } from "drizzle-orm";
 import { toCardDto, type CardDto } from "./cardStore.js";
 import type { Db } from "./db/client.js";
 import { cards, reviewLog, reviewStates } from "./db/schema.js";
+import { newCardsToday, startOfDay, type NewCardsToday } from "./newCards.js";
 import { applyRating, fromStateRow, toStateRow, type RatingName, type ReviewMode } from "./review.js";
 
 export type QueueItem = { card: CardDto; mode: ReviewMode; due: string; state: number; reps: number; lapses: number };
 
-/** Cards due in a mode, most overdue first. Only speakable cards enter the pronunciation queue. */
-export function dueQueue(db: Db, mode: ReviewMode, now = new Date(), limit = 50): QueueItem[] {
-  return db
+/**
+ * Cards due in a mode, most overdue first, with the never-reviewed ones spread among them at random
+ * instead of in a block at the end. Only speakable cards enter the pronunciation queue; paused ones
+ * enter none.
+ */
+export function dueQueue(db: Db, mode: ReviewMode, now = new Date(), limit = 50, random = Math.random): QueueItem[] {
+  const items = db
     .select({ card: cards, state: reviewStates })
     .from(reviewStates)
     .innerJoin(cards, eq(cards.id, reviewStates.cardId))
@@ -16,6 +21,7 @@ export function dueQueue(db: Db, mode: ReviewMode, now = new Date(), limit = 50)
       and(
         eq(reviewStates.mode, mode),
         lte(reviewStates.due, now),
+        eq(cards.suspended, false),
         mode === "speech" ? eq(cards.speakable, true) : undefined,
       ),
     )
@@ -30,6 +36,16 @@ export function dueQueue(db: Db, mode: ReviewMode, now = new Date(), limit = 50)
       reps: state.reps,
       lapses: state.lapses,
     }));
+  return mixNew(items, random);
+}
+
+/** Inserts each new card at a random spot among the reviews, keeping the reviews' order. */
+export function mixNew<T extends { reps: number }>(items: T[], random = Math.random): T[] {
+  const mixed = items.filter((item) => item.reps > 0);
+  for (const item of items.filter((item) => item.reps === 0)) {
+    mixed.splice(Math.floor(random() * (mixed.length + 1)), 0, item);
+  }
+  return mixed;
 }
 
 export type ReviewInput = {
@@ -90,9 +106,10 @@ function applyOne(tx: Pick<Db, "select" | "update" | "insert">, review: ReviewIn
   return { id: review.id, status: "applied", due: next.due.toISOString() };
 }
 
-export type Stats = { cards: number; due: Record<ReviewMode, number>; reviewedToday: number };
+export type Stats = { cards: number; due: Record<ReviewMode, number>; reviewedToday: number; newCards: NewCardsToday };
 
-export function getStats(db: Db, now = new Date()): Stats {
+/** `timeZone` sets where "today" starts for reviewedToday and the new-card allowance. */
+export function getStats(db: Db, now = new Date(), timeZone = "UTC"): Stats {
   const total = db.select({ n: count() }).from(cards).get()?.n ?? 0;
   const dueRows = db
     .select({ mode: reviewStates.mode, n: count() })
@@ -101,6 +118,7 @@ export function getStats(db: Db, now = new Date()): Stats {
     .where(
       and(
         lte(reviewStates.due, now),
+        eq(cards.suspended, false),
         sql`(${reviewStates.mode} = 'meaning' or ${cards.speakable} = 1)`,
       ),
     )
@@ -108,9 +126,8 @@ export function getStats(db: Db, now = new Date()): Stats {
     .all();
   const due = { meaning: 0, speech: 0 };
   for (const row of dueRows) due[row.mode] = row.n;
-  const dayStart = new Date(now);
-  dayStart.setUTCHours(0, 0, 0, 0);
+  const dayStart = startOfDay(now, timeZone);
   const reviewedToday =
     db.select({ n: count() }).from(reviewLog).where(sql`${reviewLog.reviewedAt} >= ${dayStart.getTime()}`).get()?.n ?? 0;
-  return { cards: total, due, reviewedToday };
+  return { cards: total, due, reviewedToday, newCards: newCardsToday(db, now, timeZone) };
 }
