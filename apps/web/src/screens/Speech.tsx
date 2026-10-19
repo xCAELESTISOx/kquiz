@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { api, ApiError, submitReview } from "../lib/api";
+import { clozeFor } from "../lib/cloze";
+import { useLeechIds } from "../lib/leeches";
 import { describeErrors, segments, verdict } from "../lib/pronunciation";
 import { canRecord, MAX_SECONDS, Recorder, RecorderFailure, type RecorderError } from "../lib/recorder";
 import { navigate } from "../lib/router";
 import { cardAudioUrl, useIntonation } from "../lib/practice";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
-import type { Card, RatingName, ScoreResult } from "../lib/types";
+import type { Card, QueueItem, RatingName, ScoreResult } from "../lib/types";
+import { LeechBadge } from "../ui/LeechBadge";
 import { CloseIcon, MicIcon, PlayIcon, RetryIcon, SpeakerIcon, StopIcon } from "../ui/icons";
 import { IntonationChart } from "../ui/IntonationChart";
 import { useCountUp } from "../ui/motion";
@@ -43,7 +46,7 @@ function scoreError(error: unknown): string {
 }
 
 export function SpeechScreen() {
-  const [queue, setQueue] = useState<Card[]>();
+  const [queue, setQueue] = useState<QueueItem[]>();
   const [total, setTotal] = useState(0);
   const [done, setDone] = useState(0);
   const [step, setStep] = useState(0);
@@ -64,7 +67,7 @@ export function SpeechScreen() {
     document.title = "Произношение · KQuiz";
     api.queue("speech").then(
       ({ items }) => {
-        setQueue(items.map((item) => item.card));
+        setQueue(items);
         setTotal(items.length);
         shownAt.current = performance.now();
       },
@@ -83,12 +86,15 @@ export function SpeechScreen() {
     return () => clearInterval(id);
   }, [phase]);
 
-  const card = queue?.[0];
+  const item = queue?.[0];
+  const card = item?.card;
+  const cloze = useMemo(() => item && clozeFor(item), [item]);
+  const leeches = useLeechIds("speech");
   const intonation = useIntonation(card ? cardAudioUrl(card.id) : "", takeWav);
 
   // The next few too, so their audio is ready by the time they come up.
   useEffect(() => {
-    if (queue) preloadSpeech(...queue.slice(0, 3));
+    if (queue) preloadSpeech(...queue.slice(0, 3).map((i) => i.card));
   }, [queue]);
 
   const stop = useCallback(async () => {
@@ -203,8 +209,21 @@ export function SpeechScreen() {
           <div className="review-stage">
             <div className="review-card speech-card" key={step}>
               <div className="speech-body">
-              <p className="speech-ask">Скажи по-корейски</p>
+              {leeches.has(card.id) && <LeechBadge />}
+              <p className="speech-ask">
+                {cloze ? `Скажи пропущенное слово${card.korean.endsWith("다") ? " в словарной форме" : ""}` : "Скажи по-корейски"}
+              </p>
               <p className="speech-meaning">{card.meaning}</p>
+              {cloze && (
+                <div className="speech-context">
+                  <p lang="ko">
+                    {cloze.before}
+                    {revealed ? <mark className="cloze-mark">{cloze.word}</mark> : <span className="cloze-gap" aria-label="пропуск" />}
+                    {cloze.after}
+                  </p>
+                  <p className="muted">{card.examples[cloze.example]!.ru}</p>
+                </div>
+              )}
 
               {revealed ? (
                 <div className="speech-word">

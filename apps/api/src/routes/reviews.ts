@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { AuthVariables } from "../auth/sessions.js";
 import type { Db } from "../db/client.js";
+import { findLeeches } from "../leeches.js";
 import { introduceDailyCards } from "../newCards.js";
 import { ratings } from "../review.js";
 import { applyReviews, dueQueue, getStats } from "../reviewStore.js";
@@ -44,6 +45,9 @@ export function reviewRoutes(db: Db, now: () => Date, timeZone: string) {
     introduceDailyCards(db, now(), timeZone);
     return c.json(getStats(db, now(), timeZone));
   });
+
+  // Cards forgotten again and again (leeches.ts), for the app's list; Claude gets them through get_leeches.
+  app.get("/leeches", (c) => c.json({ items: findLeeches(db) }));
 
   return app;
 }

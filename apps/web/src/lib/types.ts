@@ -51,6 +51,13 @@ export interface QueueItem {
   lapses: number;
 }
 
+/** A card forgotten on many different days since its last edit (GET /api/reviews/leeches). */
+export interface Leech {
+  card: Card;
+  forgotten: Partial<Record<ReviewMode, number>>;
+  lastForgottenAt: string;
+}
+
 export interface AddCardsResult {
   created: Card[];
   duplicates: { korean: string; existingId: number }[];

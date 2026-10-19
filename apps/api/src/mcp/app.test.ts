@@ -239,6 +239,7 @@ describe("mcp tools", () => {
       "add_cards",
       "add_sound_drills",
       "find_cards",
+      "get_leeches",
       "get_stats",
       "get_weak_sounds",
       "list_sound_drills",

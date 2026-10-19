@@ -10,6 +10,7 @@ import { cards, oauthClients, oauthCodes, oauthGrants, phoneStats, reviewLog } f
 import type { OwnerAuth } from "../mcp/app.js";
 import type { OAuthStore } from "../mcp/oauth-store.js";
 import type { CardStore, DrillStore, NewDrill } from "../mcp/store.js";
+import { findLeeches } from "../leeches.js";
 import { introduceDailyCards } from "../newCards.js";
 import { addDrills, listDrills } from "../practice.js";
 import { getStats } from "../reviewStore.js";
@@ -137,6 +138,10 @@ export class SqliteCardStore implements CardStore {
       .limit(limit)
       .all()
       .map((row) => ({ ...row, errorRate: row.errors / row.attempts }));
+  }
+
+  async hardCards(limit: number) {
+    return findLeeches(this.db, limit).map(({ card, ...rest }) => ({ card: toStoredCard(card), ...rest }));
   }
 }
 

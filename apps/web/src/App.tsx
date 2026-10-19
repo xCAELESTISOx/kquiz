@@ -3,6 +3,7 @@ import { flushPendingReviews } from "./lib/api";
 import { useLocation } from "./lib/router";
 import { hideSplash } from "./lib/splash";
 import { AddScreen } from "./screens/Add";
+import { LeechesScreen } from "./screens/Leeches";
 import { CardScreen } from "./screens/Card";
 import { CardsScreen } from "./screens/Cards";
 import { LoginScreen } from "./screens/Login";
@@ -44,6 +45,8 @@ export function App() {
         <CardsScreen key="cards" filter={param === "queued" || param === "paused" ? param : undefined} />
       ) : route === "card" ? (
         <CardScreen key={param} id={Number(param)} />
+      ) : route === "leeches" ? (
+        <LeechesScreen />
       ) : (
         <TodayScreen />
       )}
