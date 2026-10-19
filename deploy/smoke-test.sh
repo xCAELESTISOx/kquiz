@@ -44,7 +44,9 @@ check "oversized body" 413 /api/cards -X POST "${cf[@]}" -H "content-type: appli
 
 if curl -s --noproxy "*" -o /dev/null --max-time 2 http://127.0.0.1:80/; then echo "FAIL port 80 is open"; fail=1; else echo "ok   nothing on port 80"; fi
 if ss -ltn | awk '{print $4}' | grep -Eq '^(0\.0\.0\.0|\*|\[::\]):8787$'; then echo "FAIL API listens publicly"; fail=1; else echo "ok   API only on 127.0.0.1"; fi
-if docker compose logs api | grep -q 'One-time setup code'; then echo "ok   setup code in the log"; else echo "FAIL no setup code in the log"; fail=1; fi
+# Not piped into grep -q: with pipefail an early grep exit fails the pipeline.
+docker compose logs api > "$work/api.log" 2>&1
+if grep -q 'One-time setup code' "$work/api.log"; then echo "ok   setup code in the log"; else echo "FAIL no setup code in the log"; fail=1; fi
 
 KQUIZ_BACKUPS=$work/backups ./backup.sh >/dev/null
 if ls "$work"/backups/kquiz-*.db.gz >/dev/null 2>&1; then echo "ok   backup written"; else echo "FAIL no backup"; fail=1; fi
