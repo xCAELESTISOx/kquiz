@@ -8,8 +8,12 @@ a short queue, 1 MB / 10 s per recording, 15 s per job.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import ctypes
+import gc
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
@@ -27,6 +31,9 @@ JOB_TIMEOUT_S = float(os.environ.get("SCORER_TIMEOUT", "15"))
 MAX_WAITING = 2
 # Speech for one card; the API calls one at a time in the background, so this is generous.
 TTS_TIMEOUT_S = float(os.environ.get("TTS_TIMEOUT", "60"))
+# The TTS model is dropped after this long without requests, giving its ~500 MB back to the
+# scoring model; new cards are rare, so it is loaded again only now and then.
+TTS_IDLE_S = float(os.environ.get("TTS_IDLE", "300"))
 
 
 def _load_scorer():
@@ -44,6 +51,7 @@ async def lifespan(app: FastAPI):
     app.state.tts_job = asyncio.Semaphore(1)
     if not hasattr(app.state, "synth"):
         app.state.synth = None
+    app.state.synth_used_at = time.monotonic()
     if not hasattr(app.state, "scorer"):
         app.state.scorer = None
         app.state.model_error = None
@@ -53,7 +61,9 @@ async def lifespan(app: FastAPI):
             except Exception as exc:  # the service still serves /g2p without a model
                 log.exception("model failed to load")
                 app.state.model_error = f"{type(exc).__name__}: {exc}"
+    unloader = asyncio.create_task(_unload_idle_synth(app.state))
     yield
+    unloader.cancel()
 
 
 app = FastAPI(title="kquiz-scorer", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
@@ -72,6 +82,25 @@ def _synth(state):
     return state.synth
 
 
+def unload_idle_synth(state, now: float) -> bool:
+    """Drops the TTS model if nothing used it for TTS_IDLE_S. Runs on the event loop, between jobs."""
+    if state.synth is None or state.tts_job.locked() or now - state.synth_used_at < TTS_IDLE_S:
+        return False
+    state.synth = None
+    gc.collect()
+    # glibc keeps freed memory in the process otherwise: without this only ~35 of ~430 MB return.
+    with contextlib.suppress(OSError, AttributeError):
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    log.info("tts model unloaded after %.0f s idle", now - state.synth_used_at)
+    return True
+
+
+async def _unload_idle_synth(state) -> None:
+    while True:
+        await asyncio.sleep(60)
+        unload_idle_synth(state, time.monotonic())
+
+
 @app.post("/tts")
 async def speak(request: Request, text: str = Query(min_length=1, max_length=tts.MAX_TEXT)) -> Response:
     """Reference audio for a card as MP3. Called by the API's background worker only."""
@@ -84,7 +113,10 @@ async def speak(request: Request, text: str = Query(min_length=1, max_length=tts
 
     async def job() -> bytes:
         async with state.tts_job:
-            return await run_in_threadpool(lambda: tts.speak(_synth(state), text))
+            try:
+                return await run_in_threadpool(lambda: tts.speak(_synth(state), text))
+            finally:
+                state.synth_used_at = time.monotonic()
 
     task = asyncio.create_task(job())
     state.tasks.add(task)

@@ -80,3 +80,16 @@ def test_tts_endpoint(client):
 def test_tts_endpoint_rejects_bad_text(client):
     assert client.post("/tts", params={"text": "  "}).status_code == 422
     assert client.post("/tts", params={"text": "가" * (tts.MAX_TEXT + 1)}).status_code == 422
+
+
+def test_idle_model_is_unloaded(client):
+    from app.main import TTS_IDLE_S, unload_idle_synth
+
+    state = app.state
+    client.post("/tts", params={"text": "국물"})
+    used = state.synth_used_at
+    assert not unload_idle_synth(state, used + TTS_IDLE_S - 1)
+    assert state.synth is not None
+    assert unload_idle_synth(state, used + TTS_IDLE_S)
+    assert state.synth is None
+    app.state.synth = FakeSynth()  # the fixture's teardown expects one
