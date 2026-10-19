@@ -47,3 +47,41 @@ jobs:
       - run: shellcheck deploy/*.sh
       - run: command -v sqlite3 || (sudo apt-get update && sudo apt-get install -y sqlite3)
       - run: deploy/smoke-test.sh
+
+  # Images the server pulls instead of building (deploy/update.sh). Only commits on main that
+  # passed every job above get them, so the server never runs a red commit from the registry.
+  images:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [node, scorer, deploy]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        image: [api, caddy, scorer]
+    env:
+      IMAGE: ghcr.io/xcaelestisox/kquiz-${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # The registry cache keeps unchanged layers (torch in the scorer) byte for byte the same,
+      # so the server downloads only the layers a commit changed.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile.${{ matrix.image }}
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: |
+            ${{ env.IMAGE }}:sha-${{ github.sha }}
+            ${{ env.IMAGE }}:main
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=registry,ref=${{ env.IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.IMAGE }}:buildcache,mode=max

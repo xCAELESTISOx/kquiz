@@ -1,4 +1,5 @@
-# Run from this directory: docker compose up -d --build
+# Run from this directory. update.sh pulls the images CI built (KQUIZ_TAG=sha-<commit>);
+# docker compose up -d --build builds them here instead.
 # All services use the host network and bind only what they must:
 # Caddy :80 and :443, API 127.0.0.1:8787, scorer 127.0.0.1:8788.
 name: kquiz
@@ -17,7 +18,7 @@ services:
   api:
     <<: *hardening
     build: { context: .., dockerfile: deploy/Dockerfile.api }
-    image: kquiz-api
+    image: ${KQUIZ_REGISTRY:-ghcr.io/xcaelestisox}/kquiz-api:${KQUIZ_TAG:-main}
     # Passes SETUP_CODE when deploy/.env sets it.
     env_file: [{ path: .env, required: false }]
     environment:
@@ -37,7 +38,7 @@ services:
   caddy:
     <<: *hardening
     build: { context: .., dockerfile: deploy/Dockerfile.caddy }
-    image: kquiz-caddy
+    image: ${KQUIZ_REGISTRY:-ghcr.io/xcaelestisox}/kquiz-caddy:${KQUIZ_TAG:-main}
     cap_add: [NET_BIND_SERVICE]
     environment:
       DOMAIN: ${DOMAIN:?set DOMAIN in deploy/.env}
@@ -51,11 +52,12 @@ services:
     pids_limit: 100
     depends_on: [api]
 
-  # Pronunciation scoring. Downloads the model (~1.3 GB) into scorer-models on first start.
+  # Pronunciation scoring. Downloads the model (~1.3 GB) into scorer-models on first start;
+  # the volume outlives image updates, so the model is downloaded once per server.
   scorer:
     <<: *hardening
     build: { context: .., dockerfile: deploy/Dockerfile.scorer }
-    image: kquiz-scorer
+    image: ${KQUIZ_REGISTRY:-ghcr.io/xcaelestisox}/kquiz-scorer:${KQUIZ_TAG:-main}
     environment:
       SCORER_THREADS: "2"
       SCORER_LOAD_MODEL: ${SCORER_LOAD_MODEL:-1}
