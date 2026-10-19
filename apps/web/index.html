@@ -6,10 +6,148 @@
     <meta name="theme-color" content="#0b0d12" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- iOS shows this before the page exists; a plain field of the splash colour makes the hand-off seamless. -->
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash-1320x2868.png"
+      media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+    />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>KQuiz</title>
+    <!-- Inline so the splash paints on the first frame, before any script or stylesheet arrives. -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #0b0d12;
+      }
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: grid;
+        place-items: center;
+        background: #0b0d12;
+        color: #9097a6;
+        font-family: -apple-system, "Apple SD Gothic Neo", system-ui, sans-serif;
+        transition: opacity 320ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      #splash::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle 240px at 50% 44%, rgb(124 140 255 / 0.12), transparent);
+      }
+      .splash-mark {
+        position: relative;
+        display: grid;
+        justify-items: center;
+        gap: 22px;
+        margin-top: -6vh;
+        transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      /* 말 — "word, speech" — written stroke by stroke, the way the app asks you to say it. */
+      .splash-glyph {
+        width: 112px;
+        height: 112px;
+        overflow: visible;
+        fill: none;
+        stroke: #98a4ff;
+        stroke-width: 7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        filter: drop-shadow(0 0 14px rgb(124 140 255 / 0.45));
+        animation: splash-breathe 1.8s 1.3s ease-in-out infinite alternate;
+      }
+      .splash-glyph path {
+        stroke-dasharray: 1;
+        stroke-dashoffset: 1;
+        animation: splash-stroke 260ms cubic-bezier(0.55, 0, 0.3, 1) forwards;
+        animation-delay: calc(var(--s) * 120ms + 80ms);
+      }
+      .splash-name {
+        font-size: 15px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        opacity: 0;
+        animation: splash-fade 500ms 900ms ease-out forwards;
+      }
+      .splash-error {
+        position: absolute;
+        inset: auto 24px calc(env(safe-area-inset-bottom) + 48px);
+        margin: 0;
+        text-align: center;
+        font-size: 15px;
+        line-height: 1.4;
+        color: #eceef3;
+      }
+      #splash.is-leaving {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #splash.is-leaving .splash-mark {
+        transform: scale(1.06);
+      }
+      @keyframes splash-stroke {
+        to {
+          stroke-dashoffset: 0;
+        }
+      }
+      @keyframes splash-fade {
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes splash-breathe {
+        to {
+          filter: drop-shadow(0 0 22px rgb(124 140 255 / 0.7));
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #splash,
+        .splash-mark {
+          transition: none;
+        }
+        .splash-glyph,
+        .splash-glyph path,
+        .splash-name {
+          animation: none;
+          stroke-dashoffset: 0;
+          opacity: 1;
+        }
+      }
+    </style>
   </head>
   <body>
+    <div id="splash" role="status" aria-label="KQuiz загружается">
+      <div class="splash-mark">
+        <svg class="splash-glyph" viewBox="0 0 100 100" aria-hidden="true">
+          <!-- ㅁ -->
+          <path pathLength="1" style="--s: 0" d="M16 12 V44" />
+          <path pathLength="1" style="--s: 1" d="M16 12 H50 V44" />
+          <path pathLength="1" style="--s: 2" d="M16 44 H50" />
+          <!-- ㅏ -->
+          <path pathLength="1" style="--s: 3" d="M72 6 V54" />
+          <path pathLength="1" style="--s: 4" d="M72 30 H86" />
+          <!-- ㄹ -->
+          <path pathLength="1" style="--s: 5" d="M20 62 H78 V75" />
+          <path pathLength="1" style="--s: 6" d="M78 75 H20 V89" />
+          <path pathLength="1" style="--s: 7" d="M20 89 H82" />
+        </svg>
+        <span class="splash-name">KQuiz</span>
+      </div>
+    </div>
+    <script>
+      // If the app never takes over (a broken deploy, a dropped connection), say so instead of glowing forever.
+      setTimeout(() => {
+        const splash = document.getElementById("splash");
+        if (!splash || splash.classList.contains("is-leaving")) return;
+        const p = document.createElement("p");
+        p.className = "splash-error";
+        p.textContent = "Приложение не открылось. Проверь сеть и обнови страницу.";
+        splash.append(p);
+      }, 12000);
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

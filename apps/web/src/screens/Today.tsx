@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { api, pendingReviewCount } from "../lib/api";
 import { cardsWord } from "../lib/plural";
+import { hideSplash } from "../lib/splash";
 import type { QueueItem, Stats } from "../lib/types";
 import { HeadphonesIcon, MicIcon } from "../ui/icons";
 
@@ -21,6 +22,10 @@ export function TodayScreen() {
       (e: Error) => setError(e.message),
     );
   }, []);
+
+  useEffect(() => {
+    if (stats || error) hideSplash();
+  }, [stats, error]);
 
   const due = stats?.due.meaning ?? 0;
   const speechDue = stats?.due.speech ?? 0;
