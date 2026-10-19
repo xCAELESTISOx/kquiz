@@ -30,7 +30,11 @@ export function ScheduleSettings() {
     }
   }
 
-  const summary = status.modes.map((m) => percent(m.desiredRetention)).join(" · ");
+  // One number when every mode shares it, which is the usual case; otherwise each mode by name.
+  const targets = status.modes.map((m) => m.desiredRetention);
+  const summary = targets.every((r) => r === targets[0])
+    ? `помнить ${percent(targets[0]!)}`
+    : status.modes.map((m) => `${MODE_LABEL[m.mode].toLowerCase()} ${percent(m.desiredRetention)}`).join(", ");
 
   return (
     <details className="schedule">

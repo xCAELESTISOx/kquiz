@@ -378,14 +378,15 @@
   grid-template-columns: repeat(3, 1fr);
 }
 
+/* Words sit on one line across the row whether or not a translation is shown under them. */
 .sounds-option {
   min-height: 84px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 4px;
-  padding: 10px 6px;
+  padding: 16px 6px 10px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   background: var(--surface-raised);
