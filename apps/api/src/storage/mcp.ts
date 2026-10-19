@@ -109,7 +109,7 @@ export class SqliteCardStore implements CardStore {
 
   async stats(now: Date) {
     const stats = getStats(this.db, now);
-    return { cards: stats.cards, dueMeaning: stats.due.meaning, dueSpeech: stats.due.speech, streakDays: streakDays(this.db, now) };
+    return { cards: stats.cards, dueMeaning: stats.due.meaning, dueSpeech: stats.due.speech, dueListening: stats.due.listening, streakDays: streakDays(this.db, now) };
   }
 
   async weakSounds(limit: number) {

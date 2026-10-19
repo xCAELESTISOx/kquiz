@@ -34,7 +34,7 @@ export function findLeeches(db: Db, limit = 50): Leech[] {
       and(
         eq(reviewLog.rating, "again"),
         gt(reviewLog.reviewedAt, cards.updatedAt),
-        sql`(${reviewLog.mode} = 'meaning' or ${cards.speakable} = 1)`,
+        sql`(${reviewLog.mode} <> 'speech' or ${cards.speakable} = 1)`,
       ),
     )
     .groupBy(reviewLog.cardId, reviewLog.mode)

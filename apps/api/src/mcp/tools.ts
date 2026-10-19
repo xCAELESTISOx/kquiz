@@ -138,7 +138,7 @@ export function createMcpServer(store: CardStore): McpServer {
     {
       title: "Get hard cards",
       description:
-        "Cards the owner keeps forgetting (leeches): forgotten on several different days since the card was last edited, per mode (meaning: recalling the translation; speech: saying it in Korean). Rework them with update_card; an edit gives a card a fresh start and takes it off this list.",
+        "Cards the owner keeps forgetting (leeches): forgotten on several different days since the card was last edited, per mode (meaning: recalling the translation; speech: saying it in Korean; listening: understanding it by ear). Rework them with update_card; an edit gives a card a fresh start and takes it off this list.",
       inputSchema: { limit: z.number().int().min(1).max(50).default(20) },
       annotations: { readOnlyHint: true },
     },

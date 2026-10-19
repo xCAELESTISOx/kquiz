@@ -90,10 +90,12 @@ export class MockApi {
   queue(mode: ReviewMode, limit = 50): QueueItem[] {
     const now = this.now().getTime();
     return this.state.cards
-      .filter((c) => mode === "meaning" || c.speakable)
+      // No recordings in the mock: listening falls back to the phone's voice for every Hangul card.
+      .filter((c) => (mode === "speech" ? c.speakable : mode === "listening" ? c.readyForSpeech : true))
       .map((card) => {
         const key = `${card.id}:${mode}`;
-        const due = this.state.due[key]!;
+        // Saved before listening mode existed: due from the card's creation.
+        const due = this.state.due[key] ?? card.createdAt;
         const reps = this.state.reps[key] ?? 0;
         return { card, mode, due, state: reps ? 2 : 0, reps, lapses: 0 };
       })
@@ -126,7 +128,11 @@ export class MockApi {
     const day = this.now().toISOString().slice(0, 10);
     return {
       cards: this.state.cards.length,
-      due: { meaning: this.queue("meaning", Infinity).length, speech: this.queue("speech", Infinity).length },
+      due: {
+        meaning: this.queue("meaning", Infinity).length,
+        speech: this.queue("speech", Infinity).length,
+        listening: this.queue("listening", Infinity).length,
+      },
       reviewedToday: this.state.reviewedToday.day === day ? this.state.reviewedToday.count : 0,
     };
   }
@@ -205,6 +211,7 @@ export class MockApi {
     this.state.cards.push(card);
     this.state.due[`${card.id}:meaning`] = at;
     this.state.due[`${card.id}:speech`] = at;
+    this.state.due[`${card.id}:listening`] = at;
     return { status: "created", card };
   }
 

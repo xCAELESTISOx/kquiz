@@ -15,6 +15,7 @@ function forgottenText({ forgotten }: Leech): string {
   const parts = [];
   if (forgotten.meaning) parts.push(`перевод — ${forgotten.meaning} ${times(forgotten.meaning)}`);
   if (forgotten.speech) parts.push(`произношение — ${forgotten.speech} ${times(forgotten.speech)}`);
+  if (forgotten.listening) parts.push(`на слух — ${forgotten.listening} ${times(forgotten.listening)}`);
   return `Забыта: ${parts.join(", ")}`;
 }
 

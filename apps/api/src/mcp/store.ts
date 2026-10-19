@@ -24,6 +24,8 @@ export interface Stats {
   cards: number;
   dueMeaning: number;
   dueSpeech: number;
+  /** Cards to recognise by ear; only those whose recording is made. */
+  dueListening: number;
   streakDays: number;
 }
 
@@ -31,7 +33,7 @@ export interface Stats {
 export interface HardCard {
   card: StoredCard;
   /** Days it was forgotten since the last edit, per review mode at the threshold. */
-  forgotten: { meaning?: number; speech?: number };
+  forgotten: { meaning?: number; speech?: number; listening?: number };
   lastForgottenAt: string;
 }
 
@@ -124,6 +126,7 @@ export class MemoryCardStore implements CardStore {
       cards: all.length,
       dueMeaning: all.length,
       dueSpeech: all.filter((card) => card.speakable).length,
+      dueListening: 0,
       streakDays: 0,
     };
   }

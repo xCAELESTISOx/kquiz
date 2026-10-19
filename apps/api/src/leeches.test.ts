@@ -38,6 +38,8 @@ describe("leeches", () => {
     const { db, hard } = setup();
     for (let d = 1; d <= LEECH_THRESHOLD; d++) rate(db, hard, "again", new Date(start.getTime() + d * DAY), "speech");
     expect(findLeeches(db)[0]?.forgotten).toEqual({ speech: LEECH_THRESHOLD });
+    for (let d = 1; d <= LEECH_THRESHOLD; d++) rate(db, hard, "again", new Date(start.getTime() + d * DAY), "listening");
+    expect(findLeeches(db)[0]?.forgotten).toEqual({ speech: LEECH_THRESHOLD, listening: LEECH_THRESHOLD });
     updateCard(db, hard, { notes: "мнемоника" }, new Date(start.getTime() + 30 * DAY));
     expect(findLeeches(db)).toEqual([]);
   });
