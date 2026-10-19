@@ -18,8 +18,7 @@ class QueueRecognizer(FakeRecognizer):
         self.queue = list(heard)
 
     def log_probs(self, audio):
-        self.labels = self.queue.pop(0)
-        return super().log_probs(audio)
+        return FakeRecognizer(self.queue.pop(0)).log_probs(audio)
 
 
 def test_run_and_summary(tmp_path):

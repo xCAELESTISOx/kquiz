@@ -17,6 +17,8 @@ import json
 import random
 import re
 import sys
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -106,10 +108,22 @@ def mutations(word: str) -> list[tuple[str, int]]:
     return out
 
 
+def _open(url: str, attempts: int = 6):
+    """urlopen with a polite User-Agent, backing off when Wikimedia rate-limits (HTTP 429)."""
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    for attempt in range(attempts):
+        try:
+            return urllib.request.urlopen(req, timeout=60)
+        except urllib.error.HTTPError as exc:
+            if exc.code != 429 or attempt == attempts - 1:
+                raise
+            time.sleep(int(exc.headers.get("Retry-After") or 0) or 2 ** (attempt + 2))
+    raise AssertionError("unreachable")
+
+
 def _get(params: dict) -> dict:
     url = API + "?" + urllib.parse.urlencode({**params, "format": "json", "formatversion": "2"})
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    with _open(url) as resp:
         return json.load(resp)
 
 
@@ -148,8 +162,7 @@ def commons_files(limit: int) -> list[dict]:
 
 
 def download(url: str, dest: Path) -> None:
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=60) as resp:
+    with _open(url) as resp:
         dest.write_bytes(resp.read())
 
 
@@ -180,6 +193,7 @@ def cmd_commons(args) -> int:
         dest = out / name
         if not dest.exists():
             download(f["url"], dest)
+            time.sleep(args.delay)
         f["file"] = name
         credits.append(f"{name}\t{f['title']}\t{f['user']}\t{f['license']}")
     (out / "CREDITS.tsv").write_text(
@@ -201,6 +215,7 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("out")
     c.add_argument("--limit", type=int, default=60)
     c.add_argument("--seed", type=int, default=0)
+    c.add_argument("--delay", type=float, default=1.0, help="seconds between downloads")
     c.set_defaults(fn=cmd_commons)
     args = parser.parse_args(argv)
     return args.fn(args)
