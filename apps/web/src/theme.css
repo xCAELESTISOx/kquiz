@@ -1,0 +1,99 @@
+/* Dark-only design tokens (docs/PLAN.md §8). */
+:root {
+  color-scheme: dark;
+  --bg: #0b0d12;
+  --surface: #14171f;
+  --surface-raised: #1c202a;
+  --border: #262b37;
+  --text: #eceef3;
+  --text-muted: #9097a6;
+  --accent: #7c8cff;
+  --ok: #4ade80;
+  --weak: #fbbf24;
+  --wrong: #f87171;
+  --radius: 16px;
+  --tap: 44px;
+  --font: "Pretendard", -apple-system, "Apple SD Gothic Neo", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: calc(env(safe-area-inset-top) + 24px) 16px calc(env(safe-area-inset-bottom) + 16px);
+  max-width: 520px;
+  margin: 0 auto;
+  gap: 16px;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.stat {
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.actions {
+  margin-top: auto;
+  display: grid;
+  gap: 12px;
+}
+
+.button {
+  min-height: calc(var(--tap) + 12px);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  transition: transform 150ms ease;
+}
+
+.button:active {
+  transform: scale(0.98);
+}
+
+.button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0b0d12;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

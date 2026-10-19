@@ -1,0 +1,9 @@
+{
+  "name": "KQuiz",
+  "short_name": "KQuiz",
+  "lang": "ru",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0d12",
+  "theme_color": "#0b0d12"
+}
