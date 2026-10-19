@@ -40,16 +40,19 @@ export function cardRoutes(db: Db, now: () => Date) {
   app.get("/", (c) => {
     const query = listQuery.safeParse(c.req.query());
     if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
-    return c.json(listCards(db, query.data));
+    return c.json(listCards(db, c.get("user").id, query.data));
   });
 
   // For the filter chips of the cards screen.
-  app.get("/summary", (c) => c.json({ counts: cardCounts(db), tags: listTags(db) }));
+  app.get("/summary", (c) => {
+    const userId = c.get("user").id;
+    return c.json({ counts: cardCounts(db, userId), tags: listTags(db, userId) });
+  });
 
   app.post("/", async (c) => {
     const body = newCardSchema.safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: "invalid_request", issues: body.error.issues }, 400);
-    const { created, duplicates } = createCards(db, [body.data], "app", now());
+    const { created, duplicates } = createCards(db, c.get("user").id, [body.data], "app", now());
     if (duplicates[0]) return c.json({ error: "duplicate", existingId: duplicates[0].existingId }, 409);
     return c.json({ card: created[0] }, 201);
   });
@@ -80,20 +83,20 @@ export function cardRoutes(db: Db, now: () => Date) {
       }
     }
     if (valid.length > MAX_BATCH) return c.json({ error: "too_many_cards", max: MAX_BATCH }, 400);
-    const result = createCards(db, valid, "bulk", now());
+    const result = createCards(db, c.get("user").id, valid, "bulk", now());
     return c.json({ ...result, rejected });
   });
 
   app.get("/:id", (c) => {
     const id = idParam.safeParse(c.req.param("id"));
-    const card = id.success ? getCard(db, id.data) : undefined;
+    const card = id.success ? getCard(db, c.get("user").id, id.data) : undefined;
     return card ? c.json({ card }) : c.json({ error: "not_found" }, 404);
   });
 
   // Reference audio (cardAudio.ts). 404 until the worker has made it; the app then uses the phone's voice.
   app.get("/:id/audio", (c) => {
     const id = idParam.safeParse(c.req.param("id"));
-    const audio = id.success ? getCardAudio(db, id.data) : undefined;
+    const audio = id.success ? getCardAudio(db, c.get("user").id, id.data) : undefined;
     if (!audio) return c.json({ error: "not_found" }, 404);
     const headers = { "cache-control": "private, no-cache", etag: audio.etag };
     if (c.req.header("if-none-match") === audio.etag) return c.body(null, 304, headers);
@@ -105,7 +108,7 @@ export function cardRoutes(db: Db, now: () => Date) {
     if (!id.success) return c.json({ error: "not_found" }, 404);
     const patch = appPatchSchema.safeParse(await c.req.json().catch(() => null));
     if (!patch.success) return c.json({ error: "invalid_request", issues: patch.error.issues }, 400);
-    const result = updateCard(db, id.data, patch.data, now());
+    const result = updateCard(db, c.get("user").id, id.data, patch.data, now());
     if ("card" in result) return c.json(result);
     if (result.error === "duplicate") return c.json(result, 409);
     return c.json(result, 404);
@@ -114,16 +117,17 @@ export function cardRoutes(db: Db, now: () => Date) {
   // Pulls a card out of the new-card queue into reviews now, past the daily allowance.
   app.post("/:id/introduce", (c) => {
     const id = idParam.safeParse(c.req.param("id"));
-    const result = id.success ? introduceEarly(db, id.data, now()) : "not_found";
+    const userId = c.get("user").id;
+    const result = id.success ? introduceEarly(db, userId, id.data, now()) : "not_found";
     if (result === "not_found") return c.json({ error: "not_found" }, 404);
     if (result === "not_queued") return c.json({ error: "not_queued" }, 409);
-    return c.json({ card: getCard(db, id.data!) });
+    return c.json({ card: getCard(db, userId, id.data!) });
   });
 
   // Only the app deletes cards; the MCP server for Claude has no delete (docs/PLAN.md §6).
   app.delete("/:id", (c) => {
     const id = idParam.safeParse(c.req.param("id"));
-    if (!id.success || !deleteCard(db, id.data)) return c.json({ error: "not_found" }, 404);
+    if (!id.success || !deleteCard(db, c.get("user").id, id.data)) return c.json({ error: "not_found" }, 404);
     return c.json({ ok: true });
   });
 

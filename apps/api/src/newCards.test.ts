@@ -4,6 +4,7 @@ import { createCards } from "./cardStore.js";
 import { startOfDay } from "./newCards.js";
 import { mixNew } from "./reviewStore.js";
 import { testApp } from "./testing.js";
+import { OWNER_ID } from "./users.js";
 
 async function signedIn() {
   const t = testApp();
@@ -14,7 +15,7 @@ async function signedIn() {
 /** Cards as Claude adds them through MCP. */
 function fromClaude(t: Awaited<ReturnType<typeof signedIn>>, n: number) {
   const words = Array.from({ length: n }, (_, i) => ({ korean: `단어${String.fromCharCode(0xac00 + i)}`, meaning: `слово ${i}`, tags: [] }));
-  return createCards(t.db, words, "claude", t.clock.now).created;
+  return createCards(t.db, OWNER_ID, words, "claude", t.clock.now).created;
 }
 
 const HOUR = 3_600_000;

@@ -13,6 +13,8 @@ export interface OAuthClient {
 
 export interface AuthCode {
   codeHash: string;
+  /** Who approved it: the grant made from it works on their cards. */
+  userId: number;
   clientId: string;
   redirectUri: string;
   codeChallenge: string;
@@ -23,6 +25,7 @@ export interface AuthCode {
 /** One approval of one client. Every token pair it rotates through belongs to it. */
 export interface Grant {
   id: string;
+  userId: number;
   clientId: string;
   scope: string;
   createdAt: number;
@@ -36,7 +39,7 @@ export interface Grant {
 }
 
 /**
- * OAuth state for the single owner. Tokens and codes are stored only as hashes.
+ * OAuth state for every user's connectors. Tokens and codes are stored only as hashes.
  * The SQLite store in apps/api (auth_* tables) implements it; MemoryOAuthStore stands in until then.
  */
 export interface OAuthStore {

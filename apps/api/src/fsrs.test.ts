@@ -9,6 +9,7 @@ import { MIN_REVIEWS, optimizeMode, reviewDay, trainingItems } from "./fsrsOptim
 import { applyRating, newReviewState, type RatingName } from "./review.js";
 import { applyReviews } from "./reviewStore.js";
 import { testApp } from "./testing.js";
+import { OWNER_ID } from "./users.js";
 
 const TZ = "Asia/Seoul";
 const start = new Date("2026-01-05T01:00:00Z");
@@ -17,8 +18,7 @@ const start = new Date("2026-01-05T01:00:00Z");
 function simulate(db: Db, cardCount: number, reviewsPerCard: number) {
   let seed = 42;
   const random = () => ((seed = (seed * 1_103_515_245 + 12_345) % 2 ** 31) / 2 ** 31);
-  const { created } = createCards(
-    db,
+  const { created } = createCards(db, OWNER_ID,
     Array.from({ length: cardCount }, (_, i) => ({ korean: `단어${String.fromCharCode(0xac00 + i)}`, meaning: `слово ${i}`, examples: [], tags: [] })),
     "app",
     start,
@@ -32,7 +32,7 @@ function simulate(db: Db, cardCount: number, reviewsPerCard: number) {
       const days = row.lastReview ? (at.getTime() - row.lastReview.getTime()) / 86_400_000 : 0;
       const recall = Math.exp(-days / (2 + 6 * n));
       const rating: RatingName = random() < recall ? (random() < 0.15 ? "easy" : "good") : random() < 0.3 ? "hard" : "again";
-      applyReviews(db, [{ id: randomUUID(), cardId: card.id, mode: "meaning", rating, reviewedAt: at }], latest);
+      applyReviews(db, OWNER_ID, [{ id: randomUUID(), cardId: card.id, mode: "meaning", rating, reviewedAt: at }], latest);
     }
   }
 }
@@ -70,11 +70,11 @@ describe("fsrs weights", () => {
   it("keeps the defaults until there are enough reviews", async () => {
     const db = openDb(":memory:");
     simulate(db, 20, 5);
-    expect(await optimizeMode(db, "meaning", { timeZone: TZ, now: new Date("2027-06-01T00:00:00Z") })).toEqual({
+    expect(await optimizeMode(db, OWNER_ID, "meaning", { timeZone: TZ, now: new Date("2027-06-01T00:00:00Z") })).toEqual({
       status: "not_enough_reviews",
       reviews: 100,
     });
-    expect(getFsrsSetup(db, "meaning").weights).toBeNull();
+    expect(getFsrsSetup(db, OWNER_ID, "meaning").weights).toBeNull();
   });
 
   it("fits the owner's history once there is enough, and only once a month", async () => {
@@ -83,22 +83,22 @@ describe("fsrs weights", () => {
     const now = new Date("2027-06-01T00:00:00Z");
     const dueBefore = db.select().from(reviewStates).where(eq(reviewStates.mode, "meaning")).all();
 
-    const result = await optimizeMode(db, "meaning", { timeZone: TZ, now });
+    const result = await optimizeMode(db, OWNER_ID, "meaning", { timeZone: TZ, now });
     expect(result.reviews).toBeGreaterThanOrEqual(MIN_REVIEWS);
     expect(result.status).toBe("updated");
     if (result.status !== "updated") return;
     expect(result.logLoss).toBeLessThan(result.previousLogLoss);
 
-    const weights = getFsrsSetup(db, "meaning").weights!;
+    const weights = getFsrsSetup(db, OWNER_ID, "meaning").weights!;
     expect(weights).toHaveLength(21);
     // Memory states were replayed with the new weights; due dates were left alone.
     const after = db.select().from(reviewStates).where(eq(reviewStates.mode, "meaning")).all();
     expect(after.map((r) => r.due.getTime())).toEqual(dueBefore.map((r) => r.due.getTime()));
     expect(after.some((r, i) => r.stability !== dueBefore[i]!.stability)).toBe(true);
     // Speech has no history of its own, so it keeps the defaults.
-    expect(getFsrsSetup(db, "speech").weights).toBeNull();
+    expect(getFsrsSetup(db, OWNER_ID, "speech").weights).toBeNull();
 
-    expect((await optimizeMode(db, "meaning", { timeZone: TZ, now })).status).toBe("up_to_date");
+    expect((await optimizeMode(db, OWNER_ID, "meaning", { timeZone: TZ, now })).status).toBe("up_to_date");
   });
 });
 
@@ -124,9 +124,9 @@ describe("fsrs retention", () => {
     const res = await t.request("/reviews/fsrs", { method: "PUT", body: { mode: "speech", desiredRetention: 0.85 } });
     expect(res.status).toBe(200);
     expect(res.json.modes[1].desiredRetention).toBe(0.85);
-    expect(getFsrsSetup(t.db, "meaning").desiredRetention).toBe(0.9);
+    expect(getFsrsSetup(t.db, OWNER_ID, "meaning").desiredRetention).toBe(0.9);
     expect((await t.request("/reviews/fsrs", { method: "PUT", body: { mode: "speech", desiredRetention: 0.7 } })).status).toBe(400);
-    setDesiredRetention(t.db, "meaning", 0.93);
+    setDesiredRetention(t.db, OWNER_ID, "meaning", 0.93);
     expect((await t.request("/reviews/fsrs")).json.modes[0].desiredRetention).toBe(0.93);
   });
 

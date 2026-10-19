@@ -3,6 +3,7 @@ import { isKoreanOnly, isSpeakable, koreanKey, normalizeKorean, type CardPatch, 
 import type { Db } from "./db/client.js";
 import { cards } from "./db/schema.js";
 import { introduce } from "./newCards.js";
+import { cardsLeft, QuotaError } from "./users.js";
 
 export type CardSource = "app" | "claude" | "bulk";
 type CardRow = typeof cards.$inferSelect;
@@ -57,23 +58,28 @@ const uniqueTags = (tags: string[]) => [...new Set(tags)];
 /**
  * Stores new cards. Cards added in the app get a fresh schedule in every mode at once; cards from
  * Claude wait in the new-card queue (newCards.ts). A card whose Korean already exists (or repeats
- * earlier in the batch) is reported as a duplicate, not stored.
+ * earlier in the batch) is reported as a duplicate, not stored. Duplicates are per user: two people
+ * can both have 사랑. Past a member's card limit (users.ts) nothing is stored and QuotaError is thrown.
  */
-export function createCards(db: Db, inputs: NewCard[], source: CardSource, now = new Date()): CreateResult {
+export function createCards(db: Db, userId: number, inputs: NewCard[], source: CardSource, now = new Date()): CreateResult {
   return db.transaction((tx) => {
     const created: CardDto[] = [];
     const duplicates: Duplicate[] = [];
+    const left = cardsLeft(tx, userId, now);
     for (const input of inputs) {
       const korean = normalizeKorean(input.korean);
       const key = koreanKey(korean);
-      const existing = tx.select({ id: cards.id }).from(cards).where(eq(cards.koreanKey, key)).get();
+      const existing = tx.select({ id: cards.id }).from(cards).where(and(eq(cards.userId, userId), eq(cards.koreanKey, key))).get();
       if (existing) {
         duplicates.push({ korean, existingId: existing.id });
         continue;
       }
+      // Throwing rolls the whole batch back.
+      if (created.length >= left) throw new QuotaError("cards", left);
       const row = tx
         .insert(cards)
         .values({
+          userId,
           korean,
           koreanKey: key,
           meaning: input.meaning,
@@ -100,8 +106,8 @@ export function createCards(db: Db, inputs: NewCard[], source: CardSource, now =
   });
 }
 
-export function getCard(db: Db, id: number): CardDto | undefined {
-  const row = db.select().from(cards).where(eq(cards.id, id)).get();
+export function getCard(db: Db, userId: number, id: number): CardDto | undefined {
+  const row = db.select().from(cards).where(and(eq(cards.id, id), eq(cards.userId, userId))).get();
   return row && toCardDto(row);
 }
 
@@ -118,9 +124,9 @@ export type CardQuery = {
   before?: number;
 };
 
-export function listCards(db: Db, query: CardQuery = {}): { cards: CardDto[]; nextBefore: number | null } {
+export function listCards(db: Db, userId: number, query: CardQuery = {}): { cards: CardDto[]; nextBefore: number | null } {
   const limit = Math.min(Math.max(query.limit ?? 50, 1), 200);
-  const where: SQL[] = [];
+  const where: SQL[] = [eq(cards.userId, userId)];
   if (query.q) {
     const pattern = `%${query.q.toLocaleLowerCase().replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
     where.push(sql`(ulower(${cards.korean}) like ${pattern} escape '\\' or ulower(${cards.meaning}) like ${pattern} escape '\\')`);
@@ -145,17 +151,18 @@ export function listCards(db: Db, query: CardQuery = {}): { cards: CardDto[]; ne
 }
 
 /** Every tag in use, most used first. */
-export function listTags(db: Db): { tag: string; count: number }[] {
+export function listTags(db: Db, userId: number): { tag: string; count: number }[] {
   return db
     .select({ tag: sql<string>`j.value`, count: count() })
     .from(sql`${cards}, json_each(${cards.tags}) as j`)
+    .where(eq(cards.userId, userId))
     .groupBy(sql`j.value`)
     .orderBy(desc(count()), sql`j.value`)
     .all();
 }
 
 /** Cards in the new-card queue and paused cards, for the filter chips. */
-export function cardCounts(db: Db): { all: number; queued: number; paused: number } {
+export function cardCounts(db: Db, userId: number): { all: number; queued: number; paused: number } {
   const row = db
     .select({
       all: count(),
@@ -163,6 +170,7 @@ export function cardCounts(db: Db): { all: number; queued: number; paused: numbe
       paused: sql<number>`coalesce(sum(${cards.suspended}), 0)`,
     })
     .from(cards)
+    .where(eq(cards.userId, userId))
     .get();
   return { all: row?.all ?? 0, queued: row?.queued ?? 0, paused: row?.paused ?? 0 };
 }
@@ -170,14 +178,20 @@ export function cardCounts(db: Db): { all: number; queued: number; paused: numbe
 export type UpdateResult = { card: CardDto } | { error: "not_found" } | { error: "duplicate"; existingId: number };
 
 /** `suspended` comes only from the app: Claude can't pause cards. */
-export function updateCard(db: Db, id: number, patch: CardPatch & { suspended?: boolean }, now = new Date()): UpdateResult {
+export function updateCard(
+  db: Db,
+  userId: number,
+  id: number,
+  patch: CardPatch & { suspended?: boolean },
+  now = new Date(),
+): UpdateResult {
   return db.transaction((tx) => {
-    const current = tx.select().from(cards).where(eq(cards.id, id)).get();
+    const current = tx.select().from(cards).where(and(eq(cards.id, id), eq(cards.userId, userId))).get();
     if (!current) return { error: "not_found" };
     const korean = patch.korean === undefined ? current.korean : normalizeKorean(patch.korean);
     const key = koreanKey(korean);
     if (key !== current.koreanKey) {
-      const other = tx.select({ id: cards.id }).from(cards).where(eq(cards.koreanKey, key)).get();
+      const other = tx.select({ id: cards.id }).from(cards).where(and(eq(cards.userId, userId), eq(cards.koreanKey, key))).get();
       if (other) return { error: "duplicate", existingId: other.id };
     }
     const optional = (value: string | undefined, old: string | null) => (value === undefined ? old : emptyToNull(value));
@@ -203,6 +217,6 @@ export function updateCard(db: Db, id: number, patch: CardPatch & { suspended?: 
   });
 }
 
-export function deleteCard(db: Db, id: number): boolean {
-  return db.delete(cards).where(eq(cards.id, id)).run().changes > 0;
+export function deleteCard(db: Db, userId: number, id: number): boolean {
+  return db.delete(cards).where(and(eq(cards.id, id), eq(cards.userId, userId))).run().changes > 0;
 }

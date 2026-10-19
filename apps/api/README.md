@@ -1,6 +1,6 @@
 # @kquiz/api
 
-Hono + SQLite (better-sqlite3, Drizzle). One owner, passkey login, FSRS scheduling in three modes: meaning, speech (say it aloud) and listening (hear it, no text).
+Hono + SQLite (better-sqlite3, Drizzle). An owner and up to four invited people, each with their own data; passkey login, FSRS scheduling in three modes: meaning, speech (say it aloud) and listening (hear it, no text).
 
 ```sh
 pnpm dev            # http://127.0.0.1:8787, prints a one-time setup code on first start
@@ -25,7 +25,8 @@ pnpm db:generate    # after editing src/db/schema.ts; migrations in drizzle/ app
 
 - Cloudflare only: every request except `/api/health`, including `/mcp`, `/oauth/*` and `/.well-known/*`, needs `x-kquiz-origin` and `cf-connecting-ip`. The firewall admitting only Cloudflare's IPs is the first line; this header stops anyone who finds the server's IP.
 - Limits per client IP: passkey endpoints 5/min (plus 30/min overall), the rest of `/api` 300/min. The limiter tracks at most 10 000 clients and refuses new ones beyond that, so an IP flood can't eat memory. Shared limits for score and MCP are in `limits` in `src/security/rateLimit.ts`.
-- Body limit 1 MB, challenges live 5 min and are capped at 20 rows, at most 20 sessions.
+- Body limit 1 MB, challenges live 5 min and are capped at 20 rows, at most 20 sessions per person.
+- People (`src/users.ts`): the owner (id 1) and members who joined by a one-time invite link (24 h, at most 5 people in all). Every query filters by the session's user; another person's card id answers 404. A member may add 200 cards a day and 5000 in all and score 300 recordings a day (`429 quota_exceeded`); the owner has no limits. TTS does the owner's cards first, and a word someone else already has reuses its audio. MCP calls are limited per person.
 - Session: `__Host-kq_session` cookie, httpOnly, Secure, SameSite=Strict, 30 days; stored as SHA-256. Every non-GET request needs header `x-csrf-token`; cross-site form posts are refused.
 
 ## Endpoints
@@ -33,11 +34,18 @@ pnpm db:generate    # after editing src/db/schema.ts; migrations in drizzle/ app
 All JSON. Everything except health and `/auth/status|login|register` needs the session.
 
 **Auth** (`/api/auth`)
-- `GET /status` → `{ authenticated, setupRequired, csrfToken? }`
-- `POST /register/options` `{ setupCode? }` → WebAuthn creation options. First passkey: `setupCode`; later ones: open session + CSRF.
-- `POST /register/verify` `{ response, setupCode?, name? }` → `{ ok, csrfToken? }` (first passkey also signs in)
-- `POST /login/options` → WebAuthn request options; `POST /login/verify` `{ response }` → `{ ok, csrfToken }`
+- `GET /status` → `{ authenticated, setupRequired, csrfToken?, user?: { id, name, role: "owner" | "member" } }`
+- `GET /invite?code=` → `{ status: "ok" | "invalid" | "full" }`
+- `POST /register/options` `{ setupCode? } | { invite, userName }` → WebAuthn creation options. Owner's first passkey: `setupCode`; a new member: `invite` and their name; another passkey for yourself: open session + CSRF.
+- `POST /register/verify` `{ response, setupCode?, invite?, userName?, name? }` → `{ ok, csrfToken? }` (setup and invite also sign in)
+- `POST /login/options` → WebAuthn request options with no credential list (passkeys are discoverable); `POST /login/verify` `{ response }` → `{ ok, csrfToken }`
 - `POST /logout`, `GET /passkeys`, `DELETE /passkeys/:id` (the last passkey can't be removed)
+
+**People** (`/api/users`, owner only)
+- `GET /` → `{ users: [{ id, name, role, createdAt, disabled, cards, lastSignInAt }], invites: [{ createdAt, expiresAt }], maxUsers, memberLimits }`
+- `POST /invites` → `201 { url, expiresAt }` (the link is shown once), `409 too_many_users`; `DELETE /invites` cancels unused links
+- `POST /:id/disable` signs them out everywhere and revokes their Claude connector, data kept; `POST /:id/enable`
+- `DELETE /:id` deletes a disabled member and everything of theirs (`409 disable_first` otherwise)
 
 **Cards** (`/api/cards`)
 - `GET /?q=&tag=&notReady=1&status=queued|paused&limit=50&before=<id>` → `{ cards, nextBefore }`, newest first
@@ -83,4 +91,4 @@ FSRS weights are fitted per mode to the owner's own `review_log` (`src/fsrsOptim
 
 ## MCP server
 
-`src/server.ts` mounts `/api` and the MCP app (`src/mcp/`) on one Hono server. The MCP app gets `SqliteCardStore`, `SqliteOAuthStore` and `ownerAuth()` from `src/storage/mcp.ts`. MCP card ids are the numeric ids as strings. The OAuth consent sends the owner to the web app's `/login?fresh=1&return_to=…`, which always asks for a passkey; consent then counts the session as fresh for 5 minutes.
+`src/server.ts` mounts `/api` and the MCP app (`src/mcp/`) on one Hono server. The MCP app gets `sqliteStores()` (each person's `SqliteCardStore` and `SqliteDrillStore`), `SqliteOAuthStore` and `ownerAuth()` from `src/storage/mcp.ts`. A grant belongs to whoever approved it on the consent page and works only on their cards. MCP card ids are the numeric ids as strings. The OAuth consent sends the user to the web app's `/login?fresh=1&return_to=…`, which always asks for a passkey; consent then counts the session as fresh for 5 minutes.

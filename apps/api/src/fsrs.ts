@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { default_w, fsrs, type FSRS } from "ts-fsrs";
 import type { Db } from "./db/client.js";
 import { fsrsSettings } from "./db/schema.js";
@@ -12,15 +12,19 @@ export type FsrsSetup = { desiredRetention: number; weights: number[] | null };
 
 type Reader = Pick<Db, "select">;
 
-export function getFsrsSetup(db: Reader, mode: ReviewMode): FsrsSetup {
-  const row = db.select().from(fsrsSettings).where(eq(fsrsSettings.mode, mode)).get();
+export function getFsrsSetup(db: Reader, userId: number, mode: ReviewMode): FsrsSetup {
+  const row = db
+    .select()
+    .from(fsrsSettings)
+    .where(and(eq(fsrsSettings.userId, userId), eq(fsrsSettings.mode, mode)))
+    .get();
   return { desiredRetention: row?.desiredRetention ?? DEFAULT_RETENTION, weights: row?.weights ?? null };
 }
 
-export function setDesiredRetention(db: Db, mode: ReviewMode, retention: number) {
+export function setDesiredRetention(db: Db, userId: number, mode: ReviewMode, retention: number) {
   db.insert(fsrsSettings)
-    .values({ mode, desiredRetention: retention })
-    .onConflictDoUpdate({ target: fsrsSettings.mode, set: { desiredRetention: retention } })
+    .values({ userId, mode, desiredRetention: retention })
+    .onConflictDoUpdate({ target: [fsrsSettings.userId, fsrsSettings.mode], set: { desiredRetention: retention } })
     .run();
 }
 

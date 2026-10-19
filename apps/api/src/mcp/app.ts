@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { Hono, type Context } from "hono";
+import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { html } from "hono/html";
 import { secureHeaders } from "hono/secure-headers";
@@ -10,20 +10,22 @@ import { rateLimit } from "./rate-limit.js";
 import type { CardStore, DrillStore } from "./store.js";
 import { createMcpServer } from "./tools.js";
 
-/** The owner's passkey login, provided by the API's auth module. */
+/** The app's passkey login, provided by the API's auth module. */
 export interface OwnerAuth {
-  /** The owner's session for this request, or null when not signed in. */
-  session(c: Context): Promise<{ authenticatedAt: Date } | null>;
-  /** Page that signs the owner in with a passkey and then sends the browser to `returnTo`. */
+  /** The signed-in user's session for this request, or null when not signed in. */
+  session(c: Context): Promise<{ authenticatedAt: Date; userId: number } | null>;
+  /** Page that signs the user in with a passkey and then sends the browser to `returnTo`. */
   loginUrl(returnTo: string): string;
 }
+
+/** One user's cards and drills; null when that user can no longer use the connector (disabled). */
+export type UserStores = (userId: number) => { cards: CardStore; drills?: DrillStore } | null;
 
 export interface McpAppOptions {
   /** Public origin Claude reaches us at, e.g. https://kquiz.example.com */
   publicUrl: string;
-  cards: CardStore;
-  /** Sound drills; without it Claude gets no drill tools. */
-  drills?: DrillStore;
+  /** Each grant works on the cards of the person who approved it; without drills Claude gets no drill tools. */
+  stores: UserStores;
   oauth: OAuthStore;
   owner: OwnerAuth;
   /** Redirect URIs a registering client may use. Defaults to Claude's OAuth callbacks. */
@@ -42,7 +44,7 @@ const CODE_TTL = 60_000;
 const CONSENT_TTL = 10 * 60_000;
 const ACCESS_TTL = 60 * 60_000;
 const REFRESH_TTL = 30 * 24 * 60 * 60_000;
-// Consent counts as confirmed by passkey only if the owner signed in with it just now.
+// Consent counts as confirmed by passkey only if the user signed in with it just now.
 const FRESH_LOGIN = 5 * 60_000;
 
 const authorizeParams = z.object({
@@ -77,7 +79,7 @@ function oauthError(c: Context, error: string, description: string, status: 400 
 }
 
 export function createMcpApp(options: McpAppOptions) {
-  const { cards, drills, oauth, owner, maxClients = 20, now = Date.now } = options;
+  const { stores, oauth, owner, maxClients = 20, now = Date.now } = options;
   const issuer = options.publicUrl.replace(/\/+$/, "");
   const resource = `${issuer}/mcp`;
   const resourceMetadataUrl = `${issuer}/.well-known/oauth-protected-resource/mcp`;
@@ -198,6 +200,7 @@ export function createMcpApp(options: McpAppOptions) {
     const code = randomToken();
     await oauth.saveCode({
       codeHash: sha256(code),
+      userId: session.userId,
       clientId: params.client_id,
       redirectUri: params.redirect_uri,
       codeChallenge: params.code_challenge,
@@ -236,7 +239,7 @@ export function createMcpApp(options: McpAppOptions) {
     return client;
   }
 
-  async function issueTokens(c: Context, grant: { id: string; clientId: string; createdAt: number }, previous: string[]) {
+  async function issueTokens(c: Context, grant: { id: string; userId: number; clientId: string; createdAt: number }, previous: string[]) {
     const accessToken = randomToken();
     const refreshToken = randomToken();
     const t = now();
@@ -280,7 +283,7 @@ export function createMcpApp(options: McpAppOptions) {
       ) {
         return oauthError(c, "invalid_grant", "Invalid or expired authorization code");
       }
-      return issueTokens(c, { id: randomToken(12), clientId: client.clientId, createdAt: now() }, []);
+      return issueTokens(c, { id: randomToken(12), userId: code.userId, clientId: client.clientId, createdAt: now() }, []);
     }
 
     if (body.grant_type === "refresh_token") {
@@ -315,8 +318,15 @@ export function createMcpApp(options: McpAppOptions) {
     return c.body(null, 200);
   });
 
-  // Token check comes before the limit, so strangers cannot use up the owner's quota.
-  const mcpLimit = rateLimit(60, 60_000, now);
+  // Token check comes before the limit, so strangers cannot use up anyone's quota; one limit per
+  // person, so a friend's busy Claude doesn't use up the owner's.
+  const mcpLimits = new Map<number, ReturnType<typeof rateLimit>>();
+  const mcpLimit: MiddlewareHandler<{ Variables: { grant: Grant } }> = (c, next) => {
+    const userId = c.get("grant").userId;
+    let limit = mcpLimits.get(userId);
+    if (!limit) mcpLimits.set(userId, (limit = rateLimit(60, 60_000, now)));
+    return limit(c, next);
+  };
   app.use("/mcp", async (c, next) => {
     const token = c.req.header("authorization")?.match(/^Bearer\s+(\S+)$/i)?.[1];
     const grant = token ? await oauth.findGrantByAccess(sha256(token)) : null;
@@ -337,8 +347,10 @@ export function createMcpApp(options: McpAppOptions) {
     const token = c.get("token");
     await oauth.touchGrant(grant.id, now());
 
+    const mine = stores(grant.userId);
+    if (!mine) return c.json({ error: "invalid_token" }, 401);
     // Stateless: a fresh server per request, no sessions to keep or leak.
-    const server = createMcpServer(cards, drills);
+    const server = createMcpServer(mine.cards, mine.drills);
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,

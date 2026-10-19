@@ -7,6 +7,7 @@ import type { Db } from "../db/client.js";
 import { suggestSpeechRating } from "../review.js";
 import { ScorerError, type Scorer, type ScorerFailure } from "../scorer.js";
 import { clientIp, limits, rateLimit } from "../security/rateLimit.js";
+import { checkScoreQuota } from "../users.js";
 
 // docs/PLAN.md §7: 10 s of 16 kHz mono 16-bit PCM is 320 KB, so 1 MB leaves room for 48 kHz from other clients.
 export const MAX_RECORDING_BYTES = 1_000_000;
@@ -25,9 +26,11 @@ export function scoreRoutes(db: Db, scorer: Scorer, now: () => Date) {
   app.post("/", rateLimit({ ...limits.score, key: (c) => clientIp(c), now: () => now().getTime() }), async (c) => {
     const query = z.object({ cardId: z.coerce.number().int().positive() }).safeParse(c.req.query());
     if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
-    const card = getCard(db, query.data.cardId);
+    const userId = c.get("user").id;
+    const card = getCard(db, userId, query.data.cardId);
     if (!card) return c.json({ error: "not_found" }, 404);
     if (!card.readyForSpeech) return c.json({ error: "not_ready_for_speech" }, 422);
+    checkScoreQuota(db, userId, now());
 
     const wav = new Uint8Array(await c.req.arrayBuffer());
     if (wav.byteLength > MAX_RECORDING_BYTES) return c.json({ error: "payload_too_large" }, 413);
@@ -46,7 +49,7 @@ export function scoreRoutes(db: Db, scorer: Scorer, now: () => Date) {
       return c.json({ error: error.reason, detail: error.message }, STATUS[error.reason]);
     }
 
-    const attemptId = recordAttempt(db, card.id, result, now());
+    const attemptId = recordAttempt(db, userId, card.id, result, now());
     return c.json({
       attemptId,
       cardId: card.id,

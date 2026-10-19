@@ -14,9 +14,11 @@ import { reviewRoutes } from "./routes/reviews.js";
 import { scoreRoutes } from "./routes/score.js";
 import { statsRoutes } from "./routes/stats.js";
 import { settingsRoutes } from "./routes/settings.js";
+import { userRoutes } from "./routes/users.js";
 import { httpScorer, type Scorer } from "./scorer.js";
 import { requireCloudflare } from "./security/origin.js";
 import { clientIp, rateLimit } from "./security/rateLimit.js";
+import { QuotaError } from "./users.js";
 
 export type AppDeps = {
   db: Db;
@@ -29,7 +31,7 @@ export type AppDeps = {
   now?: () => Date;
 };
 
-// Generous for one person, low enough that a stolen session can't hammer the disk.
+// Generous for a few people, low enough that a stolen session can't hammer the disk.
 const API_LIMIT = { limit: 300, windowMs: 60_000 };
 
 export function createApp({ db, config, setupCode, webauthn, scorer, now = () => new Date() }: AppDeps) {
@@ -53,17 +55,21 @@ export function createApp({ db, config, setupCode, webauthn, scorer, now = () =>
   app.use("/settings", requireSession(db, config.secureCookies, now));
   app.use("/export", requireSession(db, config.secureCookies, now));
   app.use("/practice/*", requireSession(db, config.secureCookies, now));
+  app.use("/users/*", requireSession(db, config.secureCookies, now));
   app.route("/cards", cardRoutes(db, now));
   app.route("/reviews", reviewRoutes(db, now, config.timeZone));
   app.route("/settings", settingsRoutes(db));
   app.route("/export", exportRoutes(db, now));
   app.route("/stats", statsRoutes(db, now, config.timeZone));
   app.route("/practice", practiceRoutes(db, now));
+  app.route("/users", userRoutes(db, config, now));
   app.route("/score", scoreRoutes(db, scorer ?? httpScorer(config.scorerUrl), now));
 
   app.notFound((c) => c.json({ error: "not_found" }, 404));
   app.onError((err, c) => {
     if (err instanceof HTTPException) return err.getResponse();
+    // A member past a limit (users.ts); nothing was stored.
+    if (err instanceof QuotaError) return c.json({ error: "quota_exceeded", left: err.left, message: err.message }, 429);
     console.error(err);
     return c.json({ error: "internal" }, 500);
   });

@@ -57,6 +57,13 @@
       "when": 1792415640052,
       "tag": "0007_sound_drills",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1792419070830,
+      "tag": "0008_users",
+      "breakpoints": true
     }
   ]
 }

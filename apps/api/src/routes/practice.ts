@@ -23,23 +23,23 @@ export function practiceRoutes(db: Db, now: () => Date) {
   app.get("/shadowing", (c) => {
     const limit = z.coerce.number().int().min(1).max(50).default(10).safeParse(c.req.query("limit"));
     if (!limit.success) return c.json({ error: "invalid_request" }, 400);
-    return c.json({ items: shadowingItems(db, limit.data) });
+    return c.json({ items: shadowingItems(db, c.get("user").id, limit.data) });
   });
 
-  app.get("/drills", (c) => c.json({ drills: listDrills(db) }));
+  app.get("/drills", (c) => c.json({ drills: listDrills(db, c.get("user").id) }));
 
   app.post("/drills/:id/answers", async (c) => {
     const id = idParam.safeParse(c.req.param("id"));
     const body = z.object({ correct: z.boolean() }).safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: "invalid_request" }, 400);
-    if (!id.success || !recordDrillAnswer(db, id.data, body.data.correct, now())) return c.json({ error: "not_found" }, 404);
+    if (!id.success || !recordDrillAnswer(db, c.get("user").id, id.data, body.data.correct, now())) return c.json({ error: "not_found" }, 404);
     return c.json({ ok: true });
   });
 
   // Only the app deletes drills; Claude can add them but not remove them.
   app.delete("/drills/:id", (c) => {
     const id = idParam.safeParse(c.req.param("id"));
-    if (!id.success || !deleteDrill(db, id.data)) return c.json({ error: "not_found" }, 404);
+    if (!id.success || !deleteDrill(db, c.get("user").id, id.data)) return c.json({ error: "not_found" }, 404);
     return c.json({ ok: true });
   });
 

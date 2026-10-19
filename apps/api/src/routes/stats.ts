@@ -15,7 +15,7 @@ export function statsRoutes(db: Db, now: () => Date, timeZone = "UTC") {
     const query = z.object({ tz: z.coerce.number().int().min(-720).max(840).optional() }).safeParse(c.req.query());
     if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
     const at = now();
-    return c.json(statsOverview(db, at, query.data.tz ?? zoneOffset(timeZone, at)));
+    return c.json(statsOverview(db, c.get("user").id, at, query.data.tz ?? zoneOffset(timeZone, at)));
   });
 
   return app;

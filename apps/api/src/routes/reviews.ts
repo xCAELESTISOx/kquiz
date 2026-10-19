@@ -30,8 +30,9 @@ export function reviewRoutes(db: Db, now: () => Date, timeZone: string) {
       .object({ mode, limit: z.coerce.number().int().min(1).max(200).optional() })
       .safeParse(c.req.query());
     if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
-    introduceDailyCards(db, now(), timeZone);
-    return c.json({ items: dueQueue(db, query.data.mode, now(), query.data.limit) });
+    const userId = c.get("user").id;
+    introduceDailyCards(db, userId, now(), timeZone);
+    return c.json({ items: dueQueue(db, userId, query.data.mode, now(), query.data.limit) });
   });
 
   // Accepts a batch so the offline queue can flush in one request.
@@ -40,18 +41,19 @@ export function reviewRoutes(db: Db, now: () => Date, timeZone: string) {
       .object({ reviews: z.array(reviewSchema).min(1).max(MAX_REVIEWS_PER_REQUEST) })
       .safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: "invalid_request", issues: body.error.issues }, 400);
-    return c.json({ results: applyReviews(db, body.data.reviews, now()) });
+    return c.json({ results: applyReviews(db, c.get("user").id, body.data.reviews, now()) });
   });
 
   app.get("/stats", (c) => {
-    introduceDailyCards(db, now(), timeZone);
-    return c.json(getStats(db, now(), timeZone));
+    const userId = c.get("user").id;
+    introduceDailyCards(db, userId, now(), timeZone);
+    return c.json(getStats(db, userId, now(), timeZone));
   });
 
   // Cards forgotten again and again (leeches.ts), for the app's list; Claude gets them through get_leeches.
-  app.get("/leeches", (c) => c.json({ items: findLeeches(db) }));
+  app.get("/leeches", (c) => c.json({ items: findLeeches(db, c.get("user").id) }));
 
-  app.get("/fsrs", (c) => c.json({ modes: fsrsStatus(db), retentionRange: RETENTION_RANGE }));
+  app.get("/fsrs", (c) => c.json({ modes: fsrsStatus(db, c.get("user").id), retentionRange: RETENTION_RANGE }));
 
   // Target retention per mode: lower means fewer reviews a day and more forgotten cards.
   app.put("/fsrs", async (c) => {
@@ -59,8 +61,9 @@ export function reviewRoutes(db: Db, now: () => Date, timeZone: string) {
       .object({ mode, desiredRetention: z.number().min(RETENTION_RANGE.min).max(RETENTION_RANGE.max) })
       .safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: "invalid_request", issues: body.error.issues }, 400);
-    setDesiredRetention(db, body.data.mode, Math.round(body.data.desiredRetention * 100) / 100);
-    return c.json({ modes: fsrsStatus(db), retentionRange: RETENTION_RANGE });
+    const userId = c.get("user").id;
+    setDesiredRetention(db, userId, body.data.mode, Math.round(body.data.desiredRetention * 100) / 100);
+    return c.json({ modes: fsrsStatus(db, userId), retentionRange: RETENTION_RANGE });
   });
 
   return app;

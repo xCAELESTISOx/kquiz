@@ -1,6 +1,6 @@
 // Practice outside the review queues: shadowing the cards' example sentences and listening drills
 // on similar sounds. Neither changes a schedule; drills only count right and wrong answers.
-import { asc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { normalizeKorean } from "./cards.js";
 import type { Db } from "./db/client.js";
@@ -8,7 +8,7 @@ import { cards, reviewStates, soundDrills, speechAudio } from "./db/schema.js";
 
 // ---- Reference audio for example sentences and drill words ----
 
-/** Every text that should have audio: drill words first (they are short and few), then examples. */
+/** Every text that should have audio, for all users: drill words first (they are short and few), then examples. */
 export function wantedSpeechTexts(db: Db): string[] {
   const texts = new Set<string>();
   for (const drill of db.select({ words: soundDrills.words }).from(soundDrills).orderBy(asc(soundDrills.id)).all()) {
@@ -71,12 +71,13 @@ export type ShadowItem = { cardId: number; word: string; meaning: string; ko: st
  * Example sentences to repeat after the reference, at most one per card and only those with audio,
  * since the intonation curve needs it. Cards already studied come first, in random order.
  */
-export function shadowingItems(db: Db, limit: number, random = Math.random): ShadowItem[] {
+export function shadowingItems(db: Db, userId: number, limit: number, random = Math.random): ShadowItem[] {
   const studied = new Set(
     db
       .selectDistinct({ cardId: reviewStates.cardId })
       .from(reviewStates)
-      .where(gt(reviewStates.reps, 0))
+      .innerJoin(cards, eq(cards.id, reviewStates.cardId))
+      .where(and(eq(cards.userId, userId), gt(reviewStates.reps, 0)))
       .all()
       .map((r) => r.cardId),
   );
@@ -84,7 +85,7 @@ export function shadowingItems(db: Db, limit: number, random = Math.random): Sha
   const candidates = db
     .select({ id: cards.id, korean: cards.korean, meaning: cards.meaning, examples: cards.examples })
     .from(cards)
-    .where(sql`json_array_length(${cards.examples}) > 0`)
+    .where(and(eq(cards.userId, userId), sql`json_array_length(${cards.examples}) > 0`))
     .all()
     .map((card) => {
       const examples = card.examples.filter((e) => voiced.has(e.ko));
@@ -140,21 +141,25 @@ const wordsKey = (words: { korean: string }[]) =>
     .join("|");
 
 /** Stores new drills; a drill with the same set of words as an existing one is a duplicate. */
-export function addDrills(db: Db, inputs: NewDrill[], source: "app" | "claude", now = new Date()) {
+export function addDrills(db: Db, userId: number, inputs: NewDrill[], source: "app" | "claude", now = new Date()) {
   return db.transaction((tx) => {
     const created: { id: number; contrast: string; words: string[] }[] = [];
     const duplicates: { contrast: string; words: string[]; existingId: number }[] = [];
     for (const input of inputs) {
       const words = input.words.map((w) => ({ korean: normalizeKorean(w.korean), ...(w.meaning ? { meaning: w.meaning } : {}) }));
       const key = wordsKey(words);
-      const existing = tx.select({ id: soundDrills.id }).from(soundDrills).where(eq(soundDrills.wordsKey, key)).get();
+      const existing = tx
+        .select({ id: soundDrills.id })
+        .from(soundDrills)
+        .where(and(eq(soundDrills.userId, userId), eq(soundDrills.wordsKey, key)))
+        .get();
       if (existing) {
         duplicates.push({ contrast: input.contrast, words: words.map((w) => w.korean), existingId: existing.id });
         continue;
       }
       const row = tx
         .insert(soundDrills)
-        .values({ contrast: input.contrast, words, wordsKey: key, source, createdAt: now })
+        .values({ userId, contrast: input.contrast, words, wordsKey: key, source, createdAt: now })
         .returning({ id: soundDrills.id })
         .get();
       created.push({ id: row.id, contrast: input.contrast, words: words.map((w) => w.korean) });
@@ -164,8 +169,8 @@ export function addDrills(db: Db, inputs: NewDrill[], source: "app" | "claude", 
 }
 
 /** All drills, the ones answered worst first; unplayed ones count as half wrong. */
-export function listDrills(db: Db): DrillDto[] {
-  const rows = db.select().from(soundDrills).all();
+export function listDrills(db: Db, userId: number): DrillDto[] {
+  const rows = db.select().from(soundDrills).where(eq(soundDrills.userId, userId)).all();
   const texts = [...new Set(rows.flatMap((r) => r.words.map((w) => w.korean)))];
   const voiced = new Set<string>();
   for (let i = 0; i < texts.length; i += 500) {
@@ -187,7 +192,7 @@ export function listDrills(db: Db): DrillDto[] {
     }));
 }
 
-export function recordDrillAnswer(db: Db, id: number, correct: boolean, now = new Date()): boolean {
+export function recordDrillAnswer(db: Db, userId: number, id: number, correct: boolean, now = new Date()): boolean {
   const result = db
     .update(soundDrills)
     .set(
@@ -195,11 +200,11 @@ export function recordDrillAnswer(db: Db, id: number, correct: boolean, now = ne
         ? { correct: sql`${soundDrills.correct} + 1`, lastPracticedAt: now }
         : { wrong: sql`${soundDrills.wrong} + 1`, lastPracticedAt: now },
     )
-    .where(eq(soundDrills.id, id))
+    .where(and(eq(soundDrills.id, id), eq(soundDrills.userId, userId)))
     .run();
   return result.changes > 0;
 }
 
-export function deleteDrill(db: Db, id: number): boolean {
-  return db.delete(soundDrills).where(eq(soundDrills.id, id)).run().changes > 0;
+export function deleteDrill(db: Db, userId: number, id: number): boolean {
+  return db.delete(soundDrills).where(and(eq(soundDrills.id, id), eq(soundDrills.userId, userId))).run().changes > 0;
 }

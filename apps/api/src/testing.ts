@@ -48,51 +48,57 @@ export function testApp(env: Record<string, string> = {}, deps: { scorer?: Score
   const clock = { now: new Date("2026-10-19T10:00:00Z") };
   const app = createServer({ db, config, setupCode: SETUP_CODE, webauthn: fakeWebAuthn(), scorer: deps.scorer, now: () => clock.now });
 
-  let cookie = "";
-  let csrfToken = "";
-  /** Paths are under /api unless they start with "//", which marks a path from the site root. */
-  /** A `Uint8Array` body is sent as is (audio/wav); anything else as JSON. */
-  async function request(path: string, init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) {
-    const raw = init.body instanceof Uint8Array;
-    const headers: Record<string, string> = { origin: ORIGIN, ...init.headers };
-    if (cookie) headers.cookie = cookie;
-    if (csrfToken) headers["x-csrf-token"] ??= csrfToken;
-    if (init.body !== undefined) headers["content-type"] ??= raw ? "audio/wav" : "application/json";
-    const res = await app.request(path.startsWith("//") ? path.slice(1) : `/api${path}`, {
-      method: init.method ?? (init.body === undefined ? "GET" : "POST"),
-      headers,
-      body: init.body === undefined ? undefined : raw ? (init.body as Uint8Array) : JSON.stringify(init.body),
-    });
-    const set = res.headers.get("set-cookie");
-    if (set) cookie = set.split(";")[0]!;
-    const text = await res.text();
-    let json: Record<string, any> | null = null;
-    try {
-      json = JSON.parse(text);
-    } catch {}
-    if (typeof json?.csrfToken === "string") csrfToken = json.csrfToken;
-    return { status: res.status, headers: res.headers, json: json ?? {}, text };
+  /** A browser of its own: its own cookie and CSRF token, for a second person on the same server. */
+  function browser() {
+    let cookie = "";
+    let csrfToken = "";
+    /** Paths are under /api unless they start with "//", which marks a path from the site root. */
+    /** A `Uint8Array` body is sent as is (audio/wav); anything else as JSON. */
+    async function request(path: string, init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) {
+      const raw = init.body instanceof Uint8Array;
+      const headers: Record<string, string> = { origin: ORIGIN, ...init.headers };
+      if (cookie) headers.cookie = cookie;
+      if (csrfToken) headers["x-csrf-token"] ??= csrfToken;
+      if (init.body !== undefined) headers["content-type"] ??= raw ? "audio/wav" : "application/json";
+      const res = await app.request(path.startsWith("//") ? path.slice(1) : `/api${path}`, {
+        method: init.method ?? (init.body === undefined ? "GET" : "POST"),
+        headers,
+        body: init.body === undefined ? undefined : raw ? (init.body as Uint8Array) : JSON.stringify(init.body),
+      });
+      const set = res.headers.get("set-cookie");
+      if (set) cookie = set.split(";")[0]!;
+      const text = await res.text();
+      let json: Record<string, any> | null = null;
+      try {
+        json = JSON.parse(text);
+      } catch {}
+      if (typeof json?.csrfToken === "string") csrfToken = json.csrfToken;
+      return { status: res.status, headers: res.headers, json: json ?? {}, text };
+    }
+
+    /** Binds the first passkey with the setup code, which also signs in. */
+    async function signIn() {
+      const options = await request("/auth/register/options", { body: { setupCode: SETUP_CODE } });
+      const res = await request("/auth/register/verify", { body: { setupCode: SETUP_CODE, response: signed(options.json.challenge) } });
+      if (res.status !== 200) throw new Error(`sign in failed: ${JSON.stringify(res.json)}`);
+    }
+
+    const jar = {
+      clear: () => {
+        cookie = "";
+        csrfToken = "";
+      },
+      get csrf() {
+        return csrfToken;
+      },
+      get cookie() {
+        return cookie;
+      },
+    };
+
+    return { request, signIn, jar };
   }
 
-  /** Binds the first passkey with the setup code, which also signs in. */
-  async function signIn() {
-    const options = await request("/auth/register/options", { body: { setupCode: SETUP_CODE } });
-    const res = await request("/auth/register/verify", { body: { setupCode: SETUP_CODE, response: signed(options.json.challenge) } });
-    if (res.status !== 200) throw new Error(`sign in failed: ${JSON.stringify(res.json)}`);
-  }
-
-  const jar = {
-    clear: () => {
-      cookie = "";
-      csrfToken = "";
-    },
-    get csrf() {
-      return csrfToken;
-    },
-    get cookie() {
-      return cookie;
-    },
-  };
-
-  return { app, db, config, clock, request, signIn, jar };
+  const { request, signIn, jar } = browser();
+  return { app, db, config, clock, request, signIn, jar, browser };
 }
