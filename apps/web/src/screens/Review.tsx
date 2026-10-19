@@ -40,9 +40,10 @@ export function ReviewScreen() {
 
   const card = queue?.[0];
 
+  // The next few too, so their audio is ready by the time they come up.
   useEffect(() => {
-    if (card) preloadSpeech(card);
-  }, [card]);
+    if (queue) preloadSpeech(...queue.slice(0, 3));
+  }, [queue]);
 
   const reveal = useCallback(() => {
     if (card && !revealed) setRevealed(true);

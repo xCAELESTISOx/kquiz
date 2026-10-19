@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { api, pendingReviewCount } from "../lib/api";
+import { api, lastToday, pendingReviewCount, rememberToday } from "../lib/api";
 import { cardsWord } from "../lib/plural";
 import type { QueueItem, Stats } from "../lib/types";
 import { MicIcon } from "../ui/icons";
@@ -7,16 +7,23 @@ import { MicIcon } from "../ui/icons";
 const PREVIEW = 14;
 
 export function TodayScreen() {
-  const [stats, setStats] = useState<Stats>();
-  const [preview, setPreview] = useState<QueueItem[]>([]);
+  // Last launch's numbers first, so the screen is never empty while the server answers.
+  const [saved] = useState(lastToday);
+  const [stats, setStats] = useState<Stats | undefined>(saved?.stats);
+  const [preview, setPreview] = useState<QueueItem[]>(saved?.preview ?? []);
   const [error, setError] = useState<string>();
 
   useEffect(() => {
     document.title = "KQuiz";
-    Promise.all([api.stats(), api.queue("meaning", PREVIEW)]).then(
+    // The whole queue, not just the preview: the review screen takes this answer instead of asking again.
+    Promise.all([api.stats(), api.queue("meaning")]).then(
       ([s, q]) => {
+        const items = q.items.slice(0, PREVIEW);
         setStats(s);
-        setPreview(q.items);
+        setPreview(items);
+        setError(undefined);
+        rememberToday({ stats: s, preview: items });
+        if (s.due.speech > 0) api.queue("speech").catch(() => {});
       },
       (e: Error) => setError(e.message),
     );
