@@ -2,7 +2,9 @@ import { useEffect } from "react";
 import { flushPendingReviews } from "./lib/api";
 import { useLocation } from "./lib/router";
 import { hideSplash } from "./lib/splash";
+import { AccessScreen } from "./screens/Access";
 import { AddScreen } from "./screens/Add";
+import { InviteScreen } from "./screens/Invite";
 import { LeechesScreen } from "./screens/Leeches";
 import { CardScreen } from "./screens/Card";
 import { CardsScreen } from "./screens/Cards";
@@ -24,7 +26,8 @@ export function App() {
   }, [route]);
 
   useEffect(() => {
-    if (location.pathname === "/login") return;
+    // Nobody is signed in yet on these, and a stored review would send the browser to /login.
+    if (location.pathname === "/login" || location.hash.startsWith("#/invite/")) return;
     void flushPendingReviews();
     const onOnline = () => void flushPendingReviews();
     addEventListener("online", onOnline);
@@ -32,6 +35,7 @@ export function App() {
   }, []);
 
   if (route === "login") return <LoginScreen />;
+  if (route === "invite") return <InviteScreen code={param!} />;
   if (route === "review") return <ReviewScreen key="meaning" mode="meaning" />;
   if (route === "listen") return <ReviewScreen key="listening" mode="listening" />;
   if (route === "speech") return <SpeechScreen />;
@@ -50,6 +54,8 @@ export function App() {
         <StatsScreen />
       ) : route === "leeches" ? (
         <LeechesScreen />
+      ) : route === "access" ? (
+        <AccessScreen />
       ) : (
         <TodayScreen />
       )}

@@ -1,5 +1,6 @@
 import { MockApi } from "./mock";
 import type {
+  AccessInfo,
   AddCardResult,
   AddCardsResult,
   AuthStatus,
@@ -9,6 +10,7 @@ import type {
   CardPatch,
   CardSummary,
   FsrsStatus,
+  InviteStatus,
   Leech,
   NewCard,
   QueueItem,
@@ -128,12 +130,26 @@ export const auth = {
   loginOptions: () => request<Record<string, unknown>>("POST", "/auth/login/options", { body: {} }),
   loginVerify: (response: unknown) =>
     request<{ ok: boolean; csrfToken?: string }>("POST", "/auth/login/verify", { body: { response } }),
-  registerOptions: (setupCode: string) =>
-    request<Record<string, unknown>>("POST", "/auth/register/options", { body: { setupCode } }),
-  registerVerify: (setupCode: string, response: unknown) =>
+  /** The owner's first passkey takes the setup code, a new person an invite code and their name. */
+  registerOptions: (who: RegisterAs) => request<Record<string, unknown>>("POST", "/auth/register/options", { body: who }),
+  registerVerify: (who: RegisterAs, response: unknown) =>
     request<{ ok: boolean; csrfToken?: string }>("POST", "/auth/register/verify", {
-      body: { setupCode, response, name: navigator.platform || "iPhone" },
+      body: { ...who, response, name: navigator.platform || "iPhone" },
     }),
+  invite: (code: string) =>
+    request<{ status: InviteStatus }>("GET", `/auth/invite?code=${encodeURIComponent(code)}`, { fallback: () => ({ status: "ok" }) }),
+};
+
+type RegisterAs = { setupCode: string } | { invite: string; userName: string };
+
+/** The owner's access screen (apps/api routes/users.ts). */
+export const access = {
+  get: () => request<AccessInfo>("GET", "/users"),
+  invite: () => request<{ url: string; expiresAt: string }>("POST", "/users/invites", { body: {} }),
+  cancelInvites: () => request<{ cancelled: number }>("DELETE", "/users/invites"),
+  disable: (id: number) => request<{ ok: true }>("POST", `/users/${id}/disable`, { body: {} }),
+  enable: (id: number) => request<{ ok: true }>("POST", `/users/${id}/enable`, { body: {} }),
+  remove: (id: number) => request<{ ok: true }>("DELETE", `/users/${id}`),
 };
 
 const QUEUE_TTL = 60_000;

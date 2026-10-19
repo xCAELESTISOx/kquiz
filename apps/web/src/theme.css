@@ -2524,3 +2524,93 @@ p {
     display: none;
   }
 }
+
+/* ---------- Access (the owner's invites) ---------- */
+
+.access-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.access-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px 16px;
+  animation: appear var(--dur-2) var(--ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+.access-item + .access-item {
+  border-top: 1px solid var(--border);
+}
+
+.access-who {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.access-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.access-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.chip-button.danger {
+  color: var(--wrong);
+}
+
+.chip-button:disabled {
+  opacity: 0.5;
+}
+
+.access-invite {
+  display: grid;
+  gap: 12px;
+}
+
+.access-invite p {
+  margin: 0;
+}
+
+.access-link {
+  display: block;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.link-button.inline {
+  min-height: 0;
+  font-size: inherit;
+}
+
+.access-notes {
+  display: grid;
+  gap: 8px;
+}
+
+.access-notes p {
+  margin: 0;
+}
+
+.access-notes code {
+  overflow-wrap: anywhere;
+}

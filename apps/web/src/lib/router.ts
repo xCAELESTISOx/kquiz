@@ -2,11 +2,25 @@ import { useEffect, useState } from "react";
 
 // A handful of screens doesn't justify a router dependency. Screens live in the hash, so the PWA works
 // from any static host; /login is a real path because the MCP OAuth consent links to it.
-export type Route = "today" | "add" | "stats" | "review" | "speech" | "listen" | "cards" | "card" | "leeches" | "shadow" | "sounds" | "login";
+export type Route =
+  | "today"
+  | "add"
+  | "stats"
+  | "review"
+  | "speech"
+  | "listen"
+  | "cards"
+  | "card"
+  | "leeches"
+  | "shadow"
+  | "sounds"
+  | "access"
+  | "invite"
+  | "login";
 
 export interface Location {
   route: Route;
-  /** The card id on "card", the filter on "cards" ("queued", "paused"). */
+  /** The card id on "card", the filter on "cards" ("queued", "paused"), the code on "invite". */
   param?: string;
 }
 
@@ -21,10 +35,13 @@ export function parseHash(hash: string): Location {
     head === "listen" ||
     head === "leeches" ||
     head === "shadow" ||
-    head === "sounds"
+    head === "sounds" ||
+    head === "access"
   ) {
     return { route: head };
   }
+  // A friend's invite link: #/invite/<code>.
+  if (head === "invite" && param) return { route: "invite", param };
   if (head === "cards") {
     if (param && /^\d+$/.test(param)) return { route: "card", param };
     return { route: "cards", param: param || undefined };
@@ -37,7 +54,7 @@ function parse(): Location {
   return parseHash(location.hash);
 }
 
-export function navigate(route: Exclude<Route, "login" | "card">) {
+export function navigate(route: Exclude<Route, "login" | "card" | "invite">) {
   location.hash = route === "today" ? "/" : `/${route}`;
 }
 
