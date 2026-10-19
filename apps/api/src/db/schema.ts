@@ -169,3 +169,31 @@ export const oauthGrants = sqliteTable(
   },
   (t) => [uniqueIndex("oauth_grants_access").on(t.accessHash), uniqueIndex("oauth_grants_refresh").on(t.refreshHash)],
 );
+
+// Reference audio for any other Korean text, keyed by the text itself: card example sentences
+// (shadowing) and the words of sound drills. Made by the same worker as card_audio.
+export const speechAudio = sqliteTable("speech_audio", {
+  text: text("text").primaryKey(),
+  mime: text("mime").notNull(),
+  data: blob("data", { mode: "buffer" }).notNull(),
+  createdAt: timestamp("created_at").notNull(),
+});
+
+// Listening drills on similar sounds (ㄱ/ㅋ/ㄲ): 2–4 words that differ in one sound, picked by Claude.
+export const soundDrills = sqliteTable(
+  "sound_drills",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    // What the words contrast, as shown to the owner, e.g. "ㄱ/ㅋ/ㄲ".
+    contrast: text("contrast").notNull(),
+    words: text("words", { mode: "json" }).$type<{ korean: string; meaning?: string }[]>().notNull(),
+    // Sorted words joined by "|", so the same set is not added twice.
+    wordsKey: text("words_key").notNull(),
+    source: text("source", { enum: ["app", "claude"] }).notNull(),
+    correct: integer("correct").notNull().default(0),
+    wrong: integer("wrong").notNull().default(0),
+    lastPracticedAt: timestamp("last_practiced_at"),
+    createdAt: timestamp("created_at").notNull(),
+  },
+  (t) => [uniqueIndex("sound_drills_words").on(t.wordsKey)],
+);

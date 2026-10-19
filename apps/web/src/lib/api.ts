@@ -57,7 +57,7 @@ interface RequestOptions<T> {
   accept?: number[];
 }
 
-async function request<T>(method: string, path: string, opts: RequestOptions<T> = {}, retried = false): Promise<T> {
+export async function request<T>(method: string, path: string, opts: RequestOptions<T> = {}, retried = false): Promise<T> {
   const { body, fallback } = opts;
   if (method !== "GET" && !csrfToken && !path.startsWith("/auth/")) {
     try {

@@ -9,7 +9,8 @@ import type { Db } from "../db/client.js";
 import { cards, oauthClients, oauthCodes, oauthGrants, phoneStats, reviewLog } from "../db/schema.js";
 import type { OwnerAuth } from "../mcp/app.js";
 import type { OAuthStore } from "../mcp/oauth-store.js";
-import type { CardStore } from "../mcp/store.js";
+import type { CardStore, DrillStore, NewDrill } from "../mcp/store.js";
+import { addDrills, listDrills } from "../practice.js";
 import { getStats } from "../reviewStore.js";
 
 export type StoredCard = NewCard & {
@@ -120,6 +121,24 @@ export class SqliteCardStore implements CardStore {
       .limit(limit)
       .all()
       .map((row) => ({ ...row, errorRate: row.errors / row.attempts }));
+  }
+}
+
+export class SqliteDrillStore implements DrillStore {
+  constructor(private readonly db: Db) {}
+
+  async add(drills: NewDrill[]) {
+    return addDrills(this.db, drills, "claude");
+  }
+
+  async list() {
+    return listDrills(this.db).map(({ id, contrast, words, correct, wrong }) => ({
+      id,
+      contrast,
+      words: words.map((w) => (w.meaning ? { korean: w.korean, meaning: w.meaning } : { korean: w.korean })),
+      correct,
+      wrong,
+    }));
   }
 }
 

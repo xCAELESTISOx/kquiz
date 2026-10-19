@@ -7,7 +7,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { z } from "zod";
 import { randomToken, sha256, type Grant, type OAuthClient, type OAuthStore } from "./oauth-store.js";
 import { rateLimit } from "./rate-limit.js";
-import type { CardStore } from "./store.js";
+import type { CardStore, DrillStore } from "./store.js";
 import { createMcpServer } from "./tools.js";
 
 /** The owner's passkey login, provided by the API's auth module. */
@@ -22,6 +22,8 @@ export interface McpAppOptions {
   /** Public origin Claude reaches us at, e.g. https://kquiz.example.com */
   publicUrl: string;
   cards: CardStore;
+  /** Sound drills; without it Claude gets no drill tools. */
+  drills?: DrillStore;
   oauth: OAuthStore;
   owner: OwnerAuth;
   /** Redirect URIs a registering client may use. Defaults to Claude's OAuth callbacks. */
@@ -75,7 +77,7 @@ function oauthError(c: Context, error: string, description: string, status: 400 
 }
 
 export function createMcpApp(options: McpAppOptions) {
-  const { cards, oauth, owner, maxClients = 20, now = Date.now } = options;
+  const { cards, drills, oauth, owner, maxClients = 20, now = Date.now } = options;
   const issuer = options.publicUrl.replace(/\/+$/, "");
   const resource = `${issuer}/mcp`;
   const resourceMetadataUrl = `${issuer}/.well-known/oauth-protected-resource/mcp`;
@@ -336,7 +338,7 @@ export function createMcpApp(options: McpAppOptions) {
     await oauth.touchGrant(grant.id, now());
 
     // Stateless: a fresh server per request, no sessions to keep or leak.
-    const server = createMcpServer(cards);
+    const server = createMcpServer(cards, drills);
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,

@@ -3,6 +3,7 @@ import { api, pendingReviewCount } from "../lib/api";
 import { cardsWord } from "../lib/plural";
 import type { QueueItem, Stats } from "../lib/types";
 import { MicIcon } from "../ui/icons";
+import { PracticeLinks } from "../ui/PracticeLinks";
 
 const PREVIEW = 14;
 
@@ -84,6 +85,8 @@ export function TodayScreen() {
           </div>
         </dl>
       )}
+
+      {stats && <PracticeLinks />}
 
       <div aria-live="polite">
         {error && <p className="notice notice-error">Не получилось загрузить данные: {error}. Обнови страницу.</p>}

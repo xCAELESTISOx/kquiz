@@ -58,6 +58,12 @@ Card: `{ id, korean, meaning, pronunciation, romanization, examples, notes, tags
 - Every attempt is saved to `attempts` (no audio) and counted in `phone_stats` for `get_weak_sounds`; only "wrong" sounds count as errors there.
 - 20 recordings a minute per client. Errors: `404` unknown card, `422 not_ready_for_speech` (non-Hangul card), `422 bad_recording` (not WAV, silence, too long), `503 busy` (with `Retry-After`) or `503 unavailable` (scorer down or model not loaded), `504 timeout`.
 
+**Practice** (`/api/practice`): shadowing and sound drills; nothing here changes a schedule.
+- `GET /audio?text=` → MP3 of an example sentence or drill word, `404` until the background worker has made it. The worker (`cardAudio.ts`) does cards first, then drill words, then examples, and keeps them in `speech_audio` by text.
+- `GET /shadowing?limit=10` → `{ items: [{ cardId, word, meaning, ko, ru }] }`: one voiced example per card, studied cards first, random order. The intonation curve is computed in the browser (apps/web/src/lib/intonation.ts), so the server does no pitch work.
+- `GET /drills` → `{ drills: [{ id, contrast, words: [{ korean, meaning }], correct, wrong, ready }] }`, the most missed first. Claude adds drills over MCP (`add_sound_drills`).
+- `POST /drills/:id/answers` `{ correct }`, `DELETE /drills/:id` (the app only).
+
 ## MCP server
 
 `src/server.ts` mounts `/api` and the MCP app (`src/mcp/`) on one Hono server. The MCP app gets `SqliteCardStore`, `SqliteOAuthStore` and `ownerAuth()` from `src/storage/mcp.ts`. MCP card ids are the numeric ids as strings. The OAuth consent sends the owner to the web app's `/login?fresh=1&return_to=…`, which always asks for a passkey; consent then counts the session as fresh for 5 minutes.

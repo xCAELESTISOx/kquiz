@@ -1,9 +1,11 @@
 // Reference audio for cards: services/scorer's /tts (Supertonic) makes an MP3 per card, a
-// background worker asks for it once and keeps it in card_audio. Until it is there, or when the
+// background worker asks for it once and keeps it in card_audio (examples and drill words go to
+// speech_audio, see practice.ts). Until it is there, or when the
 // scorer is down, the web app falls back to the phone's own voice.
 import { and, asc, eq, isNull, ne, notInArray, or } from "drizzle-orm";
 import type { Db } from "./db/client.js";
 import { cardAudio, cards } from "./db/schema.js";
+import { nextTextWithoutAudio, pruneSpeechAudio, saveSpeechAudio } from "./practice.js";
 
 export interface Speaker {
   /** MP3 of `text` read aloud. */
@@ -66,14 +68,36 @@ export function saveCardAudio(db: Db, cardId: number, text: string, data: Uint8A
 // A text the scorer refused is tried again after a day, in case the model or the text changed.
 const BAD_TEXT_RETRY_MS = 24 * 60 * 60 * 1000;
 
+type Job = { key: string; text: string; save(mp3: Uint8Array): void };
+
 /**
- * Makes audio for every card that lacks it, one at a time. One pass stops at the first failure
- * that isn't about the text (scorer down, busy, slow) and waits for the next tick.
+ * Makes audio for every card that lacks it, one at a time, then for example sentences and drill
+ * words (practice.ts). One pass stops at the first failure that isn't about the text (scorer down,
+ * busy, slow) and waits for the next tick.
  */
 export function audioWorker(db: Db, speaker: Speaker, now: () => Date = () => new Date()) {
-  const badText = new Map<number, number>();
+  const badText = new Map<string, number>();
   let running = false;
   let failing = false;
+
+  function nextJob(): Job | undefined {
+    const skipCards = [...badText.keys()].filter((k) => k.startsWith("card:")).map((k) => Number(k.slice(5)));
+    const card = nextCardWithoutAudio(db, skipCards);
+    if (card) {
+      return {
+        key: `card:${card.id}`,
+        text: card.korean,
+        save(mp3) {
+          // The card may have changed or gone while the audio was being made.
+          const current = db.select({ korean: cards.korean }).from(cards).where(eq(cards.id, card.id)).get();
+          if (current?.korean === card.korean) saveCardAudio(db, card.id, card.korean, mp3, now());
+        },
+      };
+    }
+    const skipTexts = new Set([...badText.keys()].filter((k) => k.startsWith("text:")).map((k) => k.slice(5)));
+    const text = nextTextWithoutAudio(db, skipTexts);
+    return text === undefined ? undefined : { key: `text:${text}`, text, save: (mp3) => saveSpeechAudio(db, text, mp3, now()) };
+  }
 
   async function runOnce(): Promise<number> {
     if (running) return 0;
@@ -82,21 +106,21 @@ export function audioWorker(db: Db, speaker: Speaker, now: () => Date = () => ne
     try {
       for (;;) {
         const t = now().getTime();
-        for (const [id, until] of badText) if (until <= t) badText.delete(id);
-        const card = nextCardWithoutAudio(db, [...badText.keys()]);
-        if (!card) break;
+        for (const [key, until] of badText) if (until <= t) badText.delete(key);
+        const job = nextJob();
+        if (!job) {
+          pruneSpeechAudio(db);
+          break;
+        }
         try {
-          const mp3 = await speaker.speak(card.korean);
-          // The card may have changed or gone while the audio was being made.
-          const current = db.select({ korean: cards.korean }).from(cards).where(eq(cards.id, card.id)).get();
-          if (current?.korean === card.korean) saveCardAudio(db, card.id, card.korean, mp3, now());
+          job.save(await speaker.speak(job.text));
           made++;
           if (failing) console.log("tts: back to normal");
           failing = false;
         } catch (error) {
           if (error instanceof BadTextError) {
-            console.warn(`tts: card ${card.id} refused: ${error.message}`);
-            badText.set(card.id, t + BAD_TEXT_RETRY_MS);
+            console.warn(`tts: ${job.key} refused: ${error.message}`);
+            badText.set(job.key, t + BAD_TEXT_RETRY_MS);
             continue;
           }
           // Logged once per outage, not on every tick.

@@ -1,0 +1,470 @@
+/* Practice screens: shadowing with the intonation curve, and the similar-sounds drill.
+   Built on the tokens and the review/speech layout in theme.css. */
+
+/* ---------- Entry on Today ---------- */
+
+.practice-links {
+  display: grid;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.practice-links a {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 68px;
+  padding: 12px 14px 12px 12px;
+  color: var(--text);
+  text-decoration: none;
+  transition: background var(--dur-1) var(--ease);
+  animation: answer-in var(--dur-3) var(--ease-out) backwards;
+  animation-delay: calc(120ms + var(--i, 0) * 50ms);
+}
+
+.practice-links a + a {
+  border-top: 1px solid var(--border);
+}
+
+.practice-links a:active {
+  background: var(--surface-hover);
+  transition-duration: var(--dur-press);
+}
+
+.practice-links a > svg {
+  width: 18px;
+  height: 18px;
+  color: var(--text-faint);
+  flex: none;
+}
+
+.practice-icon {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent-hi);
+}
+
+.practice-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.practice-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.practice-title {
+  font-weight: 600;
+}
+
+.practice-sub {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+/* ---------- Shadowing ---------- */
+
+.shadow-sentence {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  text-wrap: balance;
+  word-break: keep-all;
+}
+
+.shadow-translation {
+  color: var(--text-muted);
+  font-size: var(--fs-md);
+  text-wrap: balance;
+}
+
+.shadow-word {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.shadow-word .muted {
+  font-weight: 400;
+}
+
+.shadow-together {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap);
+  padding: 0 8px 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  transition:
+    color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease);
+}
+
+.shadow-together svg {
+  width: 18px;
+  height: 18px;
+}
+
+.shadow-together[aria-pressed="true"] {
+  color: var(--text);
+  border-color: rgb(124 140 255 / 0.4);
+}
+
+.shadow-together[aria-pressed="true"] svg {
+  color: var(--accent);
+}
+
+.shadow-together:disabled {
+  opacity: 0.5;
+}
+
+.shadow-switch {
+  position: relative;
+  width: 36px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--surface-hover);
+  transition: background var(--dur-1) var(--ease);
+}
+
+.shadow-switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition:
+    transform var(--dur-2) var(--ease-spring),
+    background var(--dur-1) var(--ease);
+}
+
+[aria-pressed="true"] > .shadow-switch {
+  background: var(--accent);
+}
+
+[aria-pressed="true"] > .shadow-switch::after {
+  transform: translateX(14px);
+  background: var(--on-accent);
+}
+
+.shadow .speech-again .chip-button {
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.shadow .review-actions .record {
+  padding-top: 4px;
+}
+
+/* ---------- Intonation chart ---------- */
+
+.intonation {
+  width: 100%;
+  margin: 10px 0 0;
+  padding: 14px 14px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: rgb(11 13 18 / 0.35);
+  text-align: left;
+  animation: answer-in var(--dur-2) var(--ease-out);
+}
+
+.intonation.is-working {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 72px;
+  color: var(--accent);
+}
+
+.intonation-title {
+  margin-bottom: 4px;
+  font-size: var(--fs-md);
+  font-weight: 700;
+}
+
+.intonation-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.intonation-title.tone-none {
+  color: var(--text-muted);
+}
+
+.intonation-legend {
+  display: flex;
+  gap: 12px;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+
+.intonation-legend span::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 3px;
+  margin-right: 6px;
+  vertical-align: middle;
+  border-radius: 2px;
+}
+
+.intonation-legend .is-reference::before {
+  background: var(--text-faint);
+}
+
+.intonation-legend .is-yours::before {
+  background: var(--accent);
+}
+
+.intonation-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.intonation-mid {
+  stroke: var(--border);
+  stroke-dasharray: 2 5;
+}
+
+.intonation-apart {
+  fill: rgb(248 113 113 / 0.12);
+  animation: appear var(--dur-3) var(--ease) 500ms backwards;
+}
+
+.intonation-reference,
+.intonation-yours {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.intonation-reference {
+  stroke: var(--text-faint);
+  stroke-width: 5;
+  opacity: 0.7;
+}
+
+/* Your curve draws itself over the reference, left to right, the way you said it. */
+.intonation-yours {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 6px var(--accent-glow));
+  clip-path: inset(0 100% 0 0);
+  animation: curve-draw 700ms var(--ease-out) 120ms forwards;
+}
+
+@keyframes curve-draw {
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.intonation-note {
+  margin-top: 10px;
+  text-align: center;
+}
+
+/* ---------- Similar sounds ---------- */
+
+.sounds-card {
+  gap: 14px;
+  touch-action: auto;
+}
+
+.sounds-contrast {
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.sounds-play {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  margin: 10px 0 4px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: linear-gradient(to bottom, var(--accent-hi), var(--accent));
+  color: var(--on-accent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.3),
+    0 18px 40px -16px var(--accent-glow);
+  transition: transform var(--dur-1) var(--ease-spring);
+}
+
+.sounds-play svg {
+  width: 40px;
+  height: 40px;
+}
+
+.sounds-play:active {
+  transform: scale(0.93);
+  transition-duration: var(--dur-press);
+}
+
+/* Until the first listen, a slow ring invites the tap. */
+.sounds-play[data-pulse]::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  border: 2px solid var(--accent);
+  animation: sounds-pulse 1.8s var(--ease-out) infinite;
+}
+
+@keyframes sounds-pulse {
+  from {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.45);
+  }
+}
+
+.sounds-feedback {
+  text-align: center;
+  font-weight: 700;
+  font-size: var(--fs-md);
+  margin: -6px 0 10px;
+  animation: answer-in var(--dur-2) var(--ease-out);
+}
+
+.sounds-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.sounds-options[data-count="3"] {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.sounds-option {
+  min-height: 84px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 6px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  transition:
+    transform var(--dur-1) var(--ease-spring),
+    opacity var(--dur-2) var(--ease),
+    background var(--dur-2) var(--ease),
+    border-color var(--dur-2) var(--ease);
+  animation: rating-in var(--dur-2) var(--ease-spring) backwards;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+.sounds-option:active:not(:disabled) {
+  transform: scale(0.95);
+  transition-duration: var(--dur-press);
+}
+
+.sounds-option:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.sounds-option-word {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+}
+
+.sounds-option-meaning {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+.sounds-option[data-state="right"] {
+  border-color: rgb(74 222 128 / 0.5);
+  background: rgb(74 222 128 / 0.12);
+}
+
+.sounds-option[data-state="right"] .sounds-option-word {
+  color: var(--ok);
+}
+
+.sounds-option[data-state="wrong"] {
+  border-color: rgb(248 113 113 / 0.5);
+  background: rgb(248 113 113 / 0.1);
+  animation: sounds-shake 360ms var(--ease-out);
+}
+
+.sounds-option[data-state="wrong"] .sounds-option-word {
+  color: var(--wrong);
+}
+
+.sounds-option[data-state="other"] {
+  opacity: 0.6;
+}
+
+@keyframes sounds-shake {
+  20%,
+  60% {
+    transform: translateX(-4px);
+  }
+  40%,
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+.sounds .finished-mark .muted {
+  font-size: var(--fs-xl);
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .intonation-yours {
+    animation: none;
+    clip-path: none;
+  }
+  .sounds-play[data-pulse]::after,
+  .sounds-option[data-state="wrong"] {
+    animation: none;
+  }
+}
