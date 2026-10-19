@@ -1,11 +1,13 @@
 # Развёртывание KQuiz
 
-Один сервер с фиксированной ценой, перед ним бесплатный Cloudflare. Сервер принимает соединения только от Cloudflare, поэтому атака может в худшем случае уронить приложение, но не увеличить счёт.
+Один VPS с фиксированной ценой у российского провайдера (по умолчанию Timeweb Cloud, Москва), оплата заранее с баланса. Потратить больше пополненного нельзя: атака может уронить приложение, но не увеличить счёт.
+
+Cloudflare перед сервером не ставим: российские провайдеры обрывают соединения с ним, и приложение не открылось бы из России.
 
 ```
-iPhone, Claude ──HTTPS──▶ Cloudflare ──HTTPS (Origin Certificate)──▶ сервер :443
-                                                                     Caddy ─▶ api (127.0.0.1:8787) ─▶ SQLite
-                                                                           └─▶ статика PWA
+iPhone, Claude ──HTTPS (Let's Encrypt)──▶ сервер :443
+                                          Caddy ─▶ api (127.0.0.1:8787) ─▶ SQLite
+                                                └─▶ статика PWA
 ```
 
 Что лежит в [`deploy/`](../deploy):
@@ -13,132 +15,53 @@ iPhone, Claude ──HTTPS──▶ Cloudflare ──HTTPS (Origin Certificate)�
 | Файл | Зачем |
 |---|---|
 | `docker-compose.yml` | Три контейнера: `caddy`, `api`, `scorer` (последний пока выключен) |
-| `Caddyfile` | HTTPS, лимит тела 2 МБ, `/api`, `/mcp`, `/oauth`, `/.well-known` в API, остальное — PWA с `index.html` на любые пути (нужно для `/login`) |
-| `.env.example` | Шаблон настроек: домен и секрет для Cloudflare |
-| `setup-server.sh` | Один раз на новом сервере: Docker, firewall, SSH только по ключу, папки, ночной бэкап |
-| `firewall.sh` | Порт 443 только для адресов Cloudflare, 22 для SSH |
+| `Caddyfile` | HTTPS от Let's Encrypt, таймауты, лимит тела 2 МБ; `/api`, `/mcp`, `/oauth`, `/.well-known` в API, остальное — PWA с `index.html` на любые пути (нужно для `/login`) |
+| `.env.example` | Шаблон настроек: домен, e-mail для сертификата, секрет, код первого входа |
+| `cloud-init.sh` | Собирает user-data, с которым новый сервер сам ставит и запускает всё ниже |
+| `setup-server.sh` | Один раз на новом сервере: Docker, firewall, SSH только по ключу, папки, бэкап и автообновление |
+| `firewall.sh` | Открыты только 22 (только ключ), 80 и 443 |
 | `backup.sh` + `kquiz-backup.timer` | Копия базы каждую ночь в `/srv/kquiz/backups`, хранится 30 дней |
-| `update.sh` | Обновить приложение до свежего `main` |
+| `update.sh` + `kquiz-update.timer` | Раз в 10 минут сервер сам проверяет `main` и обновляется, перед этим делает бэкап |
 | `smoke-test.sh` | Проверка всей связки (её же запускает CI) |
 
-## Сколько стоит
+## Что делает владелец
 
-| Что | Цена |
-|---|---|
-| Hetzner Cloud CX23 (2 vCPU, 4 ГБ, 40 ГБ, 20 ТБ трафика) | около 5,5 € в месяц + 0,5 € за IPv4 + НДС. Точную цену смотри на [hetzner.com/cloud](https://www.hetzner.com/cloud) |
-| Бэкапы Hetzner (снимок сервера каждый день, 7 штук) | +20 % от цены сервера |
-| Домен | от ~10 $ в год |
-| Cloudflare Free | 0 |
+1. Зарегистрироваться на [timeweb.cloud](https://timeweb.cloud) и пополнить баланс.
+2. Купить домен там же (раздел «Домены»), чтобы DNS был в той же панели и API.
+3. Создать API-токен Timeweb Cloud (панель → API и Terraform).
+4. Создать на GitHub [fine-grained токен](https://github.com/settings/personal-access-tokens/new) только для репозитория `kquiz` с правом **Contents: Read-only**: по нему сервер забирает код.
+5. Положить оба токена в настройки облачного окружения Claude (Project settings → Cloud environment → шестерёнка → Network secrets) под именами `TIMEWEB_CLOUD_TOKEN` и `KQUIZ_GITHUB_TOKEN`, а в Allowed domains добавить `api.timeweb.cloud`.
 
-Цена сервера фиксированная, за запросы ничего не берут. Трафик сверх 20 ТБ платный, но до сервера доходит только трафик через Cloudflare, а статику он кэширует.
+Дальше Claude через API Timeweb создаёт сервер (Ubuntu 24.04, 2 vCPU, 4 ГБ, Москва) с user-data из `cloud-init.sh`, добавляет A-запись домена и проверяет, что сайт открылся по HTTPS. Код первого входа Claude задаёт сам (`SETUP_CODE`) и присылает владельцу.
 
-## Шаги
+## Первый вход и Claude
 
-### 1. Домен и Cloudflare
+1. Открыть `https://<домен>` в Safari на iPhone, ввести код первого входа, создать passkey (Face ID). Код одноразовый.
+2. Поделиться → **На экран «Домой»**.
+3. claude.ai → Settings → Connectors → **Add custom connector**: URL `https://<домен>/mcp`, подтвердить passkey'ем.
 
-1. Заведи бесплатный аккаунт на [cloudflare.com](https://dash.cloudflare.com/sign-up).
-2. Купи домен прямо в Cloudflare (Domain Registration → Register Domains, по себестоимости) или у любого регистратора и добавь его в Cloudflare (Add a domain → Free), затем поменяй NS-серверы у регистратора на те, что покажет Cloudflare.
+## Ручная установка (если без API)
 
-Дальше в тексте домен приложения — `kquiz.example.com`. Можно использовать сам домен или поддомен.
-
-### 2. Сервер
-
-1. Аккаунт на [Hetzner Cloud](https://console.hetzner.cloud), новый проект.
-2. Add Server: локация любая в Европе, образ **Ubuntu 24.04**, тип **CX23** (Shared vCPU, x86), IPv4 включён, добавь свой SSH-ключ, включи **Backups**.
-3. Запиши IPv4 сервера.
-
-### 3. DNS и сертификат в Cloudflare
-
-1. DNS → Records → Add record: тип `A`, имя `kquiz` (или `@` для самого домена), IPv4 сервера, **Proxied** (оранжевое облако).
-2. SSL/TLS → Overview: режим **Full (strict)**.
-3. SSL/TLS → Edge Certificates: **Always Use HTTPS** включить, Minimum TLS Version **1.2**.
-4. SSL/TLS → Origin Server → **Create Certificate**: RSA, hostnames `kquiz.example.com`, срок 15 лет. Не закрывай окно: понадобятся оба текста (Origin Certificate и Private key) на шаге 5.
-
-### 4. Секрет, без которого сервер не ответит
-
-1. Придумай секрет: `openssl rand -hex 32` (на Mac или на сервере).
-2. Rules → Transform Rules → **Modify Request Header** → Create rule:
-   - имя `kquiz origin secret`, применить к **All incoming requests**;
-   - **Set static**, header name `x-kquiz-origin`, value — секрет.
-3. Security → WAF → Rate limiting rules → Create rule (на бесплатном плане одно правило):
-   - выражение: URI Path starts with `/api/auth/` **или** URI Path starts with `/oauth/`;
-   - 20 запросов за 10 секунд с одного IP → Block на 10 секунд.
-4. **Не включай** Bot Fight Mode и «Block AI bots»: Claude ходит к `/mcp` с серверов Anthropic, и Cloudflare примет его за бота.
-
-### 5. Установка на сервер
+1. Создать сервер Ubuntu 24.04, 2 vCPU, 4 ГБ, со своим SSH-ключом. Направить A-запись домена на его IP.
+2. На сервере:
 
 ```sh
-ssh root@<IP сервера>
-git clone https://github.com/xCAELESTISOx/kquiz.git /opt/kquiz
+git clone https://github.com/xCAELESTISOx/kquiz.git /opt/kquiz   # для приватного репозитория — с токеном
 cd /opt/kquiz/deploy
-./setup-server.sh
-```
-
-Скрипт ставит Docker, включает firewall (443 только для Cloudflare), запрещает вход по паролю, создаёт `/srv/kquiz/{data,backups,certs}` и ночной бэкап. Если репозиторий приватный, для `git clone` нужен [токен GitHub](https://github.com/settings/personal-access-tokens) с доступом только на чтение к `kquiz`.
-
-Сертификат из шага 3.4:
-
-```sh
-nano /srv/kquiz/certs/origin.pem   # вставить Origin Certificate
-nano /srv/kquiz/certs/origin.key   # вставить Private key
-chmod 600 /srv/kquiz/certs/*
-```
-
-Настройки:
-
-```sh
-cp .env.example .env
-nano .env     # DOMAIN=kquiz.example.com, ORIGIN_SECRET=секрет из шага 4
-chmod 600 .env
-```
-
-Запуск (первая сборка занимает несколько минут):
-
-```sh
+./setup-server.sh            # если Docker Hub недоступен: DOCKER_MIRROR=<адрес зеркала провайдера> ./setup-server.sh
+cp .env.example .env && nano .env && chmod 600 .env
 docker compose up -d --build
-docker compose ps                         # оба контейнера healthy
-docker compose logs api | grep 'setup code'
+docker compose logs api | grep 'setup code'   # если SETUP_CODE не задан
 ```
-
-### 6. Первый вход с iPhone
-
-1. Открой `https://kquiz.example.com` в Safari.
-2. Введи код настройки из лога и создай passkey (Face ID). Код одноразовый: после первого ключа он больше не работает.
-3. Поделиться → **На экран «Домой»**.
-
-### 7. Подключение Claude
-
-claude.ai → Settings → Connectors → **Add custom connector**: имя `KQuiz`, URL `https://kquiz.example.com/mcp`. Claude откроет страницу согласия, подтверди её passkey'ем.
-
-### 8. Автоматический деплой из GitHub Actions
-
-После этого каждый влитый в `main` PR сам попадает на сервер, как только CI зелёный (workflow `.github/workflows/deploy.yml`). Ключ, который лежит в GitHub, умеет только запустить `deploy/update.sh`: ни shell, ни других команд с ним не получить.
-
-На сервере:
-
-```sh
-ssh-keygen -t ed25519 -N '' -C github-deploy -f /root/deploy_key
-echo "command=\"/opt/kquiz/deploy/update.sh\",restrict $(cat /root/deploy_key.pub)" >> /root/.ssh/authorized_keys
-cat /root/deploy_key                 # → секрет DEPLOY_SSH_KEY
-ssh-keyscan -t ed25519 localhost | sed "s/^localhost/<IP сервера>/"   # → секрет DEPLOY_KNOWN_HOSTS
-rm /root/deploy_key /root/deploy_key.pub
-```
-
-В GitHub: репозиторий → Settings → Secrets and variables → Actions:
-- Secrets: `DEPLOY_SSH_KEY` и `DEPLOY_KNOWN_HOSTS` (вывод команд выше);
-- Variables: `DEPLOY_HOST` = IP сервера.
-
-Пока `DEPLOY_HOST` не задан, workflow пропускается. Запустить деплой вручную: Actions → Deploy → Run workflow.
 
 ## Обслуживание
 
 | Задача | Команда на сервере |
 |---|---|
-| Обновить до свежего `main` | само после шага 8, или вручную `/opt/kquiz/deploy/update.sh` (сначала делает бэкап) |
+| Обновить сейчас, не дожидаясь таймера | `/opt/kquiz/deploy/update.sh` |
 | Логи | `cd /opt/kquiz/deploy && docker compose logs -f --tail 100` |
 | Бэкап вручную | `/opt/kquiz/deploy/backup.sh` |
 | Скачать бэкапы к себе | `scp 'root@<IP>:/srv/kquiz/backups/*' .` (с компьютера) |
-| Обновить адреса Cloudflare в firewall | `/opt/kquiz/deploy/firewall.sh` (раз в несколько месяцев) |
 
 **Восстановление из бэкапа:**
 
@@ -151,14 +74,14 @@ chown 1000:1000 /srv/kquiz/data/kquiz.db
 docker compose start api
 ```
 
-**Копия бэкапов вне сервера (по желанию).** Бэкапы Hetzner из шага 2 уже хранятся отдельно от диска сервера. Если нужна ещё одна копия, подойдёт Hetzner Storage Box (фиксированная цена): впиши `BACKUP_REMOTE=u123456@u123456.your-storagebox.de:kquiz` в `/etc/kquiz-backup.env` и добавь ключ сервера в Storage Box.
+**Копия бэкапов вне сервера (по желанию).** Впиши в `/etc/kquiz-backup.env` `BACKUP_REMOTE=user@host:kquiz` (rsync по SSH, порт в `BACKUP_REMOTE_PORT`), и `backup.sh` будет копировать архивы туда.
 
-**Оценка произношения.** API к ней пока не обращается, поэтому контейнер `scorer` выключен. Когда понадобится: `docker compose --profile scorer up -d --build` (при первом старте скачает модель, около 1,3 ГБ; памяти 4 ГБ хватает).
+**Оценка произношения.** API к ней пока не обращается, поэтому контейнер `scorer` выключен. Когда понадобится, впиши `COMPOSE_PROFILES=scorer` в `deploy/.env` и выполни `docker compose up -d --build`. При первом старте он скачает модель, около 1,3 ГБ; 4 ГБ памяти хватает.
 
 ## Как устроена защита
 
-- Firewall (`ufw`) пускает на 443 только адреса Cloudflare, порт 80 закрыт, SSH только по ключу.
-- Даже если кто-то найдёт IP и обойдёт firewall, API без заголовка `x-kquiz-origin` с секретом отвечает 403 на всё, кроме `/api/health`.
-- API и сервис оценки слушают только `127.0.0.1`, снаружи их не видно.
-- Caddy режет тела больше 2 МБ, API — больше 1 МБ; лимиты запросов есть и в Cloudflare, и в самом API.
-- Контейнеры без root-прав (кроме Caddy, которому оставлено только право занять порт 443), файловая система только для чтения, лимиты памяти, логи ограничены 30 МБ на контейнер, чтобы поток запросов не забил диск.
+- Наружу открыт только Caddy (80 и 443) и SSH по ключу. API и сервис оценки слушают `127.0.0.1`.
+- API принимает только запросы с секретным заголовком, который добавляет Caddy, и берёт IP клиента из заголовка, который тоже ставит Caddy. Подделать IP, чтобы обойти лимиты, нельзя.
+- Лимиты запросов в API: вход 5 в минуту, остальное API 300 в минуту, MCP и OAuth отдельно. Caddy режет тела больше 2 МБ и медленные соединения.
+- Контейнеры без root-прав (кроме Caddy, которому оставлено только право занять порты 80 и 443), файловая система только для чтения, лимиты памяти, логи не больше 30 МБ на контейнер, чтобы поток запросов не забил диск.
+- Бюджет: тариф с фиксированной ценой и оплата с баланса. Сервер не может стоить больше, чем на балансе.

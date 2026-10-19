@@ -1,0 +1,8 @@
+[Unit]
+Description=Update KQuiz to the latest main
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/kquiz/deploy/update.sh --if-changed

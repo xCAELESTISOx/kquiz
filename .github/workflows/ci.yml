@@ -49,7 +49,7 @@ jobs:
       - run: deploy/smoke-test.sh
       - name: Scorer image starts and answers /g2p (without the model)
         working-directory: deploy
-        env: { DOMAIN: kquiz.test, ORIGIN_SECRET: unused-in-this-step }
+        env: { DOMAIN: kquiz.test, ACME_EMAIL: internal, ORIGIN_SECRET: unused-in-this-step }
         run: |
           docker compose --profile scorer build scorer
           docker compose --profile scorer run -d --name scorer -e SCORER_LOAD_MODEL=0 scorer
