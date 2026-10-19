@@ -38,7 +38,8 @@ describe("SqliteCardStore", () => {
     const db = openDb(":memory:");
     const store = new SqliteCardStore(db);
     const [water] = await store.insert([card("물", "вода"), card("TV", "телевизор")], "claude");
-    const now = new Date("2026-10-19T10:00:00Z");
+    // Cards get the real clock as their creation time, so "now" must not be a fixed date.
+    const now = new Date();
     const day = 86_400_000;
     for (const [i, offset] of [0, 1, 2, 4].entries()) {
       db.insert(reviewLog)
