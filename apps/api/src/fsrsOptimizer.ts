@@ -4,6 +4,7 @@ import { createEmptyCard, type Card } from "ts-fsrs";
 import type { Db } from "./db/client.js";
 import { fsrsSettings, reviewLog, reviewStates } from "./db/schema.js";
 import { currentWeights, getFsrsSetup, schedulerFor } from "./fsrs.js";
+import { reviewModes } from "./cardStore.js";
 import { applyRating, ratings, type RatingName, type ReviewMode } from "./review.js";
 
 /** The FSRS authors suggest about this many reviews before personal weights beat the defaults. */
@@ -153,7 +154,7 @@ export type FsrsStatus = {
 };
 
 export function fsrsStatus(db: Db): FsrsStatus[] {
-  return (["meaning", "speech"] as const).map((mode) => {
+  return reviewModes.map((mode) => {
     const row = db.select().from(fsrsSettings).where(eq(fsrsSettings.mode, mode)).get();
     const reviews = db.select({ n: count() }).from(reviewLog).where(eq(reviewLog.mode, mode)).get()?.n ?? 0;
     return {
@@ -168,14 +169,14 @@ export function fsrsStatus(db: Db): FsrsStatus[] {
   });
 }
 
-/** Checks both modes now and then; the fit itself runs off the event loop in fsrs-rs. */
+/** Checks every mode now and then; the fit itself runs off the event loop in fsrs-rs. */
 export function optimizerWorker(db: Db, timeZone: string, now: () => Date = () => new Date()) {
   let running = false;
   async function runOnce() {
     if (running) return;
     running = true;
     try {
-      for (const mode of ["meaning", "speech"] as const) {
+      for (const mode of reviewModes) {
         const result = await optimizeMode(db, mode, { timeZone, now: now() });
         if (result.status !== "not_enough_reviews" && result.status !== "up_to_date") console.log(`fsrs ${mode}:`, result);
       }

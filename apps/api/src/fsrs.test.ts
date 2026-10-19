@@ -119,6 +119,7 @@ describe("fsrs retention", () => {
     expect(initial.json.modes).toEqual([
       expect.objectContaining({ mode: "meaning", desiredRetention: 0.9, personal: false, reviews: 0, minReviews: MIN_REVIEWS }),
       expect.objectContaining({ mode: "speech", desiredRetention: 0.9, personal: false }),
+      expect.objectContaining({ mode: "listening", desiredRetention: 0.9, personal: false }),
     ]);
     const res = await t.request("/reviews/fsrs", { method: "PUT", body: { mode: "speech", desiredRetention: 0.85 } });
     expect(res.status).toBe(200);

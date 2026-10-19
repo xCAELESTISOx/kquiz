@@ -1,6 +1,7 @@
 import { createEmptyCard, fsrs, Rating, type Card, type FSRS, type Grade, type State } from "ts-fsrs";
 
-export type ReviewMode = "meaning" | "speech";
+/** Meaning: Hangul → translation. Speech: say it aloud. Listening: hear it, no text → translation. */
+export type ReviewMode = "meaning" | "speech" | "listening";
 
 export const ratings = {
   again: Rating.Again,

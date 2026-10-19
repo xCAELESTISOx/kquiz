@@ -44,7 +44,7 @@ export const reviewStates = sqliteTable(
     cardId: integer("card_id")
       .notNull()
       .references(() => cards.id, { onDelete: "cascade" }),
-    mode: text("mode", { enum: ["meaning", "speech"] }).notNull(),
+    mode: text("mode", { enum: ["meaning", "speech", "listening"] }).notNull(),
     due: timestamp("due").notNull(),
     stability: real("stability").notNull(),
     difficulty: real("difficulty").notNull(),
@@ -67,7 +67,7 @@ export const reviewLog = sqliteTable(
     cardId: integer("card_id")
       .notNull()
       .references(() => cards.id, { onDelete: "cascade" }),
-    mode: text("mode", { enum: ["meaning", "speech"] }).notNull(),
+    mode: text("mode", { enum: ["meaning", "speech", "listening"] }).notNull(),
     rating: text("rating", { enum: ["again", "hard", "good", "easy"] }).notNull(),
     reviewedAt: timestamp("reviewed_at").notNull(),
     elapsedMs: integer("elapsed_ms"),
@@ -78,7 +78,7 @@ export const reviewLog = sqliteTable(
 // Per-mode FSRS setup. No row means FSRS defaults at 90 % retention. `weights` stays null until
 // the optimizer has fitted the owner's own review history and the fit beat the current weights.
 export const fsrsSettings = sqliteTable("fsrs_settings", {
-  mode: text("mode", { enum: ["meaning", "speech"] }).primaryKey(),
+  mode: text("mode", { enum: ["meaning", "speech", "listening"] }).primaryKey(),
   desiredRetention: real("desired_retention").notNull().default(0.9),
   weights: text("weights", { mode: "json" }).$type<number[]>(),
   // Size of the history behind `weights`, and when the optimizer last ran (accepted or not).

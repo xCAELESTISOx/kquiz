@@ -1,6 +1,7 @@
 // Shapes of the REST contract with apps/api (see apps/api/README.md).
 
-export type ReviewMode = "meaning" | "speech";
+/** Meaning: Hangul → translation. Speech: say it aloud. Listening: hear it with no text → translation. */
+export type ReviewMode = "meaning" | "speech" | "listening";
 export type RatingName = "again" | "hard" | "good" | "easy";
 export type CardSource = "app" | "claude" | "bulk";
 

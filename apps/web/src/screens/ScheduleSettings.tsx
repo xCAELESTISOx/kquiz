@@ -3,7 +3,7 @@ import { api } from "../lib/api";
 import type { FsrsModeStatus, FsrsStatus, ReviewMode } from "../lib/types";
 
 const RETENTIONS = [0.85, 0.9, 0.95];
-const MODE_LABEL: Record<ReviewMode, string> = { meaning: "Значение", speech: "Произношение" };
+const MODE_LABEL: Record<ReviewMode, string> = { meaning: "Значение", speech: "Вслух", listening: "На слух" };
 const percent = (r: number) => `${Math.round(r * 100)} %`;
 
 /** Target retention per mode, and whether intervals are already fitted to the owner's history. */

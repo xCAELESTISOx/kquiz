@@ -1,8 +1,9 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { api, pendingReviewCount } from "../lib/api";
 import { cardsWord } from "../lib/plural";
+import { hideSplash } from "../lib/splash";
 import type { QueueItem, Stats } from "../lib/types";
-import { MicIcon } from "../ui/icons";
+import { HeadphonesIcon, MicIcon } from "../ui/icons";
 import { ScheduleSettings } from "./ScheduleSettings";
 
 const PREVIEW = 14;
@@ -23,8 +24,14 @@ export function TodayScreen() {
     );
   }, []);
 
+  useEffect(() => {
+    if (stats || error) hideSplash();
+  }, [stats, error]);
+
   const due = stats?.due.meaning ?? 0;
   const speechDue = stats?.due.speech ?? 0;
+  const listenDue = stats?.due.listening ?? 0;
+  const restDue = speechDue + listenDue;
   const pending = pendingReviewCount();
   const today = new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
 
@@ -60,8 +67,13 @@ export function TodayScreen() {
               다 했어요
             </span>
             <span className="muted">
-              {speechDue > 0
-                ? `Значения повторены. Осталось проговорить вслух: ${speechDue}.`
+              {restDue > 0
+                ? `Значения повторены. Осталось ${[
+                    speechDue > 0 && `проговорить вслух: ${speechDue}`,
+                    listenDue > 0 && `узнать на слух: ${listenDue}`,
+                  ]
+                    .filter(Boolean)
+                    .join(", ")}.`
                 : "На сейчас всё повторено. Новые слова можно добавить в любой момент."}
             </span>
           </p>
@@ -76,10 +88,14 @@ export function TodayScreen() {
             <dd>{due}</dd>
           </div>
           <div style={{ "--i": 1 } as CSSProperties}>
-            <dt>Произношение</dt>
+            <dt>Вслух</dt>
             <dd>{stats.due.speech}</dd>
           </div>
           <div style={{ "--i": 2 } as CSSProperties}>
+            <dt>На слух</dt>
+            <dd>{stats.due.listening}</dd>
+          </div>
+          <div style={{ "--i": 3 } as CSSProperties}>
             <dt>Повторено</dt>
             <dd>{stats.reviewedToday}</dd>
           </div>
@@ -104,14 +120,25 @@ export function TodayScreen() {
             Повторить {due} {cardsWord(due)}
           </a>
         )}
-        {speechDue > 0 && (
-          <a className={`button${due > 0 ? "" : " primary"}`} href="#/speech">
-            <MicIcon />
-            Произношение
-            <span className="button-count">{speechDue}</span>
-          </a>
+        {restDue > 0 && (
+          <div className="action-pair">
+            {speechDue > 0 && (
+              <a className={`button${due > 0 || listenDue > 0 ? "" : " primary"}`} href="#/speech">
+                <MicIcon />
+                Произношение
+                <span className="button-count">{speechDue}</span>
+              </a>
+            )}
+            {listenDue > 0 && (
+              <a className={`button${due > 0 || speechDue > 0 ? "" : " primary"}`} href="#/listen">
+                <HeadphonesIcon />
+                На слух
+                <span className="button-count">{listenDue}</span>
+              </a>
+            )}
+          </div>
         )}
-        {due === 0 && speechDue === 0 && (
+        {due === 0 && restDue === 0 && (
           <a className="button" href="#/add">
             Добавить слова
           </a>
