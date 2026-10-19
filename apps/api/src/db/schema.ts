@@ -57,7 +57,7 @@ export const reviewStates = sqliteTable(
     cardId: integer("card_id")
       .notNull()
       .references(() => cards.id, { onDelete: "cascade" }),
-    mode: text("mode", { enum: ["meaning", "speech"] }).notNull(),
+    mode: text("mode", { enum: ["meaning", "speech", "listening"] }).notNull(),
     due: timestamp("due").notNull(),
     stability: real("stability").notNull(),
     difficulty: real("difficulty").notNull(),
@@ -80,7 +80,7 @@ export const reviewLog = sqliteTable(
     cardId: integer("card_id")
       .notNull()
       .references(() => cards.id, { onDelete: "cascade" }),
-    mode: text("mode", { enum: ["meaning", "speech"] }).notNull(),
+    mode: text("mode", { enum: ["meaning", "speech", "listening"] }).notNull(),
     rating: text("rating", { enum: ["again", "hard", "good", "easy"] }).notNull(),
     reviewedAt: timestamp("reviewed_at").notNull(),
     elapsedMs: integer("elapsed_ms"),

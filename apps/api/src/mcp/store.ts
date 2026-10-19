@@ -26,6 +26,8 @@ export interface Stats {
   cards: number;
   dueMeaning: number;
   dueSpeech: number;
+  /** Cards to recognise by ear; only those whose recording is made. */
+  dueListening: number;
   /** Cards from Claude still waiting to enter reviews, and how many enter per day. */
   queued: number;
   newPerDay: number;
@@ -122,6 +124,7 @@ export class MemoryCardStore implements CardStore {
       cards: all.length,
       dueMeaning: live.length,
       dueSpeech: live.filter((card) => card.speakable).length,
+      dueListening: 0,
       queued: all.length - live.length,
       newPerDay: 15,
       streakDays: 0,

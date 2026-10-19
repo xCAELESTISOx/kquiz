@@ -211,6 +211,17 @@ p {
   transition-timing-function: var(--ease-out);
 }
 
+/* Pronunciation and listening side by side under the main button. */
+.action-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.action-pair > .button:only-child {
+  grid-column: 1 / -1;
+}
+
 .button-count {
   min-width: 26px;
   padding: 2px 8px;
@@ -469,7 +480,7 @@ p {
 
 .facts {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   margin: 0;
   border-top: 1px solid var(--border);
   padding-top: 16px;
@@ -482,7 +493,7 @@ p {
 }
 
 .facts div + div {
-  padding-left: 14px;
+  padding-left: 12px;
   border-left: 1px solid var(--border);
 }
 
@@ -1385,6 +1396,36 @@ p {
 
 .review-hint {
   font-size: 15px;
+}
+
+/* Listening: the sound takes the place of the Hangul until the answer is shown. */
+.listen-play {
+  display: grid;
+  place-items: center;
+  width: 112px;
+  height: 112px;
+  border: 1px solid rgb(255 255 255 / 0.06);
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-hi);
+  cursor: pointer;
+  box-shadow: 0 0 0 10px rgb(255 255 255 / 0.02);
+  transition: transform var(--dur-press) var(--ease-out);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.listen-play svg {
+  width: 44px;
+  height: 44px;
+}
+
+.listen-play:active {
+  transform: scale(0.94);
+}
+
+.listen-play:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
 }
 
 .review-answer {

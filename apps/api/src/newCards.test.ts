@@ -75,7 +75,7 @@ describe("new-card queue", () => {
     const paused = await t.request(`/cards/${json.card.id}`, { method: "PATCH", body: { suspended: true } });
     expect(paused.json.card.suspended).toBe(true);
     expect((await t.request("/reviews/queue?mode=meaning")).json.items).toHaveLength(0);
-    expect((await t.request("/reviews/stats")).json.due).toEqual({ meaning: 0, speech: 0 });
+    expect((await t.request("/reviews/stats")).json.due).toEqual({ meaning: 0, speech: 0, listening: 0 });
     expect((await t.request("/cards?status=paused")).json.cards).toHaveLength(1);
     await t.request(`/cards/${json.card.id}`, { method: "PATCH", body: { suspended: false } });
     expect((await t.request("/reviews/queue?mode=meaning")).json.items).toHaveLength(1);
@@ -122,7 +122,7 @@ describe("cards summary and export", () => {
     expect(res.headers.get("content-disposition")).toBe('attachment; filename="kquiz-2026-10-19.json"');
     expect(res.json).toMatchObject({ app: "kquiz", version: 1, settings: { newPerDay: 15 }, attempts: [] });
     expect(res.json.cards).toHaveLength(1);
-    expect(res.json.cards[0].reviewStates.map((s: any) => s.mode).sort()).toEqual(["meaning", "speech"]);
+    expect(res.json.cards[0].reviewStates.map((s: any) => s.mode).sort()).toEqual(["listening", "meaning", "speech"]);
     expect(res.json.reviewLog).toHaveLength(1);
   });
 

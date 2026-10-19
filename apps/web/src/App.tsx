@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { flushPendingReviews } from "./lib/api";
 import { useLocation } from "./lib/router";
+import { hideSplash } from "./lib/splash";
 import { AddScreen } from "./screens/Add";
 import { CardScreen } from "./screens/Card";
 import { CardsScreen } from "./screens/Cards";
@@ -13,6 +14,11 @@ import { TabBar } from "./ui/TabBar";
 export function App() {
   const { route, param } = useLocation();
 
+  // Today lifts the splash itself once its numbers are in.
+  useEffect(() => {
+    if (route !== "today") hideSplash();
+  }, [route]);
+
   useEffect(() => {
     if (location.pathname === "/login") return;
     void flushPendingReviews();
@@ -22,7 +28,8 @@ export function App() {
   }, []);
 
   if (route === "login") return <LoginScreen />;
-  if (route === "review") return <ReviewScreen />;
+  if (route === "review") return <ReviewScreen key="meaning" mode="meaning" />;
+  if (route === "listen") return <ReviewScreen key="listening" mode="listening" />;
   if (route === "speech") return <SpeechScreen />;
 
   return (

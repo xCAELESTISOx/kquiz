@@ -55,7 +55,7 @@ const emptyToNull = (value: string | undefined) => (value ? value : null);
 const uniqueTags = (tags: string[]) => [...new Set(tags)];
 
 /**
- * Stores new cards. Cards added in the app get a fresh schedule in both modes at once; cards from
+ * Stores new cards. Cards added in the app get a fresh schedule in every mode at once; cards from
  * Claude wait in the new-card queue (newCards.ts). A card whose Korean already exists (or repeats
  * earlier in the batch) is reported as a duplicate, not stored.
  */

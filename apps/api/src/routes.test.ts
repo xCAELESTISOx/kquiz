@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { saveCardAudio } from "./cardAudio.js";
 import { testApp } from "./testing.js";
 
 async function signedIn() {
@@ -108,7 +109,28 @@ describe("reviews", () => {
     expect(resent.json.results[0].status).toBe("duplicate");
     expect((await t.request("/reviews/queue?mode=meaning")).json.items).toHaveLength(0);
     expect((await t.request("/reviews/queue?mode=speech")).json.items).toHaveLength(1);
-    expect((await t.request("/reviews/stats")).json).toEqual({ cards: 1, due: { meaning: 0, speech: 1 }, reviewedToday: 1, newCards: { introduced: 0, limit: 15, queued: 0 } });
+    expect((await t.request("/reviews/stats")).json).toEqual({ cards: 1, due: { meaning: 0, speech: 1, listening: 0 }, reviewedToday: 1, newCards: { introduced: 0, limit: 15, queued: 0 } });
+  });
+
+  it("offers a card for listening once its recording is made from its current Korean", async () => {
+    const t = await signedIn();
+    const { json } = await t.request("/cards", { body: { korean: "물", meaning: "вода" } });
+    const listening = async () => (await t.request("/reviews/queue?mode=listening")).json.items;
+    expect(await listening()).toHaveLength(0);
+    saveCardAudio(t.db, json.card.id, "물", new Uint8Array([1]), t.clock.now);
+    expect(await listening()).toHaveLength(1);
+    expect((await t.request("/reviews/stats")).json.due.listening).toBe(1);
+
+    const review = { id: randomUUID(), cardId: json.card.id, mode: "listening", rating: "good", reviewedAt: t.clock.now.toISOString() };
+    expect((await t.request("/reviews", { body: { reviews: [review] } })).json.results[0].status).toBe("applied");
+    expect(await listening()).toHaveLength(0);
+    // The other modes keep their own schedules.
+    expect((await t.request("/reviews/queue?mode=meaning")).json.items).toHaveLength(1);
+
+    t.clock.now = new Date(t.clock.now.getTime() + 20 * 86_400_000);
+    expect(await listening()).toHaveLength(1);
+    await t.request(`/cards/${json.card.id}`, { method: "PATCH", body: { korean: "물이" } });
+    expect(await listening()).toHaveLength(0);
   });
 
   it("applies offline reviews in the order they happened", async () => {

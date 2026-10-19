@@ -1,6 +1,6 @@
 # @kquiz/api
 
-Hono + SQLite (better-sqlite3, Drizzle). One owner, passkey login, FSRS scheduling in two modes.
+Hono + SQLite (better-sqlite3, Drizzle). One owner, passkey login, FSRS scheduling in three modes: meaning, speech (say it aloud) and listening (hear it, no text).
 
 ```sh
 pnpm dev            # http://127.0.0.1:8787, prints a one-time setup code on first start
@@ -57,9 +57,9 @@ Card: `{ id, korean, meaning, pronunciation, romanization, examples, notes, tags
 **Export** (`/api/export`): `GET` → a JSON download (`kquiz-YYYY-MM-DD.json`): `{ app, version, exportedAt, settings, cards (with reviewStates), reviewLog, attempts }`.
 
 **Reviews** (`/api/reviews`)
-- `GET /queue?mode=meaning|speech&limit=50` → `{ items: [{ card, mode, due, state, reps, lapses }] }`, most overdue first with never-reviewed cards spread among them at random; speech only for speakable cards, paused cards never
+- `GET /queue?mode=meaning|speech|listening&limit=50` → `{ items: [{ card, mode, due, state, reps, lapses }] }`, most overdue first with never-reviewed cards spread among them at random; speech only for speakable cards, listening only for cards whose recording is made from their current Korean (the phone's voice is no model for the ear), paused cards never
 - `POST /` `{ reviews: [{ id: uuid, cardId, mode, rating: again|hard|good|easy, reviewedAt, elapsedMs? }] }` (≤ 200) → `{ results: [{ id, status: applied|duplicate|card_not_found, due? }] }`. A resent `id` is a no-op; a batch is applied in `reviewedAt` order.
-- `GET /stats` → `{ cards, due: { meaning, speech }, reviewedToday, newCards: { introduced, limit, queued } }` (day in `TIME_ZONE`)
+- `GET /stats` → `{ cards, due: { meaning, speech, listening }, reviewedToday, newCards: { introduced, limit, queued } }` (day in `TIME_ZONE`)
 
 **Pronunciation** (`/api/score`)
 - `POST /?cardId=` with the recording as the body (`content-type: audio/wav`, ≤ 1 MB, ≤ 10 s; the web app sends 16 kHz mono 16-bit PCM) → `{ attemptId, cardId, score, pronunciation, syllables: [{ text, pron, status: ok|weak|wrong }], errors: [{ syllable, position, kind, status, expected, heard }], suggestedRating }`. Fields are the scorer's (services/scorer/README.md).

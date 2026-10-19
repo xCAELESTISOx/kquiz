@@ -8,7 +8,7 @@ import { cards, reviewStates } from "./db/schema.js";
 import { newReviewState, toStateRow, type ReviewMode } from "./review.js";
 import { getSettings } from "./settings.js";
 
-export const reviewModes: ReviewMode[] = ["meaning", "speech"];
+export const reviewModes: ReviewMode[] = ["meaning", "speech", "listening"];
 
 type Tx = Pick<Db, "insert" | "update">;
 
@@ -33,7 +33,7 @@ export function startOfDay(now: Date, timeZone: string): Date {
   return new Date(Date.UTC(parts.year!, parts.month! - 1, parts.day!) - offset);
 }
 
-/** Puts cards into reviews: fresh schedules in both modes, due now. */
+/** Puts cards into reviews: fresh schedules in every mode, due now. */
 export function introduce(tx: Tx, ids: number[], how: "direct" | "daily" | "early", now: Date) {
   if (!ids.length) return;
   tx.update(cards).set({ introducedAt: now, introduction: how }).where(inArray(cards.id, ids)).run();
