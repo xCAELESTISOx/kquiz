@@ -24,6 +24,8 @@ export interface Stats {
   cards: number;
   dueMeaning: number;
   dueSpeech: number;
+  /** Cards to recognise by ear; only those whose recording is made. */
+  dueListening: number;
   streakDays: number;
 }
 
@@ -115,6 +117,7 @@ export class MemoryCardStore implements CardStore {
       cards: all.length,
       dueMeaning: all.length,
       dueSpeech: all.filter((card) => card.speakable).length,
+      dueListening: 0,
       streakDays: 0,
     };
   }

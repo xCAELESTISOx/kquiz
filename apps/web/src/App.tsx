@@ -20,7 +20,8 @@ export function App() {
   }, []);
 
   if (route === "login") return <LoginScreen />;
-  if (route === "review") return <ReviewScreen />;
+  if (route === "review") return <ReviewScreen key="meaning" mode="meaning" />;
+  if (route === "listen") return <ReviewScreen key="listening" mode="listening" />;
   if (route === "speech") return <SpeechScreen />;
 
   return (

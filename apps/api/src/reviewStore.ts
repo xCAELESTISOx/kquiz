@@ -1,12 +1,19 @@
 import { and, asc, count, eq, lte, sql } from "drizzle-orm";
 import { toCardDto, type CardDto } from "./cardStore.js";
 import type { Db } from "./db/client.js";
-import { cards, reviewLog, reviewStates } from "./db/schema.js";
+import { cardAudio, cards, reviewLog, reviewStates } from "./db/schema.js";
 import { applyRating, fromStateRow, toStateRow, type RatingName, type ReviewMode } from "./review.js";
 
 export type QueueItem = { card: CardDto; mode: ReviewMode; due: string; state: number; reps: number; lapses: number };
 
-/** Cards due in a mode, most overdue first. Only speakable cards enter the pronunciation queue. */
+// Listening needs the card's own recording (cardAudio.ts), made from its current Korean: the phone's
+// voice is a poor model for training the ear, so until the recording is there the card waits.
+const hasCurrentAudio = sql`exists (select 1 from ${cardAudio} where ${cardAudio.cardId} = ${cards.id} and ${cardAudio.text} = ${cards.korean})`;
+
+/**
+ * Cards due in a mode, most overdue first. Only speakable cards enter the pronunciation queue,
+ * and only cards with their recording the listening one.
+ */
 export function dueQueue(db: Db, mode: ReviewMode, now = new Date(), limit = 50): QueueItem[] {
   return db
     .select({ card: cards, state: reviewStates })
@@ -17,6 +24,7 @@ export function dueQueue(db: Db, mode: ReviewMode, now = new Date(), limit = 50)
         eq(reviewStates.mode, mode),
         lte(reviewStates.due, now),
         mode === "speech" ? eq(cards.speakable, true) : undefined,
+        mode === "listening" ? hasCurrentAudio : undefined,
       ),
     )
     .orderBy(asc(reviewStates.due))
@@ -101,12 +109,12 @@ export function getStats(db: Db, now = new Date()): Stats {
     .where(
       and(
         lte(reviewStates.due, now),
-        sql`(${reviewStates.mode} = 'meaning' or ${cards.speakable} = 1)`,
+        sql`(${reviewStates.mode} = 'meaning' or (${reviewStates.mode} = 'speech' and ${cards.speakable} = 1) or (${reviewStates.mode} = 'listening' and ${hasCurrentAudio}))`,
       ),
     )
     .groupBy(reviewStates.mode)
     .all();
-  const due = { meaning: 0, speech: 0 };
+  const due = { meaning: 0, speech: 0, listening: 0 };
   for (const row of dueRows) due[row.mode] = row.n;
   const dayStart = new Date(now);
   dayStart.setUTCHours(0, 0, 0, 0);

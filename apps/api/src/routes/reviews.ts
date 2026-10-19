@@ -7,7 +7,7 @@ import { applyReviews, dueQueue, getStats } from "../reviewStore.js";
 
 export const MAX_REVIEWS_PER_REQUEST = 200;
 
-const mode = z.enum(["meaning", "speech"]);
+const mode = z.enum(["meaning", "speech", "listening"]);
 
 const reviewSchema = z.object({
   id: z.uuid(),

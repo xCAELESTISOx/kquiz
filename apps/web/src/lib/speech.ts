@@ -53,7 +53,10 @@ export function speak(card: SpeechCard) {
   const clip = hasAudio() ? clipFor(card) : undefined;
   if (!clip || clip.failed) return speakWithSystemVoice(card.korean);
   clip.audio.currentTime = 0;
-  clip.audio.play().catch(() => {
+  clip.audio.play().catch((e: unknown) => {
+    // Played without a tap and the browser said no: the phone's voice would be refused too,
+    // and the recording itself is fine for the next tap.
+    if (e instanceof DOMException && e.name === "NotAllowedError") return;
     clip.failed = true;
     speakWithSystemVoice(card.korean);
   });
