@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent, type React
 import { api, submitReview } from "../lib/api";
 import { navigate } from "../lib/router";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
-import type { Card, RatingName } from "../lib/types";
+import type { Card, RatingName, ReviewMode } from "../lib/types";
 import { CloseIcon, SpeakerIcon } from "../ui/icons";
 import { useGlide } from "../ui/motion";
 
@@ -15,7 +15,12 @@ const RATINGS: { name: RatingName; label: string; key: string }[] = [
 
 const SWIPE_THRESHOLD = 90;
 
-export function ReviewScreen() {
+/**
+ * Meaning: the Hangul is shown, recall the translation. Listening: only the card's recording plays,
+ * the text appears with the answer. Each mode has its own schedule on the server.
+ */
+export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "listening"> }) {
+  const listening = mode === "listening";
   const [queue, setQueue] = useState<Card[]>();
   const [total, setTotal] = useState(0);
   const [done, setDone] = useState(0);
@@ -27,22 +32,27 @@ export function ReviewScreen() {
   const shownAt = useRef(performance.now());
 
   useEffect(() => {
-    document.title = "Повторение · KQuiz";
-    api.queue("meaning").then(
+    document.title = listening ? "На слух · KQuiz" : "Повторение · KQuiz";
+    api.queue(mode).then(
       ({ items }) => {
         setQueue(items.map((item) => item.card));
         setTotal(items.length);
         shownAt.current = performance.now();
+        // The tap that opened the screen may still count; if not, the big button is right there.
+        if (listening && items[0]) speak(items[0].card);
       },
       (e: Error) => setError(e.message),
     );
-  }, []);
+  }, [mode, listening]);
 
   const card = queue?.[0];
+  const upcoming = queue?.[1];
 
   useEffect(() => {
     if (card) preloadSpeech(card);
-  }, [card]);
+    // Listening plays the next card straight from the grading tap, so it should be loaded by then.
+    if (listening && upcoming) preloadSpeech(upcoming);
+  }, [card, upcoming, listening]);
 
   const reveal = useCallback(() => {
     if (card && !revealed) setRevealed(true);
@@ -56,25 +66,29 @@ export function ReviewScreen() {
       void submitReview({
         id: crypto.randomUUID(),
         cardId: card.id,
-        mode: "meaning",
+        mode,
         rating,
         reviewedAt: new Date().toISOString(),
         elapsedMs: Math.round(performance.now() - shownAt.current),
       }).catch((e: Error) => setError(e.message));
       // A forgotten card comes back at the end of this session, like Anki's relearning step.
-      setQueue((q) => (q ? (rating === "again" ? [...q.slice(1), q[0]!] : q.slice(1)) : q));
+      const next = queue ? (rating === "again" ? [...queue.slice(1), queue[0]!] : queue.slice(1)) : queue;
+      setQueue(next);
+      // Inside the tap, where iOS still lets audio play.
+      if (listening && next?.[0]) speak(next[0]);
       if (rating !== "again") setDone((n) => n + 1);
       setRevealed(false);
       setStep((n) => n + 1);
       shownAt.current = performance.now();
     },
-    [card, revealed, step],
+    [card, revealed, step, queue, mode, listening],
   );
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === "Escape") navigate("today");
+      else if (listening && card && (e.key === "r" || e.key === "к")) speak(card);
       else if (!revealed && (e.key === " " || e.key === "Enter")) {
         e.preventDefault();
         reveal();
@@ -85,14 +99,14 @@ export function ReviewScreen() {
     }
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [revealed, reveal, rate]);
+  }, [revealed, reveal, rate, listening, card]);
 
   const progress = total ? Math.min(done / total, 1) : 0;
 
   return (
     <main className="review">
       <header className="review-top">
-        <a className="icon-button" href="#/" aria-label="Закончить повторение">
+        <a className="icon-button" href="#/" aria-label={listening ? "Закончить тренировку на слух" : "Закончить повторение"}>
           <CloseIcon />
         </a>
         <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
@@ -136,9 +150,24 @@ export function ReviewScreen() {
               )
             }
           >
-            <GlideText className="review-korean" on={revealed}>
-              {card.korean}
-            </GlideText>
+            {listening && !revealed ? (
+              <button
+                type="button"
+                className="listen-play"
+                aria-label="Послушать ещё раз"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  speak(card);
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <SpeakerIcon />
+              </button>
+            ) : (
+              <GlideText className="review-korean" on={revealed}>
+                {card.korean}
+              </GlideText>
+            )}
             {revealed ? (
               <div className="review-answer">
                 {(card.pronunciation && card.pronunciation !== card.korean) || card.romanization ? (
@@ -163,9 +192,9 @@ export function ReviewScreen() {
                 {card.notes && <p className="review-notes muted">{card.notes}</p>}
               </div>
             ) : (
-              <p className="review-hint muted">Вспомни перевод</p>
+              <p className="review-hint muted">{listening ? "Послушай и вспомни перевод" : "Вспомни перевод"}</p>
             )}
-            {canSpeak() && (
+            {canSpeak() && (!listening || revealed) && (
               <button
                 type="button"
                 className="icon-button speak-button"
