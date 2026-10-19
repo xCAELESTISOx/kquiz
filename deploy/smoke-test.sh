@@ -7,7 +7,8 @@ cd "$(dirname "$0")"
 
 work=$(mktemp -d)
 ORIGIN_SECRET=$(openssl rand -hex 32)
-export DOMAIN=kquiz.test ACME_EMAIL=internal ORIGIN_SECRET KQUIZ_DATA=$work/data
+# The scorer runs without its model here: /g2p still works, and CI skips a 1.3 GB download.
+export DOMAIN=kquiz.test ACME_EMAIL=internal ORIGIN_SECRET KQUIZ_DATA=$work/data SCORER_LOAD_MODEL=0
 mkdir -p "$KQUIZ_DATA"
 chmod 777 "$KQUIZ_DATA"
 
@@ -40,6 +41,14 @@ got=$(curl -s --noproxy "*" -o /dev/null -w '%{http_code} %{redirect_url}' -H "H
 if [ "$got" = "308 https://$DOMAIN/login" ]; then echo "ok   http redirects to https"; else echo "FAIL http redirect: $got"; fail=1; fi
 got=$(curl -s --noproxy "*" -o /dev/null -w '%{http_code}' http://127.0.0.1:8787/api/auth/status || true)
 if [ "$got" = 403 ]; then echo "ok   API refuses requests that bypass Caddy"; else echo "FAIL API without Caddy: $got"; fail=1; fi
+got=""
+for _ in $(seq 60); do
+  got=$(curl -s --noproxy "*" 'http://127.0.0.1:8788/g2p?text=%EA%B5%AD%EB%AC%BC' || true)
+  case $got in *'"pronunciation":"궁물"'*) break ;; esac
+  sleep 2
+done
+case $got in *'"pronunciation":"궁물"'*) echo "ok   scorer answers /g2p" ;; *) echo "FAIL scorer /g2p: $got"; fail=1 ;; esac
+if ss -ltn | awk '{print $4}' | grep -Eq '^(0\.0\.0\.0|\*|\[::\]):8788$'; then echo "FAIL scorer listens publicly"; fail=1; fi
 if ss -ltn | awk '{print $4}' | grep -Eq '^(0\.0\.0\.0|\*|\[::\]):8787$'; then echo "FAIL API listens publicly"; fail=1; else echo "ok   API only on 127.0.0.1"; fi
 # Not piped into grep -q: with pipefail an early grep exit fails the pipeline.
 docker compose logs api > "$work/api.log" 2>&1

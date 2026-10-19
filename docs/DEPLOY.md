@@ -14,7 +14,7 @@ iPhone, Claude ──HTTPS (Let's Encrypt)──▶ сервер :443
 
 | Файл | Зачем |
 |---|---|
-| `docker-compose.yml` | Три контейнера: `caddy`, `api`, `scorer` (последний пока выключен) |
+| `docker-compose.yml` | Три контейнера: `caddy`, `api`, `scorer` (оценка произношения) |
 | `Caddyfile` | HTTPS от Let's Encrypt, таймауты, лимит тела 2 МБ; `/api`, `/mcp`, `/oauth`, `/.well-known` в API, остальное — PWA с `index.html` на любые пути (нужно для `/login`) |
 | `.env.example` | Шаблон настроек: домен, e-mail для сертификата, секрет, код первого входа |
 | `cloud-init.sh` | Собирает user-data, с которым новый сервер сам ставит и запускает всё ниже |
@@ -28,11 +28,10 @@ iPhone, Claude ──HTTPS (Let's Encrypt)──▶ сервер :443
 
 1. Зарегистрироваться на [timeweb.cloud](https://timeweb.cloud) и пополнить баланс.
 2. Купить домен там же (раздел «Домены»), чтобы DNS был в той же панели и API.
-3. Создать API-токен Timeweb Cloud (панель → API и Terraform).
-4. Создать на GitHub [fine-grained токен](https://github.com/settings/personal-access-tokens/new) только для репозитория `kquiz` с правом **Contents: Read-only**: по нему сервер забирает код.
-5. Положить оба токена в настройки облачного окружения Claude (Project settings → Cloud environment → шестерёнка → Network secrets) под именами `TIMEWEB_CLOUD_TOKEN` и `KQUIZ_GITHUB_TOKEN`, а в Allowed domains добавить `api.timeweb.cloud`.
+3. Создать API-токен Timeweb Cloud (панель → API и Terraform) и добавить его в настройки облачного окружения Claude (Project settings → Cloud environment → шестерёнка → Network secrets): тип **Bearer**, хост `api.timeweb.cloud`. Там же в Allowed domains добавить `api.timeweb.cloud`.
+4. Когда Claude пришлёт открытый ключ: GitHub → репозиторий `kquiz` → Settings → Deploy keys → Add deploy key, вставить ключ, галочку «Allow write access» **не ставить**. По этому ключу сервер забирает код, и больше он ничего не умеет.
 
-Дальше Claude через API Timeweb создаёт сервер (Ubuntu 24.04, 2 vCPU, 4 ГБ, Москва) с user-data из `cloud-init.sh`, добавляет A-запись домена и проверяет, что сайт открылся по HTTPS. Код первого входа Claude задаёт сам (`SETUP_CODE`) и присылает владельцу.
+Дальше Claude через API Timeweb создаёт сервер (Ubuntu 24.04, 4 ГБ, Москва) с user-data из `cloud-init.sh`, добавляет A-запись домена и проверяет, что сайт открылся по HTTPS. Код первого входа Claude задаёт сам (`SETUP_CODE`) и присылает владельцу.
 
 ## Первый вход и Claude
 
@@ -76,7 +75,7 @@ docker compose start api
 
 **Копия бэкапов вне сервера (по желанию).** Впиши в `/etc/kquiz-backup.env` `BACKUP_REMOTE=user@host:kquiz` (rsync по SSH, порт в `BACKUP_REMOTE_PORT`), и `backup.sh` будет копировать архивы туда.
 
-**Оценка произношения.** API к ней пока не обращается, поэтому контейнер `scorer` выключен. Когда понадобится, впиши `COMPOSE_PROFILES=scorer` в `deploy/.env` и выполни `docker compose up -d --build`. При первом старте он скачает модель, около 1,3 ГБ; 4 ГБ памяти хватает.
+**Оценка произношения.** Контейнер `scorer` при первом старте скачивает модель (около 1,3 ГБ) и держит её в памяти, около 2 ГБ. Поэтому серверу нужно 4 ГБ: на 2 ГБ модель не поместится вместе с остальным.
 
 ## Как устроена защита
 

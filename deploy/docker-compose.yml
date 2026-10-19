@@ -51,14 +51,14 @@ services:
     pids_limit: 100
     depends_on: [api]
 
-  # Not used by the API yet. Enable with: docker compose --profile scorer up -d
+  # Pronunciation scoring. Downloads the model (~1.3 GB) into scorer-models on first start.
   scorer:
     <<: *hardening
-    profiles: [scorer]
     build: { context: .., dockerfile: deploy/Dockerfile.scorer }
     image: kquiz-scorer
     environment:
       SCORER_THREADS: "2"
+      SCORER_LOAD_MODEL: ${SCORER_LOAD_MODEL:-1}
     volumes:
       - scorer-models:/models
     tmpfs: [/tmp]
