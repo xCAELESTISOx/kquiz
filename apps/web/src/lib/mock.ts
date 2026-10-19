@@ -12,6 +12,7 @@ import type {
   ReviewResult,
   ScoreResult,
   Stats,
+  StatsOverview,
 } from "./types";
 
 // Stand-in for apps/api when it isn't running. Dev builds only (see api.ts).
@@ -128,6 +129,59 @@ export class MockApi {
       cards: this.state.cards.length,
       due: { meaning: this.queue("meaning", Infinity).length, speech: this.queue("speech", Infinity).length },
       reviewedToday: this.state.reviewedToday.day === day ? this.state.reviewedToday.count : 0,
+    };
+  }
+
+  /** Made-up but plausible history, deterministic, so the statistics screen can be designed. */
+  statsOverview(): StatsOverview {
+    const today = new Date(this.now());
+    today.setHours(12, 0, 0, 0);
+    const day = (offset: number) => {
+      const d = new Date(today.getTime() + offset * DAY);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    };
+    let seed = 7;
+    const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+    const activity = Array.from({ length: 119 }, (_, i) => {
+      const age = 118 - i;
+      const skip = age > 60 ? rand() < 0.6 : age === 9 || age === 23 || rand() < 0.08;
+      return { day: day(-age), reviews: skip || age === 0 ? 0 : Math.round(8 + rand() * 50 * (1 - age / 200)) };
+    });
+    const forecast = Array.from({ length: 30 }, (_, i) => ({
+      day: day(i),
+      due: {
+        meaning: Math.round((i === 0 ? 34 : 6 + rand() * 22) * (i === 9 ? 2.4 : 1)),
+        speech: Math.round(i === 0 ? 12 : 2 + rand() * 10),
+      },
+    }));
+    return {
+      today: day(0),
+      streak: { current: 8, best: 21, reviewedToday: false },
+      activity,
+      forecast,
+      retention: { meaning: { reviews: 412, recalled: 361 }, speech: { reviews: 96, recalled: 88 } },
+      targetRetention: 0.9,
+      cards: {
+        total: 238,
+        byMode: {
+          meaning: { new: 31, learning: 14, young: 121, mature: 72 },
+          speech: { new: 58, learning: 9, young: 118, mature: 41 },
+        },
+      },
+      speech: {
+        weeks: [61, 64, null, 68, 71, 70, 76, 79].map((avg, i) => ({
+          start: day(-(7 - i) * 7 - 6),
+          attempts: avg === null ? 0 : 20 + i * 4,
+          avgScore: avg,
+        })),
+        sounds: [
+          { phone: "t͈ɕ", attempts: 48, errors: 19, recent: { attempts: 14, errors: 3 }, previous: { attempts: 12, errors: 6 } },
+          { phone: "ʌ", attempts: 160, errors: 52, recent: { attempts: 40, errors: 12 }, previous: { attempts: 38, errors: 13 } },
+          { phone: "kʰ", attempts: 61, errors: 17, recent: { attempts: 18, errors: 7 }, previous: { attempts: 15, errors: 3 } },
+          { phone: "ɰi", attempts: 22, errors: 6, recent: { attempts: 0, errors: 0 }, previous: { attempts: 6, errors: 2 } },
+          { phone: "s͈", attempts: 37, errors: 8, recent: { attempts: 11, errors: 1 }, previous: { attempts: 9, errors: 3 } },
+        ],
+      },
     };
   }
 

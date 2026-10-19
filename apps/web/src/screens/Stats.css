@@ -1,0 +1,590 @@
+/* Statistics screen. Shared tokens and .segmented live in theme.css. */
+
+.stats {
+  gap: 20px;
+}
+
+.stats-loading {
+  display: grid;
+  gap: 16px;
+}
+
+/* ---------- Streak: the one big number ---------- */
+
+.streak {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 4px 2px 8px;
+}
+
+.streak-number {
+  min-width: 1.1ch;
+  font-size: 88px;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 0.9;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+/* Full color while the streak is safe for today, dimmer while it still needs today's session. */
+.streak-number[data-alive] {
+  background: linear-gradient(to bottom, var(--accent-hi), var(--accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 8px 24px rgb(124 140 255 / 0.25));
+}
+
+.streak-number[data-alive="pending"] {
+  opacity: 0.55;
+  filter: none;
+}
+
+.streak-label {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  margin-bottom: 4px;
+}
+
+.streak .muted {
+  font-size: var(--fs-sm);
+  text-wrap: pretty;
+}
+
+/* ---------- Sections ---------- */
+
+.stats-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 16px 16px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-1);
+}
+
+.stats-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stats-section h2 {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.stats-aside {
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-subhead {
+  margin: 12px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+.stats-note {
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.segmented-small {
+  box-shadow: none;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.segmented-small::before {
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  border-radius: 9px;
+}
+
+.segmented-small button {
+  min-height: 34px;
+  font-size: 14px;
+}
+
+/* ---------- Readout over a chart: value first, then what it is ---------- */
+
+.readout {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  min-height: 34px;
+}
+
+.readout-value {
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.readout-label {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.readout-parts {
+  display: flex;
+  gap: 12px;
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.readout-parts span,
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Line keys in the readout, as in a tooltip. */
+.readout-parts i {
+  width: 10px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.legend {
+  display: flex;
+  gap: 16px;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+.legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+/* ---------- Bars ---------- */
+
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 132px;
+  padding-top: 4px;
+  border-bottom: 1px solid var(--border-strong);
+  touch-action: pan-y;
+  cursor: crosshair;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.bars[data-range="30"] {
+  gap: 3px;
+}
+
+.bars-score {
+  height: 96px;
+}
+
+.bar {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  transition: opacity var(--dur-1) var(--ease);
+}
+
+.bars[data-picking="true"] .bar:not([data-selected="true"]) {
+  opacity: 0.4;
+}
+
+.bar-stack {
+  width: 100%;
+  min-height: 2px;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+  border-radius: 4px 4px 0 0;
+  overflow: hidden;
+  transform-origin: bottom;
+  animation: bar-grow 560ms var(--ease-out) backwards;
+}
+
+.bar-stack span {
+  flex-basis: 0;
+  min-height: 2px;
+}
+
+.bar[data-empty="true"] .bar-stack {
+  background: var(--border);
+  height: 2px !important;
+}
+
+.bar[data-today="true"] .bar-stack {
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.18) inset;
+}
+
+@keyframes bar-grow {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+.bars-axis {
+  display: flex;
+  gap: 8px;
+  margin-top: -4px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bars-axis[data-range="30"] {
+  gap: 3px;
+}
+
+.bars-axis span {
+  flex: 1;
+  min-width: 0;
+  overflow: visible;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.bars-axis[data-range="30"] span {
+  text-align: left;
+}
+
+/* ---------- Retention meters ---------- */
+
+.retention,
+.card-states,
+.sounds {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.retention li,
+.card-states li {
+  display: grid;
+  gap: 8px;
+}
+
+.retention-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--fs-sm);
+}
+
+.retention-head strong {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.retention-head strong[data-faint="true"] {
+  color: var(--text-faint);
+}
+
+.meter {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-raised);
+}
+
+.meter > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transform-origin: left;
+  animation: meter-grow 640ms var(--ease-out) 160ms backwards;
+}
+
+/* The FSRS target as a tick through the track. */
+.meter::after {
+  content: "";
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: var(--target, -10px);
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--text);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+.meter-thin {
+  height: 4px;
+}
+
+.meter-thin::after {
+  content: none;
+}
+
+.meter-thin > span {
+  background: var(--text-muted);
+}
+
+@keyframes meter-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+.retention .retention-target {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.retention-target i {
+  flex: none;
+  width: 2px;
+  height: 12px;
+  border-radius: 1px;
+  background: var(--text);
+}
+
+/* ---------- Activity heatmap ---------- */
+
+.heatmap {
+  display: grid;
+  gap: 6px;
+}
+
+.heatmap-months,
+.heatmap-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 1fr);
+  gap: 3px;
+}
+
+.heatmap-months {
+  color: var(--text-faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.heatmap-grid {
+  grid-template-rows: repeat(7, auto);
+  grid-auto-flow: column;
+  touch-action: pan-y;
+}
+
+.heatmap-cell {
+  aspect-ratio: 1;
+  border-radius: 4px;
+  background: var(--surface-raised);
+  transition: box-shadow var(--dur-1) var(--ease);
+}
+
+/* One hue, light to strong, for "how much". */
+.heatmap-cell[data-level="none"] {
+  background: transparent;
+}
+
+.heatmap-cell[data-level="1"] {
+  background: rgb(107 124 245 / 0.3);
+}
+
+.heatmap-cell[data-level="2"] {
+  background: rgb(107 124 245 / 0.52);
+}
+
+.heatmap-cell[data-level="3"] {
+  background: rgb(107 124 245 / 0.76);
+}
+
+.heatmap-cell[data-level="4"] {
+  background: var(--accent-hi);
+}
+
+.heatmap-cell[data-selected="true"] {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 3.5px var(--text);
+}
+
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.heatmap-legend .heatmap-cell {
+  width: 12px;
+  border-radius: 3px;
+}
+
+.heatmap-legend span:first-child {
+  margin-right: 4px;
+}
+
+.heatmap-legend span:last-child {
+  margin-left: 4px;
+}
+
+/* ---------- Card states: one hue, from new to learned ---------- */
+
+.states-bar {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--surface-raised);
+}
+
+.states-bar span {
+  flex-basis: 0;
+  min-width: 3px;
+  transform-origin: left;
+  animation: meter-grow 640ms var(--ease-out) 160ms backwards;
+}
+
+[data-step="0"] {
+  background: rgb(148 160 200 / 0.28);
+}
+
+[data-step="1"] {
+  background: rgb(107 124 245 / 0.42);
+}
+
+[data-step="2"] {
+  background: rgb(107 124 245 / 0.72);
+}
+
+[data-step="3"] {
+  background: var(--accent-hi);
+}
+
+.states-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+.states-values span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.states-values i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.states-values b {
+  color: var(--text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Weak sounds ---------- */
+
+.sounds li {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.sound-glyph {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 52px;
+  height: 52px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  font-size: var(--fs-xl);
+  font-weight: 600;
+}
+
+.sound-body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.sound-body b {
+  font-size: var(--fs-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 999px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-raised);
+}
+
+.trend[data-trend="better"] {
+  color: var(--ok);
+  background: rgb(74 222 128 / 0.1);
+}
+
+.trend[data-trend="worse"] {
+  color: var(--wrong);
+  background: rgb(248 113 113 / 0.1);
+}
+
+.trend[data-trend="none"] {
+  padding-left: 8px;
+  color: var(--text-faint);
+}
+
+/* ---------- Motion ---------- */
+
+.streak > * {
+  animation: answer-in var(--dur-3) var(--ease-out) backwards;
+}
+
+.streak > :nth-child(2) {
+  animation-delay: 80ms;
+}
+
+.stats-section {
+  animation: answer-in var(--dur-3) var(--ease-out) backwards;
+  animation-delay: calc(60ms + var(--i, 0) * 50ms);
+}

@@ -11,6 +11,7 @@ import type { OwnerAuth } from "../mcp/app.js";
 import type { OAuthStore } from "../mcp/oauth-store.js";
 import type { CardStore } from "../mcp/store.js";
 import { getStats } from "../reviewStore.js";
+import { statsOverview } from "../statsStore.js";
 
 export type StoredCard = NewCard & {
   id: string;
@@ -108,7 +109,22 @@ export class SqliteCardStore implements CardStore {
 
   async stats(now: Date) {
     const stats = getStats(this.db, now);
-    return { cards: stats.cards, dueMeaning: stats.due.meaning, dueSpeech: stats.due.speech, streakDays: streakDays(this.db, now) };
+    const overview = statsOverview(this.db, now);
+    const dueNext7Days: Record<string, number> = {};
+    for (const { due } of overview.forecast.slice(0, 7)) {
+      for (const [mode, n] of Object.entries(due)) dueNext7Days[mode] = (dueNext7Days[mode] ?? 0) + n;
+    }
+    const retention30d = Object.fromEntries(
+      Object.entries(overview.retention).map(([mode, r]) => [mode, r.reviews ? Math.round((r.recalled / r.reviews) * 100) / 100 : null]),
+    );
+    return {
+      cards: stats.cards,
+      dueMeaning: stats.due.meaning,
+      dueSpeech: stats.due.speech,
+      streakDays: streakDays(this.db, now),
+      dueNext7Days,
+      retention30d,
+    };
   }
 
   async weakSounds(limit: number) {

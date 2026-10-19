@@ -5,6 +5,7 @@ import { AddScreen } from "./screens/Add";
 import { LoginScreen } from "./screens/Login";
 import { ReviewScreen } from "./screens/Review";
 import { SpeechScreen } from "./screens/Speech";
+import { StatsScreen } from "./screens/Stats";
 import { TodayScreen } from "./screens/Today";
 import { TabBar } from "./ui/TabBar";
 
@@ -25,7 +26,7 @@ export function App() {
 
   return (
     <div className="shell">
-      {route === "add" ? <AddScreen /> : <TodayScreen />}
+      {route === "add" ? <AddScreen /> : route === "stats" ? <StatsScreen /> : <TodayScreen />}
       <TabBar route={route} />
     </div>
   );

@@ -136,7 +136,7 @@ export function createMcpServer(store: CardStore): McpServer {
     "get_stats",
     {
       title: "Get stats",
-      description: "Number of cards, cards due for review in each mode, and the current streak in days.",
+      description: "Number of cards, cards due now in each mode, the current streak in days, reviews coming due in the next 7 days, and the share of reviews recalled over the last 30 days (FSRS aims for 0.9).",
       annotations: { readOnlyHint: true },
     },
     async () => json(await store.stats(new Date())),

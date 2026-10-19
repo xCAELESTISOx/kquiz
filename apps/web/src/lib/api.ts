@@ -11,6 +11,7 @@ import type {
   ReviewResult,
   ScoreResult,
   Stats,
+  StatsOverview,
 } from "./types";
 
 export class ApiError extends Error {
@@ -150,6 +151,10 @@ export const api = {
     request<{ results: ReviewResult[] }>("POST", "/reviews", { body: { reviews }, fallback: (m) => m.review(reviews) }),
 
   stats: () => request<Stats>("GET", "/reviews/stats", { fallback: (m) => m.stats() }),
+
+  /** The statistics screen, with days in the phone's time zone. */
+  statsOverview: () =>
+    request<StatsOverview>("GET", `/stats?tz=${-new Date().getTimezoneOffset()}`, { fallback: (m) => m.statsOverview() }),
 
   /** Scores a recording against the card. It is not a review: the rating is sent separately. */
   score: (cardId: number, wav: Uint8Array<ArrayBuffer>) =>

@@ -74,3 +74,9 @@ export const RetryIcon = () => (
     <path d="M4 4v4h4" />
   </Icon>
 );
+
+export const ChartIcon = () => (
+  <Icon>
+    <path d="M5 20V12M10 20V5M15 20v-9M20 20V8" />
+  </Icon>
+);

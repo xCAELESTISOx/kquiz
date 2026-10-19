@@ -52,6 +52,9 @@ Card: `{ id, korean, meaning, pronunciation, romanization, examples, notes, tags
 - `POST /` `{ reviews: [{ id: uuid, cardId, mode, rating: again|hard|good|easy, reviewedAt, elapsedMs? }] }` (≤ 200) → `{ results: [{ id, status: applied|duplicate|card_not_found, due? }] }`. A resent `id` is a no-op; a batch is applied in `reviewedAt` order.
 - `GET /stats` → `{ cards, due: { meaning, speech }, reviewedToday }` (UTC day)
 
+**Statistics** (`/api/stats`)
+- `GET /?tz=540` (minutes east of UTC; days start at the owner's midnight) → `{ today, streak: { current, best, reviewedToday }, activity: [{ day, reviews }] (17 weeks), forecast: [{ day, due: { <mode>: n } }] (30 days, today includes overdue, new cards left out), retention: { <mode>: { reviews, recalled } } (30 days, without first sightings and reviews < 12 h apart), targetRetention, cards: { total, byMode: { <mode>: { new, learning, young, mature } } }, speech: { weeks: [{ start, attempts, avgScore }] (8), sounds: [{ phone, attempts, errors, recent, previous }] } }`. Modes are whatever `review_states` holds, so a new mode appears without an API change. `sounds` are the worst by overall error rate (≥ 3 attempts); `recent` is the last 14 days, `previous` the 14 before.
+
 **Pronunciation** (`/api/score`)
 - `POST /?cardId=` with the recording as the body (`content-type: audio/wav`, ≤ 1 MB, ≤ 10 s; the web app sends 16 kHz mono 16-bit PCM) → `{ attemptId, cardId, score, pronunciation, syllables: [{ text, pron, status: ok|weak|wrong }], errors: [{ syllable, position, kind, status, expected, heard }], suggestedRating }`. Fields are the scorer's (services/scorer/README.md).
 - Scoring is not a review: the app shows the result, the owner picks the rating and it goes to `POST /api/reviews` with `mode: "speech"` like any other. `suggestedRating` is forgiving: "weak" syllables never pull it below good, because the model flags about one syllable in six even in fluent native speech.

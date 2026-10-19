@@ -25,6 +25,10 @@ export interface Stats {
   dueMeaning: number;
   dueSpeech: number;
   streakDays: number;
+  /** Reviews coming due in the next 7 days (UTC), per mode, new cards left out. */
+  dueNext7Days?: Record<string, number>;
+  /** Share of reviews in the last 30 days not rated "again", per mode; null without data. */
+  retention30d?: Record<string, number | null>;
 }
 
 export interface WeakSound {
