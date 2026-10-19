@@ -222,6 +222,12 @@ describe("oauth", () => {
   });
 });
 
+const examples = [
+  { ko: "책을 읽어요.", ru: "Я читаю книгу." },
+  { ko: "신문을 읽었어요.", ru: "Я прочитал газету." },
+  { ko: "천천히 읽어 주세요.", ru: "Прочитайте медленно, пожалуйста." },
+];
+
 describe("mcp tools", () => {
   it("lists the tools without a delete", async () => {
     const client = await mcpClient((await connect()).access_token);
@@ -232,16 +238,16 @@ describe("mcp tools", () => {
 
   it("adds cards and reports duplicates and rejects", async () => {
     const client = await mcpClient((await connect()).access_token);
-    await client.callTool({ name: "add_cards", arguments: { cards: [{ korean: "물", meaning: "вода" }] } });
+    await client.callTool({ name: "add_cards", arguments: { cards: [{ korean: "물", meaning: "вода", examples }] } });
     const result = parse(
       await client.callTool({
         name: "add_cards",
         arguments: {
           cards: [
-            { korean: "물 ", meaning: "вода" },
-            { korean: "읽다", meaning: "читать", pronunciation: "[익따]", example_ko: "책을 읽어요.", tags: ["глаголы"] },
-            { korean: "읽다", meaning: "читать" },
-            { korean: "", meaning: "пусто" },
+            { korean: "물 ", meaning: "вода", examples },
+            { korean: "읽다", meaning: "читать", pronunciation: "[익따]", examples, tags: ["глаголы"] },
+            { korean: "읽다", meaning: "читать", examples },
+            { korean: "", meaning: "пусто", examples },
           ],
         },
       }),
@@ -251,32 +257,71 @@ describe("mcp tools", () => {
     expect(result.rejected.map((r: { reason: string }) => r.reason)).toEqual(["repeated in this batch", expect.any(String)]);
 
     const stored = [...cards.cards.values()].find((c) => c.korean === "읽다")!;
-    expect(stored).toMatchObject({ source: "claude", exampleKo: "책을 읽어요.", tags: ["глаголы"] });
+    expect(stored).toMatchObject({ source: "claude", examples, tags: ["глаголы"] });
+  });
+
+  it("requires exactly three examples on every new card", async () => {
+    const client = await mcpClient((await connect()).access_token);
+    const none = await client.callTool({ name: "add_cards", arguments: { cards: [{ korean: "물", meaning: "вода" }] } });
+    expect(none.isError).toBe(true);
+    const two = await client.callTool({
+      name: "add_cards",
+      arguments: { cards: [{ korean: "물", meaning: "вода", examples: examples.slice(0, 2) }] },
+    });
+    expect(two.isError).toBe(true);
+    const latin = parse(
+      await client.callTool({
+        name: "add_cards",
+        arguments: { cards: [{ korean: "물", meaning: "вода", examples: [...examples.slice(0, 2), { ko: "water", ru: "вода" }] }] },
+      }),
+    );
+    expect(latin.created).toEqual([]);
+    expect(latin.rejected).toHaveLength(1);
+    expect(cards.cards.size).toBe(0);
   });
 
   it("finds and updates cards without touching other fields", async () => {
     const client = await mcpClient((await connect()).access_token);
     await client.callTool({
       name: "add_cards",
-      arguments: { cards: [{ korean: "사과", meaning: "яблоко", tags: ["еда"] }, { korean: "하늘", meaning: "небо" }] },
+      arguments: {
+        cards: [
+          { korean: "사과", meaning: "яблоко", tags: ["еда"], notes: "фрукт", examples },
+          { korean: "하늘", meaning: "небо", examples },
+        ],
+      },
     });
     const found = parse(await client.callTool({ name: "find_cards", arguments: { tag: "еда" } }));
     expect(found.cards).toHaveLength(1);
     const id = found.cards[0].id;
 
-    const updated = parse(await client.callTool({ name: "update_card", arguments: { id, changes: { meaning: "яблоко (фрукт)" } } }));
-    expect(updated.card).toMatchObject({ meaning: "яблоко (фрукт)", tags: ["еда"] });
+    const noExamples = await client.callTool({ name: "update_card", arguments: { id, changes: { meaning: "яблоко (фрукт)" } } });
+    expect(noExamples.isError).toBe(true);
+
+    const newExamples = [
+      { ko: "사과를 먹어요.", ru: "Я ем яблоко." },
+      { ko: "사과가 빨개요.", ru: "Яблоко красное." },
+      { ko: "사과 두 개 주세요.", ru: "Дайте два яблока." },
+    ];
+    const updated = parse(
+      await client.callTool({
+        name: "update_card",
+        arguments: { id, changes: { meaning: "яблоко (фрукт)", notes: "", examples: newExamples } },
+      }),
+    );
+    expect(updated.card).toMatchObject({ meaning: "яблоко (фрукт)", tags: ["еда"], examples: newExamples });
+    expect(updated.card.notes ?? "").toBe("");
 
     const byText = parse(await client.callTool({ name: "find_cards", arguments: { query: "небо" } }));
     expect(byText.cards.map((c: { korean: string }) => c.korean)).toEqual(["하늘"]);
 
-    const missing = await client.callTool({ name: "update_card", arguments: { id: "nope", changes: { meaning: "x" } } });
+    const missing = await client.callTool({ name: "update_card", arguments: { id: "nope", changes: { meaning: "x", examples } } });
     expect(missing.isError).toBe(true);
   });
 
   it("caps a batch at 50 cards", async () => {
     const client = await mcpClient((await connect()).access_token);
-    const many = Array.from({ length: 51 }, (_, i) => ({ korean: "가".repeat(i + 1), meaning: "x" }));
+    const many = Array.from({ length: 51 }, (_, i) => ({ korean: "가".repeat(i + 1), meaning: "x", examples }));
     const result = await client.callTool({ name: "add_cards", arguments: { cards: many } });
     expect(result.isError).toBe(true);
     expect(cards.cards.size).toBe(0);
@@ -284,7 +329,7 @@ describe("mcp tools", () => {
 
   it("reports stats", async () => {
     const client = await mcpClient((await connect()).access_token);
-    await client.callTool({ name: "add_cards", arguments: { cards: [{ korean: "물", meaning: "вода" }] } });
+    await client.callTool({ name: "add_cards", arguments: { cards: [{ korean: "물", meaning: "вода", examples }] } });
     expect(parse(await client.callTool({ name: "get_stats", arguments: {} }))).toMatchObject({ cards: 1, dueMeaning: 1 });
   });
 });

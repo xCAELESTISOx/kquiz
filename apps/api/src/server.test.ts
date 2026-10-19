@@ -85,12 +85,23 @@ describe("server", () => {
       }),
     );
     const text = (result: unknown) => JSON.parse((result as { content: { text: string }[] }).content[0]!.text);
-    const added = text(await client.callTool({ name: "add_cards", arguments: { cards: [{ korean: "물!", meaning: "вода" }, { korean: "불", meaning: "огонь" }] } }));
+    const examples = [
+      { ko: "불이 났어요.", ru: "Случился пожар." },
+      { ko: "불을 켜 주세요.", ru: "Включите свет, пожалуйста." },
+      { ko: "불이 뜨거워요.", ru: "Огонь горячий." },
+    ];
+    const added = text(
+      await client.callTool({
+        name: "add_cards",
+        arguments: { cards: [{ korean: "물!", meaning: "вода", examples }, { korean: "불", meaning: "огонь", examples }] },
+      }),
+    );
     expect(added.created.map((c: { korean: string }) => c.korean)).toEqual(["불"]);
     expect(added.duplicates.map((c: { korean: string }) => c.korean)).toEqual(["물"]);
     expect((await t.request("/cards")).json.cards.map((c: { korean: string; source: string }) => [c.korean, c.source])).toEqual([
       ["불", "claude"],
       ["물", "app"],
     ]);
+    expect((await t.request("/cards")).json.cards[0].examples).toEqual(examples);
   });
 });

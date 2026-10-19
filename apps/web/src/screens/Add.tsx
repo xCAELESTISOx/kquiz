@@ -56,7 +56,7 @@ function SingleForm() {
   const [tags, setTags] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const [fieldErrors, setFieldErrors] = useState<{ korean?: string; meaning?: string }>({});
+  const [fieldErrors, setFieldErrors] = useState<{ korean?: string; meaning?: string; example?: string }>({});
   const [added, setAdded] = useState<NewCard[]>([]);
   const koreanRef = useRef<HTMLInputElement>(null);
   const meaningRef = useRef<HTMLInputElement>(null);
@@ -69,15 +69,16 @@ function SingleForm() {
     const errors = {
       ...(!korean.trim() && { korean: "Впиши слово по-корейски" }),
       ...(!meaning.trim() && { meaning: "Впиши перевод" }),
+      ...(!exampleKo.trim() !== !exampleMeaning.trim() && { example: "Нужны и пример, и его перевод" }),
     };
     setFieldErrors(errors);
     if (errors.korean) return koreanRef.current?.focus();
     if (errors.meaning) return meaningRef.current?.focus();
+    if (errors.example) return;
     const card: NewCard = {
       korean: korean.trim(),
       meaning: meaning.trim(),
-      ...(exampleKo.trim() && { exampleKo: exampleKo.trim() }),
-      ...(exampleMeaning.trim() && { exampleMeaning: exampleMeaning.trim() }),
+      ...(exampleKo.trim() && { examples: [{ ko: exampleKo.trim(), ru: exampleMeaning.trim() }] }),
       ...(notes.trim() && { notes: notes.trim() }),
       tags: tags
         .split(",")
@@ -171,7 +172,11 @@ function SingleForm() {
               lang="ko"
               autoComplete="off"
               value={exampleKo}
-              onChange={(e) => setExampleKo(e.target.value)}
+              aria-invalid={!!fieldErrors.example && !exampleKo.trim()}
+              onChange={(e) => {
+                setExampleKo(e.target.value);
+                setFieldErrors((f) => ({ ...f, example: undefined }));
+              }}
             />
           </label>
           <label className="field">
@@ -180,8 +185,13 @@ function SingleForm() {
               className="input"
               autoComplete="off"
               value={exampleMeaning}
-              onChange={(e) => setExampleMeaning(e.target.value)}
+              aria-invalid={!!fieldErrors.example && !exampleMeaning.trim()}
+              onChange={(e) => {
+                setExampleMeaning(e.target.value);
+                setFieldErrors((f) => ({ ...f, example: undefined }));
+              }}
             />
+            {fieldErrors.example && <span className="field-error">{fieldErrors.example}</span>}
           </label>
           <label className="field">
             <span className="field-label">Заметка</span>

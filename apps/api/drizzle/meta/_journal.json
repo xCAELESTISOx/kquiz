@@ -15,6 +15,13 @@
       "when": 1792395137632,
       "tag": "0001_attempts",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1792408772089,
+      "tag": "0002_card_examples",
+      "breakpoints": true
     }
   ]
 }

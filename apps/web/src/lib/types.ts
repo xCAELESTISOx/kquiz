@@ -4,13 +4,18 @@ export type ReviewMode = "meaning" | "speech";
 export type RatingName = "again" | "hard" | "good" | "easy";
 export type CardSource = "app" | "claude" | "bulk";
 
+/** A Korean sentence that uses the word, with its Russian translation. */
+export interface Example {
+  ko: string;
+  ru: string;
+}
+
 export interface NewCard {
   korean: string;
   meaning: string;
   pronunciation?: string;
   romanization?: string;
-  exampleKo?: string;
-  exampleMeaning?: string;
+  examples?: Example[];
   notes?: string;
   tags?: string[];
 }
@@ -21,8 +26,7 @@ export interface Card {
   meaning: string;
   pronunciation: string | null;
   romanization: string | null;
-  exampleKo: string | null;
-  exampleMeaning: string | null;
+  examples: Example[];
   notes: string | null;
   tags: string[];
   speakable: boolean;

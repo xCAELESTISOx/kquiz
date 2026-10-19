@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { newCardSchema, normalizeKorean, type NewCard } from "../cards.js";
+import { EXAMPLES_PER_CARD, newCardSchema, normalizeKorean, type NewCard } from "../cards.js";
 import type { CardStore } from "./store.js";
 
 export const MAX_CARDS_PER_CALL = 50;
@@ -10,26 +10,34 @@ const instructions = `KQuiz is the owner's personal Korean flashcard deck. Cards
 - korean: the word or phrase in Hangul only (no hanja, Latin letters or brackets). Use dictionary form for verbs and adjectives unless the owner asks otherwise.
 - meaning: a short Russian translation, the most common sense first.
 - pronunciation (optional): how it is actually said, in Hangul, only when it differs from the spelling (e.g. 읽다 → [익따]).
-- example_ko / example_meaning (optional): one short natural sentence and its Russian translation.
+- examples (required, exactly ${EXAMPLES_PER_CARD}): short natural Korean sentences that use the word, each with its Russian translation, as {"ko", "ru"}. Vary the forms and situations, keep them at the owner's level. Every add_cards card and every update_card call must carry all ${EXAMPLES_PER_CARD}; when editing, send the card's current examples again if they stay as they are.
+- notes (optional): grammar, usage or anything else worth remembering.
 - tags: lowercase topics such as "еда" or "глаголы".
-Call find_cards before adding words the owner may already have; add_cards also reports duplicates. Cards cannot be deleted from here.`;
+Call find_cards before adding words the owner may already have; add_cards also reports duplicates. To fix a card, use update_card instead of adding a new one: any field can be changed, and an empty string clears pronunciation, romanization or notes. Cards cannot be deleted from here.`;
 
 const cardInput = z.object({
   korean: z.string(),
   meaning: z.string(),
   pronunciation: z.string().optional(),
   romanization: z.string().optional(),
-  example_ko: z.string().optional(),
-  example_meaning: z.string().optional(),
   notes: z.string().optional(),
   tags: z.array(z.string()).optional(),
 });
 
-type CardInput = z.infer<typeof cardInput>;
+// Claude has to write examples for every card it adds or edits, so a word is never learned out of context.
+const examplesInput = z
+  .array(
+    z.object({
+      ko: z.string().describe("Korean sentence that uses the word"),
+      ru: z.string().describe("Its Russian translation"),
+    }),
+  )
+  .length(EXAMPLES_PER_CARD)
+  .describe(`Exactly ${EXAMPLES_PER_CARD} example sentences`);
 
-function toNewCard({ example_ko, example_meaning, ...rest }: CardInput) {
-  return newCardSchema.safeParse({ ...rest, exampleKo: example_ko, exampleMeaning: example_meaning });
-}
+const newCardInput = cardInput.extend({ examples: examplesInput });
+
+const requiredExamples = newCardSchema.extend({ examples: newCardSchema.shape.examples.unwrap().length(EXAMPLES_PER_CARD) });
 
 function json(value: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }] };
@@ -46,15 +54,15 @@ export function createMcpServer(store: CardStore): McpServer {
     "add_cards",
     {
       title: "Add cards",
-      description: `Adds up to ${MAX_CARDS_PER_CALL} Korean flashcards. Returns created cards, duplicates of existing cards and rejected ones with the reason.`,
-      inputSchema: { cards: z.array(cardInput).min(1).max(MAX_CARDS_PER_CALL) },
+      description: `Adds up to ${MAX_CARDS_PER_CALL} Korean flashcards. Every card needs exactly ${EXAMPLES_PER_CARD} examples. Returns created cards, duplicates of existing cards and rejected ones with the reason.`,
+      inputSchema: { cards: z.array(newCardInput).min(1).max(MAX_CARDS_PER_CALL) },
       annotations: { destructiveHint: false, idempotentHint: true },
     },
     async ({ cards }) => {
       const rejected: { korean: string; reason: string }[] = [];
       const valid = new Map<string, NewCard>();
       for (const input of cards) {
-        const parsed = toNewCard(input);
+        const parsed = requiredExamples.safeParse(input);
         if (!parsed.success) {
           rejected.push({ korean: input.korean, reason: z.prettifyError(parsed.error) });
           continue;
@@ -94,23 +102,20 @@ export function createMcpServer(store: CardStore): McpServer {
     "update_card",
     {
       title: "Update card",
-      description: "Changes fields of one card found with find_cards. Only the given fields change.",
+      description: `Edits one card found with find_cards: Korean, meaning, pronunciation, romanization, notes, tags, examples or speakable. Only the given fields change; tags replace the old list; an empty string clears pronunciation, romanization or notes. Every call must include exactly ${EXAMPLES_PER_CARD} examples (resend the current ones if they stay).`,
       inputSchema: {
         id: z.string().min(1),
-        changes: cardInput.partial().extend({ speakable: z.boolean().optional() }),
+        changes: cardInput.partial().extend({ examples: examplesInput, speakable: z.boolean().optional() }),
       },
       annotations: { destructiveHint: false, idempotentHint: true },
     },
-    async ({ id, changes: { example_ko, example_meaning, speakable, ...rest } }) => {
-      const parsed = newCardSchema
-        .partial()
-        .safeParse({ ...rest, exampleKo: example_ko, exampleMeaning: example_meaning });
+    async ({ id, changes: { speakable, ...rest } }) => {
+      const parsed = requiredExamples.partial().required({ examples: true }).safeParse(rest);
       if (!parsed.success) return error(z.prettifyError(parsed.error));
       // partial() keeps the tags default, which would wipe tags on every update.
       const patch = Object.fromEntries(
         Object.entries({ ...parsed.data, tags: rest.tags && parsed.data.tags, speakable }).filter(([, v]) => v !== undefined),
       );
-      if (Object.keys(patch).length === 0) return error("Nothing to change");
       const card = await store.update(id, patch);
       return card ? json({ card }) : error(`Card ${id} not found`);
     },

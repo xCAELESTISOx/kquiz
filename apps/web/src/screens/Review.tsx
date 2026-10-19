@@ -146,11 +146,15 @@ export function ReviewScreen() {
                   </p>
                 ) : null}
                 <p className="review-meaning">{card.meaning}</p>
-                {card.exampleKo && (
-                  <div className="review-example">
-                    <p lang="ko">{card.exampleKo}</p>
-                    {card.exampleMeaning && <p className="muted">{card.exampleMeaning}</p>}
-                  </div>
+                {card.examples.length > 0 && (
+                  <ul className="review-examples">
+                    {card.examples.map((example, i) => (
+                      <li key={i} className="review-example">
+                        <p lang="ko">{example.ko}</p>
+                        {example.ru && <p className="muted">{example.ru}</p>}
+                      </li>
+                    ))}
+                  </ul>
                 )}
                 {card.notes && <p className="review-notes muted">{card.notes}</p>}
               </div>

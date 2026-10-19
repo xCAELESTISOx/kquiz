@@ -5,13 +5,23 @@ const KOREAN_ONLY = /^[\p{Script=Hangul}\s.,!?~…'"·-]+$/u;
 
 export const MAX_SPEAKABLE_SYLLABLES = 12;
 
+/** Claude must give exactly this many examples when it adds or edits a card. */
+export const EXAMPLES_PER_CARD = 3;
+
+/** A Korean sentence that uses the word, with its Russian translation. */
+export const exampleSchema = z.object({
+  ko: z.string().trim().min(1).max(300).regex(/\p{Script=Hangul}/u, "must be a Korean sentence"),
+  ru: z.string().trim().min(1).max(300),
+});
+
+export type Example = z.infer<typeof exampleSchema>;
+
 export const newCardSchema = z.object({
   korean: z.string().trim().min(1).max(200),
   meaning: z.string().trim().min(1).max(500),
   pronunciation: z.string().trim().max(200).optional(),
   romanization: z.string().trim().max(200).optional(),
-  exampleKo: z.string().trim().max(500).optional(),
-  exampleMeaning: z.string().trim().max(500).optional(),
+  examples: z.array(exampleSchema).max(EXAMPLES_PER_CARD).optional(),
   notes: z.string().trim().max(2000).optional(),
   tags: z.array(z.string().trim().min(1).max(50)).max(20).default([]),
   // Defaults to isSpeakable(korean); true is accepted only for Hangul-only text.
