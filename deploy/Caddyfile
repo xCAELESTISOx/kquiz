@@ -1,0 +1,58 @@
+# Caddy is the only thing exposed: :80 (redirect and ACME) and :443.
+# The API on 127.0.0.1 accepts only requests that carry ORIGIN_SECRET, and Caddy adds it,
+# so nothing reaches the API around Caddy. Caddy also passes the real client IP, which the
+# API's per-client limits key on (it reads it from cf-connecting-ip, set here, never from the client).
+{
+	admin off
+	persist_config off
+	servers {
+		timeouts {
+			read_header 10s
+			read_body 30s
+			write 60s
+			idle 2m
+		}
+	}
+}
+
+{$DOMAIN} {
+	# An e-mail for Let's Encrypt in production; "internal" for a local self-signed test.
+	tls {$CADDY_TLS}
+
+	# The API caps bodies at 1 MB itself; this stops bigger ones before they reach Node.
+	request_body {
+		max_size 2MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		-Server
+	}
+
+	log {
+		output stdout
+		format json
+	}
+
+	@backend path /api/* /mcp /mcp/* /oauth/* /.well-known/*
+	handle @backend {
+		reverse_proxy 127.0.0.1:8787 {
+			header_up X-Kquiz-Origin {env.ORIGIN_SECRET}
+			header_up Cf-Connecting-Ip {remote_host}
+		}
+	}
+
+	handle {
+		root * /srv
+		encode zstd gzip
+		header Content-Security-Policy "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; media-src 'self' blob:; connect-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		header /assets/* Cache-Control "public, max-age=31536000, immutable"
+		@notAsset not path /assets/*
+		header @notAsset Cache-Control "no-cache"
+		# SPA: /login and any other client path get index.html (the OAuth consent links to /login).
+		try_files {path} /index.html
+		file_server
+	}
+}

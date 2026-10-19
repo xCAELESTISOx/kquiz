@@ -39,3 +39,11 @@ jobs:
       - run: ruff check .
       - run: ruff format --check .
       - run: pytest
+
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: shellcheck deploy/*.sh
+      - run: command -v sqlite3 || (sudo apt-get update && sudo apt-get install -y sqlite3)
+      - run: deploy/smoke-test.sh

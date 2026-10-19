@@ -1,0 +1,7 @@
+[Unit]
+Description=KQuiz SQLite backup
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/kquiz-backup.env
+ExecStart=/opt/kquiz/deploy/backup.sh
