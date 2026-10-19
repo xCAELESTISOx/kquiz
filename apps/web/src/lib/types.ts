@@ -77,3 +77,30 @@ export interface AuthStatus {
   setupRequired: boolean;
   csrfToken?: string;
 }
+
+export type SyllableStatus = "ok" | "weak" | "wrong";
+
+export interface Sound {
+  ipa: string;
+  jamo: string;
+}
+
+/** POST /api/score, fields as services/scorer returns them. */
+export interface ScoreResult {
+  attemptId: number;
+  cardId: number;
+  score: number;
+  /** How the word is actually said, in Hangul (국물 → 궁물). */
+  pronunciation: string;
+  /** Hangul syllables of the card, in order; spaces and punctuation are not included. */
+  syllables: { text: string; pron: string; status: SyllableStatus }[];
+  errors: {
+    syllable: number;
+    position: "onset" | "vowel" | "coda" | "extra";
+    kind: "substitution" | "deletion" | "insertion" | "unclear";
+    status: Exclude<SyllableStatus, "ok">;
+    expected?: Sound | null;
+    heard?: Sound | null;
+  }[];
+  suggestedRating: RatingName;
+}

@@ -21,12 +21,16 @@ export function applyRating(state: Card, rating: RatingName, now = new Date()): 
   return scheduler.next(state, now, ratings[rating]).card;
 }
 
-/** Suggests a rating from a pronunciation score; the user makes the final choice. */
-export function suggestRating(score: number): RatingName {
-  if (score < 50) return "again";
-  if (score < 75) return "hard";
-  if (score < 92) return "good";
-  return "easy";
+/**
+ * Suggests a rating for a pronunciation attempt; the user makes the final choice.
+ * Forgiving on purpose: the model flags about one syllable in six even in fluent native speech
+ * (stage 0), so "weak" never lowers the rating below good, and only "wrong" syllables count.
+ */
+export function suggestSpeechRating(score: number, statuses: readonly ("ok" | "weak" | "wrong")[]): RatingName {
+  const total = Math.max(statuses.length, 1);
+  const wrong = statuses.filter((s) => s === "wrong").length;
+  if (wrong === 0) return score >= 90 && !statuses.includes("weak") ? "easy" : "good";
+  return wrong / total <= 0.5 ? "hard" : "again";
 }
 
 /** Columns of `review_states` that hold the FSRS card. */

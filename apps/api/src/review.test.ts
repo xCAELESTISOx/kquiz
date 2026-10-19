@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyRating, newReviewState, suggestRating } from "./review.js";
+import { applyRating, newReviewState, suggestSpeechRating } from "./review.js";
 
 describe("review", () => {
   it("schedules a good answer later than an again", () => {
@@ -11,10 +11,11 @@ describe("review", () => {
     expect(good.reps).toBe(1);
   });
 
-  it("maps scores to suggested ratings", () => {
-    expect(suggestRating(30)).toBe("again");
-    expect(suggestRating(60)).toBe("hard");
-    expect(suggestRating(85)).toBe("good");
-    expect(suggestRating(97)).toBe("easy");
+  it("suggests speech ratings without punishing weak syllables", () => {
+    expect(suggestSpeechRating(96, ["ok", "ok"])).toBe("easy");
+    expect(suggestSpeechRating(88, ["ok", "weak"])).toBe("good");
+    expect(suggestSpeechRating(70, ["ok", "wrong", "ok"])).toBe("hard");
+    expect(suggestSpeechRating(40, ["wrong", "wrong", "ok"])).toBe("again");
+    expect(suggestSpeechRating(40, ["wrong"])).toBe("again");
   });
 });

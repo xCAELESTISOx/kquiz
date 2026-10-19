@@ -4,6 +4,7 @@ import { useRoute } from "./lib/router";
 import { AddScreen } from "./screens/Add";
 import { LoginScreen } from "./screens/Login";
 import { ReviewScreen } from "./screens/Review";
+import { SpeechScreen } from "./screens/Speech";
 import { TodayScreen } from "./screens/Today";
 import { TabBar } from "./ui/TabBar";
 
@@ -20,6 +21,7 @@ export function App() {
 
   if (route === "login") return <LoginScreen />;
   if (route === "review") return <ReviewScreen />;
+  if (route === "speech") return <SpeechScreen />;
 
   return (
     <div className="shell">

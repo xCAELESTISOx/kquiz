@@ -816,6 +816,332 @@ p {
   align-self: stretch;
 }
 
+/* ---------- Speech ---------- */
+
+.speech-card {
+  justify-content: flex-start;
+  gap: 0;
+  padding: 28px 22px 64px;
+  touch-action: auto;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Auto margins center the content but let it scroll from the top when a long result overflows. */
+.speech-body {
+  margin: auto 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.speech-ask {
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.speech-meaning {
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  text-wrap: balance;
+}
+
+.speech-word {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  animation: answer-in 200ms var(--ease);
+}
+
+.speech-reveal {
+  margin-top: 6px;
+  min-height: var(--tap);
+  padding: 0 20px;
+  border-radius: 999px;
+  border: 1px dashed var(--border-strong);
+  background: none;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+/* Syllable highlights. "weak" stays soft: the model flags fluent speech too often to shout about it. */
+.syl {
+  border-radius: 10px;
+  transition: background 150ms var(--ease);
+}
+
+.syl-ok {
+  color: var(--ok);
+}
+
+.syl-weak {
+  color: var(--weak);
+  text-decoration: underline dotted rgb(251 191 36 / 0.6);
+  text-decoration-thickness: 3px;
+  text-underline-offset: 0.18em;
+}
+
+.syl-wrong {
+  color: var(--wrong);
+  background: rgb(248 113 113 / 0.14);
+  box-shadow: inset 0 0 0 1px rgb(248 113 113 / 0.35);
+  padding: 0 0.06em;
+  margin: 0 0.04em;
+}
+
+.speech-result {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-top: 6px;
+  text-align: left;
+  animation: answer-in 200ms var(--ease);
+}
+
+.speech-verdict {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.speech-verdict-title {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+.tone-ok {
+  color: var(--ok);
+}
+
+.tone-weak {
+  color: var(--weak);
+}
+
+.tone-wrong {
+  color: var(--wrong);
+}
+
+.speech-score {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.speech-score::after {
+  content: " / 100";
+  color: var(--text-faint);
+  font-weight: 500;
+}
+
+.speech-verdict-text {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.speech-errors {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  border-radius: 14px;
+  background: var(--surface-raised);
+  overflow: hidden;
+}
+
+.speech-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.speech-error:first-child {
+  border-top: 0;
+}
+
+.speech-error > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.syl-chip {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.syl-chip.syl-wrong {
+  padding: 0;
+}
+
+.syl-chip.syl-weak {
+  text-decoration: none;
+  background: rgb(251 191 36 / 0.1);
+}
+
+.speech-error-label {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.speech-error-detail {
+  font-size: var(--fs-sm);
+}
+
+.speech-error.is-weak .speech-error-detail {
+  color: var(--text-muted);
+}
+
+.speech-failed {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  max-width: 32ch;
+}
+
+.speech-notice {
+  margin-bottom: 10px;
+}
+
+.record {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  padding-top: 12px;
+}
+
+.record-button {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow:
+    0 1px 2px rgb(2 4 12 / 0.4),
+    0 14px 36px -12px rgb(124 140 255 / 0.65);
+  transition:
+    transform 150ms var(--ease),
+    background 150ms var(--ease);
+}
+
+.record-button svg {
+  position: relative;
+  width: 30px;
+  height: 30px;
+}
+
+.record-button .spinner {
+  position: relative;
+  width: 26px;
+  height: 26px;
+}
+
+.record-button:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.record-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.record-button.is-recording {
+  background: var(--wrong);
+  box-shadow: 0 14px 36px -12px rgb(248 113 113 / 0.6);
+}
+
+/* Live input level: a halo that breathes with the voice. */
+.record-level {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: rgb(124 140 255 / 0.18);
+  opacity: 0;
+  transition:
+    transform 90ms linear,
+    opacity 150ms var(--ease);
+}
+
+.is-recording .record-level {
+  opacity: 1;
+  background: rgb(248 113 113 / 0.2);
+}
+
+.record-caption {
+  min-height: 1.4em;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.speech-again {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.chip-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--tap);
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  transition: transform 150ms var(--ease);
+}
+
+.chip-button svg {
+  width: 18px;
+  height: 18px;
+  color: var(--accent);
+}
+
+.chip-button:active {
+  transform: scale(0.97);
+}
+
+/* The rating the recording suggests: ringed, not preselected, so the choice stays the user's. */
+.rating[data-suggested] {
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px currentColor;
+}
+
+.rating-good[data-suggested] {
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--accent);
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
