@@ -4,6 +4,7 @@ import { cardsWord } from "../lib/plural";
 import { hideSplash } from "../lib/splash";
 import type { QueueItem, Stats } from "../lib/types";
 import { HeadphonesIcon, MicIcon } from "../ui/icons";
+import { ScheduleSettings } from "./ScheduleSettings";
 
 const PREVIEW = 14;
 
@@ -125,6 +126,8 @@ export function TodayScreen() {
           <span className="button-count">{leeches}</span>
         </a>
       )}
+
+      {stats && <ScheduleSettings />}
 
       <div aria-live="polite">
         {error && <p className="notice notice-error">Не получилось загрузить данные: {error}. Обнови страницу.</p>}
