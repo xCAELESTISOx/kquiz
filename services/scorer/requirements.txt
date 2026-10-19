@@ -1,6 +1,8 @@
 fastapi==0.146.0
 uvicorn==0.54.0
 numpy==2.5.4
+# MP3 encoding of reference audio (app/tts.py); the wheel bundles libsndfile
+soundfile==0.14.0
 g2pkiwi==0.1.0
 # g2pkiwi 0.1.0 needs the skip-bigram model that kiwipiepy dropped after 0.21
 kiwipiepy==0.21.0

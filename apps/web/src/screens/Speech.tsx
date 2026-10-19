@@ -3,7 +3,7 @@ import { api, ApiError, submitReview } from "../lib/api";
 import { describeErrors, segments, verdict } from "../lib/pronunciation";
 import { canRecord, MAX_SECONDS, Recorder, RecorderFailure, type RecorderError } from "../lib/recorder";
 import { navigate } from "../lib/router";
-import { canSpeak, speak } from "../lib/speech";
+import { canSpeak, preloadSpeech, speak } from "../lib/speech";
 import type { Card, RatingName, ScoreResult } from "../lib/types";
 import { CloseIcon, MicIcon, PlayIcon, RetryIcon, SpeakerIcon, StopIcon } from "../ui/icons";
 import { useCountUp } from "../ui/motion";
@@ -81,6 +81,10 @@ export function SpeechScreen() {
   }, [phase]);
 
   const card = queue?.[0];
+
+  useEffect(() => {
+    if (card) preloadSpeech(card);
+  }, [card]);
 
   const stop = useCallback(async () => {
     const r = recorder.current;
@@ -222,7 +226,7 @@ export function SpeechScreen() {
               </div>
 
               {canSpeak() && (
-                <button type="button" className="icon-button speak-button" aria-label="Послушать образец" onClick={() => speak(card.korean)}>
+                <button type="button" className="icon-button speak-button" aria-label="Послушать образец" onClick={() => speak(card)}>
                   <SpeakerIcon />
                 </button>
               )}

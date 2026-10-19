@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import type { Example } from "../cards.js";
-import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { blob, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 const timestamp = (name: string) => integer(name, { mode: "timestamp_ms" });
 
@@ -25,6 +25,18 @@ export const cards = sqliteTable(
   },
   (t) => [uniqueIndex("cards_korean_key").on(t.koreanKey)],
 );
+
+// Reference audio from services/scorer's /tts, one MP3 per card. `text` is the Korean it was
+// made from: when the card's Korean changes, the audio is stale and gets made again.
+export const cardAudio = sqliteTable("card_audio", {
+  cardId: integer("card_id")
+    .primaryKey()
+    .references(() => cards.id, { onDelete: "cascade" }),
+  text: text("text").notNull(),
+  mime: text("mime").notNull(),
+  data: blob("data", { mode: "buffer" }).notNull(),
+  createdAt: timestamp("created_at").notNull(),
+});
 
 export const reviewStates = sqliteTable(
   "review_states",
