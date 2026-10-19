@@ -1,24 +1,29 @@
+import { randomBytes } from "node:crypto";
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import { serve } from "@hono/node-server";
-import { Hono } from "hono";
-import { app } from "./app.js";
-import { createMcpApp } from "./mcp/app.js";
-import { MemoryOAuthStore } from "./mcp/oauth-store.js";
-import { MemoryCardStore } from "./mcp/store.js";
+import { count } from "drizzle-orm";
+import { loadConfig } from "./config.js";
+import { openDb } from "./db/client.js";
+import { authCredentials } from "./db/schema.js";
+import { createServer } from "./server.js";
 
-// TODO(stage 1): swap the memory stores and the owner stub for SQLite and the passkey session.
-const mcp = createMcpApp({
-  publicUrl: process.env.PUBLIC_URL ?? "http://localhost:8787",
-  cards: new MemoryCardStore(),
-  oauth: new MemoryOAuthStore(),
-  owner: {
-    // No passkey login yet, so nobody can approve Claude and /mcp stays closed.
-    session: async () => null,
-    loginUrl: (returnTo) => `/login?return_to=${encodeURIComponent(returnTo)}`,
-  },
-  redirectUris: process.env.MCP_REDIRECT_URIS?.split(",").map((uri) => uri.trim()),
+const config = loadConfig();
+if (config.databasePath !== ":memory:") mkdirSync(dirname(config.databasePath), { recursive: true });
+const db = openDb(config.databasePath);
+
+// Until the first passkey is bound, anyone holding this code can bind one. It is printed
+// only to the server log, which only the owner can read.
+const needsSetup = (db.select({ n: count() }).from(authCredentials).get()?.n ?? 0) === 0;
+const setupCode = needsSetup ? (config.setupCode ?? randomBytes(18).toString("base64url")) : undefined;
+if (setupCode && !config.setupCode) console.log(`No passkey yet. One-time setup code: ${setupCode}`);
+
+const server = createServer({
+  db,
+  config,
+  setupCode,
+  mcpRedirectUris: process.env.MCP_REDIRECT_URIS?.split(",").map((uri) => uri.trim()),
 });
-
-const server = new Hono().route("/", app).route("/", mcp);
 
 const port = Number(process.env.PORT ?? 8787);
 // Bound to localhost: only Caddy on the same host may reach the API.
