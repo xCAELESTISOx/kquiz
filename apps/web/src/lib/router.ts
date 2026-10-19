@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 // A handful of screens doesn't justify a router dependency. Screens live in the hash, so the PWA works
 // from any static host; /login is a real path because the MCP OAuth consent links to it.
-export type Route = "today" | "add" | "review" | "speech" | "listen" | "cards" | "card" | "login";
+export type Route = "today" | "add" | "review" | "speech" | "listen" | "cards" | "card" | "leeches" | "login";
 
 export interface Location {
   route: Route;
@@ -13,7 +13,7 @@ export interface Location {
 /** `#/cards` is the list, `#/cards/queued` a filter of it, `#/cards/12` one card. */
 export function parseHash(hash: string): Location {
   const [head, param] = hash.replace(/^#\/?/, "").split("/");
-  if (head === "add" || head === "review" || head === "speech" || head === "listen") return { route: head };
+  if (head === "add" || head === "review" || head === "speech" || head === "listen" || head === "leeches") return { route: head };
   if (head === "cards") {
     if (param && /^\d+$/.test(param)) return { route: "card", param };
     return { route: "cards", param: param || undefined };

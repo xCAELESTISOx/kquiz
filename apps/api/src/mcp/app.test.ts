@@ -232,7 +232,7 @@ describe("mcp tools", () => {
   it("lists the tools without a delete", async () => {
     const client = await mcpClient((await connect()).access_token);
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["add_cards", "find_cards", "get_stats", "get_weak_sounds", "update_card"]);
+    expect(tools.map((t) => t.name).sort()).toEqual(["add_cards", "find_cards", "get_leeches", "get_stats", "get_weak_sounds", "update_card"]);
     expect(client.getInstructions()).toContain("Hangul");
   });
 
