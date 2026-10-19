@@ -110,11 +110,31 @@ docker compose logs api | grep 'setup code'
 
 claude.ai → Settings → Connectors → **Add custom connector**: имя `KQuiz`, URL `https://kquiz.example.com/mcp`. Claude откроет страницу согласия, подтверди её passkey'ем.
 
+### 8. Автоматический деплой из GitHub Actions
+
+После этого каждый влитый в `main` PR сам попадает на сервер, как только CI зелёный (workflow `.github/workflows/deploy.yml`). Ключ, который лежит в GitHub, умеет только запустить `deploy/update.sh`: ни shell, ни других команд с ним не получить.
+
+На сервере:
+
+```sh
+ssh-keygen -t ed25519 -N '' -C github-deploy -f /root/deploy_key
+echo "command=\"/opt/kquiz/deploy/update.sh\",restrict $(cat /root/deploy_key.pub)" >> /root/.ssh/authorized_keys
+cat /root/deploy_key                 # → секрет DEPLOY_SSH_KEY
+ssh-keyscan -t ed25519 localhost | sed "s/^localhost/<IP сервера>/"   # → секрет DEPLOY_KNOWN_HOSTS
+rm /root/deploy_key /root/deploy_key.pub
+```
+
+В GitHub: репозиторий → Settings → Secrets and variables → Actions:
+- Secrets: `DEPLOY_SSH_KEY` и `DEPLOY_KNOWN_HOSTS` (вывод команд выше);
+- Variables: `DEPLOY_HOST` = IP сервера.
+
+Пока `DEPLOY_HOST` не задан, workflow пропускается. Запустить деплой вручную: Actions → Deploy → Run workflow.
+
 ## Обслуживание
 
 | Задача | Команда на сервере |
 |---|---|
-| Обновить до свежего `main` | `/opt/kquiz/deploy/update.sh` (сначала делает бэкап) |
+| Обновить до свежего `main` | само после шага 8, или вручную `/opt/kquiz/deploy/update.sh` (сначала делает бэкап) |
 | Логи | `cd /opt/kquiz/deploy && docker compose logs -f --tail 100` |
 | Бэкап вручную | `/opt/kquiz/deploy/backup.sh` |
 | Скачать бэкапы к себе | `scp 'root@<IP>:/srv/kquiz/backups/*' .` (с компьютера) |
