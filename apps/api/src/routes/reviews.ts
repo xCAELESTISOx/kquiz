@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { AuthVariables } from "../auth/sessions.js";
 import type { Db } from "../db/client.js";
 import { findLeeches } from "../leeches.js";
+import { introduceDailyCards } from "../newCards.js";
 import { ratings } from "../review.js";
 import { applyReviews, dueQueue, getStats } from "../reviewStore.js";
 
@@ -19,7 +20,7 @@ const reviewSchema = z.object({
   elapsedMs: z.number().int().min(0).max(3_600_000).optional(),
 });
 
-export function reviewRoutes(db: Db, now: () => Date) {
+export function reviewRoutes(db: Db, now: () => Date, timeZone: string) {
   const app = new Hono<{ Variables: AuthVariables }>();
 
   app.get("/queue", (c) => {
@@ -27,6 +28,7 @@ export function reviewRoutes(db: Db, now: () => Date) {
       .object({ mode, limit: z.coerce.number().int().min(1).max(200).optional() })
       .safeParse(c.req.query());
     if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
+    introduceDailyCards(db, now(), timeZone);
     return c.json({ items: dueQueue(db, query.data.mode, now(), query.data.limit) });
   });
 
@@ -39,7 +41,10 @@ export function reviewRoutes(db: Db, now: () => Date) {
     return c.json({ results: applyReviews(db, body.data.reviews, now()) });
   });
 
-  app.get("/stats", (c) => c.json(getStats(db, now())));
+  app.get("/stats", (c) => {
+    introduceDailyCards(db, now(), timeZone);
+    return c.json(getStats(db, now(), timeZone));
+  });
 
   // Cards forgotten again and again (leeches.ts), for the app's list; Claude gets them through get_leeches.
   app.get("/leeches", (c) => c.json({ items: findLeeches(db) }));

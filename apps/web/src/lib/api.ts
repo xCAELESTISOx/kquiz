@@ -4,6 +4,10 @@ import type {
   AddCardsResult,
   AuthStatus,
   Card,
+  CardFilter,
+  CardList,
+  CardPatch,
+  CardSummary,
   Leech,
   NewCard,
   QueueItem,
@@ -11,7 +15,9 @@ import type {
   ReviewMode,
   ReviewResult,
   ScoreResult,
+  Settings,
   Stats,
+  UpdateCardResult,
 } from "./types";
 
 export class ApiError extends Error {
@@ -60,6 +66,8 @@ interface RequestOptions<T> {
 
 async function request<T>(method: string, path: string, opts: RequestOptions<T> = {}, retried = false): Promise<T> {
   const { body, fallback } = opts;
+  // Any change (a rating, new cards) can change the queue.
+  if (method !== "GET") recentQueues.clear();
   if (method !== "GET" && !csrfToken && !path.startsWith("/auth/")) {
     try {
       await authStatus();
@@ -126,6 +134,9 @@ export const auth = {
     }),
 };
 
+const QUEUE_TTL = 60_000;
+const recentQueues = new Map<string, { at: number; promise: Promise<{ items: QueueItem[] }> }>();
+
 export const api = {
   async addCard(card: NewCard): Promise<AddCardResult> {
     const res = await request<{ card: Card } | { error: "duplicate"; existingId: number }>("POST", "/cards", {
@@ -142,10 +153,52 @@ export const api = {
   addCards: (cards: NewCard[]) =>
     request<AddCardsResult>("POST", "/cards/bulk", { body: { cards }, fallback: (m) => m.addCards(cards) }),
 
-  queue: (mode: ReviewMode, limit = 50) =>
-    request<{ items: QueueItem[] }>("GET", `/reviews/queue?mode=${mode}&limit=${limit}`, {
+  cards(query: { q?: string; tag?: string; status?: CardFilter; before?: number; limit?: number } = {}) {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== "") params.set(key, String(value));
+    return request<CardList>("GET", `/cards?${params}`, { fallback: (m) => m.cards(query) });
+  },
+
+  cardSummary: () => request<CardSummary>("GET", "/cards/summary", { fallback: (m) => m.cardSummary() }),
+
+  card: (id: number) => request<{ card: Card }>("GET", `/cards/${id}`, { fallback: (m) => ({ card: m.card(id) }) }),
+
+  async updateCard(id: number, patch: CardPatch): Promise<UpdateCardResult> {
+    const res = await request<{ card: Card } | { error: "duplicate"; existingId: number }>("PATCH", `/cards/${id}`, {
+      body: patch,
+      accept: [409],
+      fallback: (m) => ({ card: m.updateCard(id, patch) }),
+    });
+    return "card" in res ? { status: "saved", card: res.card } : { status: "duplicate", existingId: res.existingId };
+  },
+
+  deleteCard: (id: number) => request<{ ok: true }>("DELETE", `/cards/${id}`, { fallback: (m) => m.deleteCard(id) }),
+
+  /** Takes a queued card into reviews now, outside the daily allowance. */
+  introduceCard: (id: number) =>
+    request<{ card: Card }>("POST", `/cards/${id}/introduce`, { body: {}, fallback: (m) => ({ card: m.introduce(id) }) }),
+
+  settings: () => request<Settings>("GET", "/settings", { fallback: (m) => m.settings() }),
+
+  updateSettings: (patch: Partial<Settings>) =>
+    request<Settings>("PATCH", "/settings", { body: patch, fallback: (m) => m.updateSettings(patch) }),
+
+  /** A JSON file with every card, its schedule and the review history; opened as a download. */
+  exportUrl: "/api/export",
+
+  queue: (mode: ReviewMode, limit = 50) => {
+    // The Today screen asks for the queue, and the review screen opened from it gets the same answer
+    // instead of another round trip.
+    const key = `${mode}:${limit}`;
+    const hit = recentQueues.get(key);
+    if (hit && performance.now() - hit.at < QUEUE_TTL) return hit.promise;
+    const promise = request<{ items: QueueItem[] }>("GET", `/reviews/queue?mode=${mode}&limit=${limit}`, {
       fallback: (m) => ({ items: m.queue(mode, limit) }),
-    }),
+    });
+    recentQueues.set(key, { at: performance.now(), promise });
+    promise.catch(() => recentQueues.get(key)?.promise === promise && recentQueues.delete(key));
+    return promise;
+  },
 
   review: (reviews: ReviewInput[]) =>
     request<{ results: ReviewResult[] }>("POST", "/reviews", { body: { reviews }, fallback: (m) => m.review(reviews) }),
@@ -162,6 +215,39 @@ export const api = {
       fallback: (m) => m.score(cardId),
     }),
 };
+
+// The Today screen's last numbers, shown at once on the next launch while fresh ones load.
+const TODAY_KEY = "kquiz.today.v1";
+
+export interface TodaySnapshot {
+  stats: Stats;
+  preview: QueueItem[];
+}
+
+export function lastToday(): TodaySnapshot | undefined {
+  try {
+    return (JSON.parse(localStorage.getItem(TODAY_KEY) ?? "null") as TodaySnapshot | null) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function rememberToday(snapshot: TodaySnapshot) {
+  try {
+    localStorage.setItem(TODAY_KEY, JSON.stringify(snapshot));
+  } catch {
+    // Only a speed-up.
+  }
+}
+
+/** After a rating the saved numbers are wrong, so Today waits for the server instead. */
+function forgetToday() {
+  try {
+    localStorage.removeItem(TODAY_KEY);
+  } catch {
+    // Nothing saved, nothing to forget.
+  }
+}
 
 // Every review goes through this local queue and is sent in batches, so ratings made offline
 // or while the server is down are not lost. Each has its own UUID, so a resend is harmless.
@@ -189,6 +275,7 @@ export function pendingReviewCount(): number {
 }
 
 export async function submitReview(input: ReviewInput): Promise<void> {
+  forgetToday();
   writePending([...readPending(), input]);
   // A flush already in flight may have read the queue before this review landed.
   if (flushing) await flushing;

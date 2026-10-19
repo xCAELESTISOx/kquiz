@@ -1,0 +1,329 @@
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { api } from "../lib/api";
+import { isKoreanOnly } from "../lib/korean";
+import { canSpeak, speak } from "../lib/speech";
+import type { Card, CardPatch, Example } from "../lib/types";
+import { BackIcon, SpeakerIcon } from "../ui/icons";
+import { Spinner } from "../ui/Spinner";
+import { lastCardsHash } from "./Cards";
+
+const EXAMPLES = 3;
+
+interface Draft {
+  korean: string;
+  meaning: string;
+  pronunciation: string;
+  romanization: string;
+  notes: string;
+  tags: string;
+  examples: Example[];
+  speakable: boolean;
+  suspended: boolean;
+}
+
+function toDraft(card: Card): Draft {
+  return {
+    korean: card.korean,
+    meaning: card.meaning,
+    pronunciation: card.pronunciation ?? "",
+    romanization: card.romanization ?? "",
+    notes: card.notes ?? "",
+    tags: card.tags.join(", "),
+    examples: Array.from({ length: EXAMPLES }, (_, i) => card.examples[i] ?? { ko: "", ru: "" }),
+    speakable: card.speakable,
+    suspended: card.suspended,
+  };
+}
+
+const splitTags = (text: string) => [...new Set(text.split(",").map((t) => t.trim()).filter(Boolean))];
+const fullExamples = (list: Example[]) =>
+  list.map((e) => ({ ko: e.ko.trim(), ru: e.ru.trim() })).filter((e) => e.ko || e.ru);
+
+/** Only what changed, so an edit never overwrites a field Claude updated meanwhile. */
+function diff(card: Card, draft: Draft): CardPatch {
+  const before = toDraft(card);
+  const patch: CardPatch = {};
+  for (const key of ["korean", "meaning", "pronunciation", "romanization", "notes"] as const) {
+    if (draft[key].trim() !== before[key].trim()) patch[key] = draft[key].trim();
+  }
+  if (splitTags(draft.tags).join("\n") !== card.tags.join("\n")) patch.tags = splitTags(draft.tags);
+  const examples = fullExamples(draft.examples);
+  if (JSON.stringify(examples) !== JSON.stringify(card.examples)) patch.examples = examples;
+  if (draft.speakable !== card.speakable) patch.speakable = draft.speakable;
+  if (draft.suspended !== card.suspended) patch.suspended = draft.suspended;
+  return patch;
+}
+
+function back() {
+  location.hash = lastCardsHash;
+}
+
+export function CardScreen({ id }: { id: number }) {
+  const [card, setCard] = useState<Card>();
+  const [draft, setDraft] = useState<Draft>();
+  const [busy, setBusy] = useState<"save" | "delete" | "introduce">();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [error, setError] = useState<string>();
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    api.card(id).then(
+      ({ card }) => {
+        setCard(card);
+        setDraft(toDraft(card));
+        document.title = `${card.korean} · KQuiz`;
+      },
+      (e: Error) => setError(e.message === "not_found" ? "Такой карточки нет. Может, её уже удалили." : e.message),
+    );
+  }, [id]);
+
+  const patch = useMemo(() => (card && draft ? diff(card, draft) : {}), [card, draft]);
+  const dirty = Object.keys(patch).length > 0;
+
+  function set<K extends keyof Draft>(key: K, value: Draft[K]) {
+    setDraft((d) => d && { ...d, [key]: value });
+    setSaved(false);
+  }
+
+  function setExample(index: number, side: keyof Example, value: string) {
+    setDraft((d) => d && { ...d, examples: d.examples.map((e, i) => (i === index ? { ...e, [side]: value } : e)) });
+    setSaved(false);
+  }
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    if (!card || !draft || !dirty || busy) return;
+    if (!draft.korean.trim() || !draft.meaning.trim()) return setError("Слово и перевод не могут быть пустыми");
+    if (fullExamples(draft.examples).some((e) => !e.ko || !e.ru)) return setError("У каждого примера нужен и перевод");
+    setBusy("save");
+    setError(undefined);
+    try {
+      const result = await api.updateCard(card.id, patch);
+      if (result.status === "duplicate") {
+        setError(`Карточка «${draft.korean.trim()}» уже есть`);
+      } else {
+        setCard(result.card);
+        setDraft(toDraft(result.card));
+        setSaved(true);
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(undefined);
+    }
+  }
+
+  async function remove() {
+    if (!card || busy) return;
+    if (!confirmDelete) return setConfirmDelete(true);
+    setBusy("delete");
+    try {
+      await api.deleteCard(card.id);
+      back();
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(undefined);
+    }
+  }
+
+  async function introduce() {
+    if (!card || busy) return;
+    setBusy("introduce");
+    try {
+      const res = await api.introduceCard(card.id);
+      setCard(res.card);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(undefined);
+    }
+  }
+
+  const readyForSpeech = draft ? isKoreanOnly(draft.korean.trim()) : true;
+
+  return (
+    <main className="screen card-screen">
+      <header className="card-top">
+        <a
+          className="icon-button"
+          href={lastCardsHash}
+          aria-label="К списку карточек"
+          onClick={(e) => {
+            e.preventDefault();
+            back();
+          }}
+        >
+          <BackIcon />
+        </a>
+        {card && canSpeak() && (
+          <button type="button" className="icon-button" aria-label="Послушать" onClick={() => speak(card)}>
+            <SpeakerIcon />
+          </button>
+        )}
+      </header>
+
+      {!card && !error && <div className="skeleton" aria-busy="true" />}
+      {!card && error && <p className="notice notice-error">{error}</p>}
+
+      {card && draft && (
+        <form className="form" onSubmit={save}>
+          {card.queued && (
+            <div className="queue-note">
+              <p>
+                <strong>Ждёт в очереди новых.</strong>
+                <span className="muted"> Войдёт в повторение сама, в свой день.</span>
+              </p>
+              <button type="button" className="chip-button" disabled={!!busy} onClick={() => void introduce()}>
+                {busy === "introduce" && <Spinner />}
+                Учить сейчас
+              </button>
+            </div>
+          )}
+
+          <label className="field">
+            <span className="field-label">По-корейски</span>
+            <input
+              className="input input-korean"
+              lang="ko"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              value={draft.korean}
+              onChange={(e) => set("korean", e.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">Перевод</span>
+            <input className="input" autoComplete="off" value={draft.meaning} onChange={(e) => set("meaning", e.target.value)} />
+          </label>
+
+          <div className="field-pair">
+            <label className="field">
+              <span className="field-label">Произношение</span>
+              <input
+                className="input"
+                lang="ko"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                placeholder="как пишется"
+                value={draft.pronunciation}
+                onChange={(e) => set("pronunciation", e.target.value)}
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">Латиницей</span>
+              <input
+                className="input"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                value={draft.romanization}
+                onChange={(e) => set("romanization", e.target.value)}
+              />
+            </label>
+          </div>
+
+          <fieldset className="examples-edit">
+            <legend className="field-label">Примеры</legend>
+            {draft.examples.map((example, i) => (
+              <div key={i} className="example-edit">
+                <input
+                  className="input"
+                  lang="ko"
+                  autoComplete="off"
+                  aria-label={`Пример ${i + 1}`}
+                  placeholder={`Пример ${i + 1}`}
+                  value={example.ko}
+                  onChange={(e) => setExample(i, "ko", e.target.value)}
+                />
+                <input
+                  className="input input-sub"
+                  autoComplete="off"
+                  aria-label={`Перевод примера ${i + 1}`}
+                  placeholder="перевод"
+                  value={example.ru}
+                  onChange={(e) => setExample(i, "ru", e.target.value)}
+                />
+              </div>
+            ))}
+          </fieldset>
+
+          <label className="field">
+            <span className="field-label">Заметка</span>
+            <textarea className="input textarea" rows={2} value={draft.notes} onChange={(e) => set("notes", e.target.value)} />
+          </label>
+          <label className="field">
+            <span className="field-label">Теги через запятую</span>
+            <input
+              className="input"
+              autoComplete="off"
+              autoCapitalize="off"
+              value={draft.tags}
+              onChange={(e) => set("tags", e.target.value)}
+            />
+          </label>
+
+          <div className="toggles">
+            <Toggle
+              checked={draft.speakable && readyForSpeech}
+              disabled={!readyForSpeech}
+              onChange={(v) => set("speakable", v)}
+              label="Тренировать произношение"
+              hint={readyForSpeech ? "Карточка попадает в «Произношение»" : "Только для слов из одного хангыля"}
+            />
+            <Toggle
+              checked={draft.suspended}
+              onChange={(v) => set("suspended", v)}
+              label="На паузе"
+              hint="Не показывается в повторении, расписание сохраняется"
+            />
+          </div>
+
+          <div aria-live="polite">
+            {error && <p className="notice notice-error">{error}</p>}
+            {saved && !dirty && <p className="notice notice-ok">Сохранено</p>}
+          </div>
+
+          <button type="button" className={`danger-button${confirmDelete ? " is-armed" : ""}`} disabled={!!busy} onClick={() => void remove()}>
+            {busy === "delete" && <Spinner />}
+            {confirmDelete ? "Точно удалить? Нажми ещё раз" : "Удалить карточку"}
+          </button>
+
+          <div className="bottom-actions">
+            <button className="button primary" type="submit" disabled={!dirty || !!busy}>
+              {busy === "save" && <Spinner />}
+              Сохранить
+            </button>
+          </div>
+        </form>
+      )}
+    </main>
+  );
+}
+
+function Toggle({
+  checked,
+  disabled,
+  onChange,
+  label,
+  hint,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (value: boolean) => void;
+  label: string;
+  hint: ReactNode;
+}) {
+  return (
+    <label className={`toggle${disabled ? " is-disabled" : ""}`}>
+      <span className="toggle-text">
+        <span>{label}</span>
+        <span className="muted small">{hint}</span>
+      </span>
+      <input type="checkbox" role="switch" className="switch" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+    </label>
+  );
+}

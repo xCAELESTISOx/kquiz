@@ -12,6 +12,18 @@ const envSchema = z.object({
   SETUP_CODE: z.string().min(16).optional(),
   // services/scorer, reachable only from this host.
   SCORER_URL: z.url().default("http://127.0.0.1:8788"),
+  // The owner's time zone: "today" and the daily new-card allowance start at its midnight.
+  TIME_ZONE: z
+    .string()
+    .default("Asia/Seoul")
+    .refine((tz) => {
+      try {
+        new Intl.DateTimeFormat("en", { timeZone: tz });
+        return true;
+      } catch {
+        return false;
+      }
+    }, "unknown time zone"),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 });
 
@@ -23,6 +35,7 @@ export type Config = {
   originSecret: string | undefined;
   setupCode: string | undefined;
   scorerUrl: string;
+  timeZone: string;
   // Secure cookies need HTTPS; off only for local http development.
   secureCookies: boolean;
   production: boolean;
@@ -42,6 +55,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     originSecret: parsed.ORIGIN_SECRET,
     setupCode: parsed.SETUP_CODE,
     scorerUrl: parsed.SCORER_URL.replace(/\/+$/, ""),
+    timeZone: parsed.TIME_ZONE,
     secureCookies: origin.protocol === "https:",
     production,
   };

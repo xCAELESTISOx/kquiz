@@ -88,9 +88,10 @@ export function SpeechScreen() {
   const cloze = useMemo(() => item && clozeFor(item), [item]);
   const leeches = useLeechIds("speech");
 
+  // The next few too, so their audio is ready by the time they come up.
   useEffect(() => {
-    if (card) preloadSpeech(card);
-  }, [card]);
+    if (queue) preloadSpeech(...queue.slice(0, 3).map((i) => i.card));
+  }, [queue]);
 
   const stop = useCallback(async () => {
     const r = recorder.current;

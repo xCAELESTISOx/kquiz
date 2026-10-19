@@ -1,9 +1,11 @@
 import { useEffect } from "react";
 import { flushPendingReviews } from "./lib/api";
-import { useRoute } from "./lib/router";
+import { useLocation } from "./lib/router";
 import { hideSplash } from "./lib/splash";
 import { AddScreen } from "./screens/Add";
 import { LeechesScreen } from "./screens/Leeches";
+import { CardScreen } from "./screens/Card";
+import { CardsScreen } from "./screens/Cards";
 import { LoginScreen } from "./screens/Login";
 import { ReviewScreen } from "./screens/Review";
 import { SpeechScreen } from "./screens/Speech";
@@ -11,7 +13,7 @@ import { TodayScreen } from "./screens/Today";
 import { TabBar } from "./ui/TabBar";
 
 export function App() {
-  const route = useRoute();
+  const { route, param } = useLocation();
 
   // Today lifts the splash itself once its numbers are in.
   useEffect(() => {
@@ -33,7 +35,17 @@ export function App() {
 
   return (
     <div className="shell">
-      {route === "add" ? <AddScreen /> : route === "leeches" ? <LeechesScreen /> : <TodayScreen />}
+      {route === "add" ? (
+        <AddScreen />
+      ) : route === "cards" ? (
+        <CardsScreen key="cards" filter={param === "queued" || param === "paused" ? param : undefined} />
+      ) : route === "card" ? (
+        <CardScreen key={param} id={Number(param)} />
+      ) : route === "leeches" ? (
+        <LeechesScreen />
+      ) : (
+        <TodayScreen />
+      )}
       <TabBar route={route} />
     </div>
   );

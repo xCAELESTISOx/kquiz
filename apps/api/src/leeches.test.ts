@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { createCards, updateCard } from "./cardStore.js";
 import { openDb } from "./db/client.js";
+import { cards } from "./db/schema.js";
 import { findLeeches, LEECH_THRESHOLD } from "./leeches.js";
 import type { RatingName, ReviewMode } from "./review.js";
 import { applyReviews } from "./reviewStore.js";
@@ -32,6 +34,13 @@ describe("leeches", () => {
     const leeches = findLeeches(db);
     expect(leeches.map((l) => [l.card.id, l.forgotten])).toEqual([[hard, { meaning: LEECH_THRESHOLD }]]);
     expect(leeches[0]!.lastForgottenAt).toBe(new Date(start.getTime() + 20 * DAY).toISOString());
+  });
+
+  it("leaves paused cards out", () => {
+    const { db, hard } = setup();
+    for (let d = 1; d <= LEECH_THRESHOLD; d++) rate(db, hard, "again", new Date(start.getTime() + d * DAY));
+    db.update(cards).set({ suspended: true }).where(eq(cards.id, hard)).run();
+    expect(findLeeches(db)).toEqual([]);
   });
 
   it("gives an edited card a fresh start", () => {

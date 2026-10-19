@@ -60,12 +60,14 @@ export function LeechesScreen() {
         <>
           <ul className="leech-list">
             {items.map((leech, i) => (
-              <li key={leech.card.id} className="leech-item" style={{ "--i": i } as CSSProperties}>
-                <span className="leech-korean" lang="ko">
-                  {leech.card.korean}
-                </span>
-                <span className="leech-meaning">{leech.card.meaning}</span>
-                <span className="leech-count muted small">{forgottenText(leech)}</span>
+              <li key={leech.card.id} style={{ "--i": i } as CSSProperties}>
+                <a className="leech-item" href={`#/cards/${leech.card.id}`}>
+                  <span className="leech-korean" lang="ko">
+                    {leech.card.korean}
+                  </span>
+                  <span className="leech-meaning">{leech.card.meaning}</span>
+                  <span className="leech-count muted small">{forgottenText(leech)}</span>
+                </a>
               </li>
             ))}
           </ul>
@@ -74,7 +76,7 @@ export function LeechesScreen() {
             <p>
               Обычно такая карточка плохо сформулирована или путается с соседней. Попроси Claude её переделать: он
               перепишет перевод и примеры, добавит подсказку или разделит карточку на две. После правки карточка уходит
-              из списка, а удалить её можешь только ты.
+              из списка. Поправить или удалить её можешь и сам: нажми на неё.
             </p>
             <div className="leech-ask">
               <span>«{ASK_CLAUDE}»</span>

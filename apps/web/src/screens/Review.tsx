@@ -50,16 +50,15 @@ export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "
 
   const item = queue?.[0];
   const card = item?.card;
-  const upcoming = queue?.[1]?.card;
   // Listening shows no text before the answer, so only meaning reviews ask through an example.
   const cloze = useMemo(() => (item && !listening ? clozeFor(item) : undefined), [item, listening]);
   const leeches = useLeechIds(mode);
 
+  // The next few too, so their audio is ready by the time they come up (listening plays the next
+  // card straight from the grading tap).
   useEffect(() => {
-    if (card) preloadSpeech(card);
-    // Listening plays the next card straight from the grading tap, so it should be loaded by then.
-    if (listening && upcoming) preloadSpeech(upcoming);
-  }, [card, upcoming, listening]);
+    if (queue) preloadSpeech(...queue.slice(0, 3).map((i) => i.card));
+  }, [queue]);
 
   const reveal = useCallback(() => {
     if (card && !revealed) setRevealed(true);

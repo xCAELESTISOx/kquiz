@@ -33,6 +33,8 @@ export function findLeeches(db: Db, limit = 50): Leech[] {
     .where(
       and(
         eq(reviewLog.rating, "again"),
+        // A paused card isn't reviewed, so there is nothing to fix until it comes back.
+        eq(cards.suspended, false),
         gt(reviewLog.reviewedAt, cards.updatedAt),
         sql`(${reviewLog.mode} <> 'speech' or ${cards.speakable} = 1)`,
       ),
