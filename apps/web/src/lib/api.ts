@@ -9,6 +9,7 @@ import type {
   ReviewInput,
   ReviewMode,
   ReviewResult,
+  ScoreResult,
   Stats,
 } from "./types";
 
@@ -16,6 +17,8 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** The API's `error` code, e.g. "busy" from /score. */
+    readonly code?: string,
   ) {
     super(message);
   }
@@ -45,7 +48,9 @@ export function loginUrl(returnTo = location.pathname + location.search + locati
 }
 
 interface RequestOptions<T> {
+  /** JSON, or raw bytes sent with `contentType`. */
   body?: unknown;
+  contentType?: string;
   /** Mock implementation for dev without a running api. */
   fallback?: (m: MockApi) => T;
   /** Statuses returned to the caller as data instead of thrown. */
@@ -64,13 +69,14 @@ async function request<T>(method: string, path: string, opts: RequestOptions<T> 
   let res: Response;
   try {
     const headers: Record<string, string> = {};
-    if (body !== undefined) headers["content-type"] = "application/json";
+    const raw = body instanceof Uint8Array;
+    if (body !== undefined) headers["content-type"] = opts.contentType ?? "application/json";
     if (method !== "GET" && csrfToken) headers["x-csrf-token"] = csrfToken;
     res = await fetch(`/api${path}`, {
       method,
       headers,
       credentials: "same-origin",
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : raw ? (body as Uint8Array<ArrayBuffer>) : JSON.stringify(body),
     });
   } catch (error) {
     const m = fallback && getMock();
@@ -92,8 +98,8 @@ async function request<T>(method: string, path: string, opts: RequestOptions<T> 
   }
   if (!res.ok && !opts.accept?.includes(res.status)) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    if (res.status === 429) throw new ApiError(429, "Слишком много запросов, попробуй через минуту");
-    throw new ApiError(res.status, data.error ?? `HTTP ${res.status}`);
+    if (res.status === 429) throw new ApiError(429, "Слишком много запросов, попробуй через минуту", data.error);
+    throw new ApiError(res.status, data.error ?? `HTTP ${res.status}`, data.error);
   }
   return (await res.json()) as T;
 }
@@ -144,6 +150,14 @@ export const api = {
     request<{ results: ReviewResult[] }>("POST", "/reviews", { body: { reviews }, fallback: (m) => m.review(reviews) }),
 
   stats: () => request<Stats>("GET", "/reviews/stats", { fallback: (m) => m.stats() }),
+
+  /** Scores a recording against the card. It is not a review: the rating is sent separately. */
+  score: (cardId: number, wav: Uint8Array<ArrayBuffer>) =>
+    request<ScoreResult>("POST", `/score?cardId=${cardId}`, {
+      body: wav,
+      contentType: "audio/wav",
+      fallback: (m) => m.score(cardId),
+    }),
 };
 
 // Every review goes through this local queue and is sent in batches, so ratings made offline

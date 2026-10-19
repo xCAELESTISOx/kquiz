@@ -92,6 +92,24 @@ export const authSessions = sqliteTable("auth_sessions", {
   userAgent: text("user_agent"),
 });
 
+// One row per scored recording. The audio itself is not kept.
+export const attempts = sqliteTable(
+  "attempts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    cardId: integer("card_id")
+      .notNull()
+      .references(() => cards.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull(),
+    score: integer("score").notNull(),
+    targetPhones: text("target_phones", { mode: "json" }).$type<string[]>().notNull(),
+    heardPhones: text("heard_phones", { mode: "json" }).$type<string[]>().notNull(),
+    syllables: text("syllables", { mode: "json" }).$type<unknown[]>().notNull(),
+    errors: text("errors_json", { mode: "json" }).$type<unknown[]>().notNull(),
+  },
+  (t) => [index("attempts_card").on(t.cardId, t.createdAt)],
+);
+
 // Filled by pronunciation attempts (stage 4); read by the weak-sounds stats and Claude.
 export const phoneStats = sqliteTable("phone_stats", {
   phone: text("phone").primaryKey(),

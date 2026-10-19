@@ -17,6 +17,7 @@ pnpm db:generate    # after editing src/db/schema.ts; migrations in drizzle/ app
 | `MCP_REDIRECT_URIS` | Claude's callbacks | Comma-separated OAuth redirect URIs a client may register |
 | `ORIGIN_SECRET` | — | Required in production. Cloudflare adds it as header `x-kquiz-origin` (Transform Rule); requests without it get 403 |
 | `SETUP_CODE` | random, printed to the log | Code for binding the first passkey; useless once one is bound |
+| `SCORER_URL` | `http://127.0.0.1:8788` | services/scorer; it listens on localhost only |
 | `HOST` / `PORT` | `127.0.0.1` / `8787` | Only Caddy on the same host talks to the API |
 
 ## Protection
@@ -50,6 +51,12 @@ Card: `{ id, korean, meaning, pronunciation, romanization, exampleKo, exampleMea
 - `GET /queue?mode=meaning|speech&limit=50` → `{ items: [{ card, mode, due, state, reps, lapses }] }`, most overdue first; speech only for speakable cards
 - `POST /` `{ reviews: [{ id: uuid, cardId, mode, rating: again|hard|good|easy, reviewedAt, elapsedMs? }] }` (≤ 200) → `{ results: [{ id, status: applied|duplicate|card_not_found, due? }] }`. A resent `id` is a no-op; a batch is applied in `reviewedAt` order.
 - `GET /stats` → `{ cards, due: { meaning, speech }, reviewedToday }` (UTC day)
+
+**Pronunciation** (`/api/score`)
+- `POST /?cardId=` with the recording as the body (`content-type: audio/wav`, ≤ 1 MB, ≤ 10 s; the web app sends 16 kHz mono 16-bit PCM) → `{ attemptId, cardId, score, pronunciation, syllables: [{ text, pron, status: ok|weak|wrong }], errors: [{ syllable, position, kind, status, expected, heard }], suggestedRating }`. Fields are the scorer's (services/scorer/README.md).
+- Scoring is not a review: the app shows the result, the owner picks the rating and it goes to `POST /api/reviews` with `mode: "speech"` like any other. `suggestedRating` is forgiving: "weak" syllables never pull it below good, because the model flags about one syllable in six even in fluent native speech.
+- Every attempt is saved to `attempts` (no audio) and counted in `phone_stats` for `get_weak_sounds`; only "wrong" sounds count as errors there.
+- 20 recordings a minute per client. Errors: `404` unknown card, `422 not_ready_for_speech` (non-Hangul card), `422 bad_recording` (not WAV, silence, too long), `503 busy` (with `Retry-After`) or `503 unavailable` (scorer down or model not loaded), `504 timeout`.
 
 ## MCP server
 

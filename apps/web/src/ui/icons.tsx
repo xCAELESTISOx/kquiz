@@ -48,3 +48,29 @@ export const CheckIcon = () => (
     <path d="m5 12.5 4.5 4.5L19 7.5" />
   </Icon>
 );
+
+export const MicIcon = () => (
+  <Icon>
+    <rect x="9" y="3" width="6" height="11" rx="3" />
+    <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" />
+  </Icon>
+);
+
+export const StopIcon = () => (
+  <Icon>
+    <rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none" />
+  </Icon>
+);
+
+export const PlayIcon = () => (
+  <Icon>
+    <path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="none" />
+  </Icon>
+);
+
+export const RetryIcon = () => (
+  <Icon>
+    <path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3" />
+    <path d="M4 4v4h4" />
+  </Icon>
+);
