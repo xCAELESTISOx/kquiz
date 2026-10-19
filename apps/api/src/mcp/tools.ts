@@ -153,7 +153,7 @@ export function createMcpServer(store: CardStore, drills?: DrillStore): McpServe
     {
       title: "Get stats",
       description:
-        "Number of cards, cards due for review in each mode, cards waiting in the new-card queue and how many enter reviews per day, and the current streak in days.",
+        "Number of cards, cards due now in each mode, cards waiting in the new-card queue and how many enter reviews per day, the current streak in days, reviews coming due in the next 7 days, and the share of reviews recalled over the last 30 days (FSRS aims for 0.9).",
       annotations: { readOnlyHint: true },
     },
     async () => json(await store.stats(new Date())),

@@ -3,6 +3,7 @@ import { toCardDto, type CardDto } from "./cardStore.js";
 import type { Db } from "./db/client.js";
 import { cardAudio, cards, reviewLog, reviewStates } from "./db/schema.js";
 import { newCardsToday, startOfDay, type NewCardsToday } from "./newCards.js";
+import { getFsrsSetup, schedulerFor } from "./fsrs.js";
 import { applyRating, fromStateRow, toStateRow, type RatingName, type ReviewMode } from "./review.js";
 
 export type QueueItem = { card: CardDto; mode: ReviewMode; due: string; state: number; reps: number; lapses: number };
@@ -10,6 +11,9 @@ export type QueueItem = { card: CardDto; mode: ReviewMode; due: string; state: n
 // Listening needs the card's own recording (cardAudio.ts), made from its current Korean: the phone's
 // voice is a poor model for training the ear, so until the recording is there the card waits.
 const hasCurrentAudio = sql`exists (select 1 from ${cardAudio} where ${cardAudio.cardId} = ${cards.id} and ${cardAudio.text} = ${cards.korean})`;
+
+/** Review states a mode can actually show, for queries over `review_states` joined with `cards`; paused cards never. */
+export const reviewable = sql`${cards.suspended} = 0 and (${reviewStates.mode} = 'meaning' or (${reviewStates.mode} = 'speech' and ${cards.speakable} = 1) or (${reviewStates.mode} = 'listening' and ${hasCurrentAudio}))`;
 
 /**
  * Cards due in a mode, most overdue first, with the never-reviewed ones spread among them at random
@@ -96,7 +100,8 @@ function applyOne(tx: Pick<Db, "select" | "update" | "insert">, review: ReviewIn
   // A clock from the future can't be trusted, and FSRS can't go back before the last review.
   let at = review.reviewedAt > now ? now : review.reviewedAt;
   if (row.lastReview && at < row.lastReview) at = row.lastReview;
-  const next = toStateRow(applyRating(fromStateRow(row), review.rating, at));
+  const scheduler = schedulerFor(getFsrsSetup(tx, review.mode));
+  const next = toStateRow(applyRating(fromStateRow(row), review.rating, at, scheduler));
   tx.update(reviewStates).set(next).where(where).run();
   tx.insert(reviewLog)
     .values({
@@ -123,8 +128,7 @@ export function getStats(db: Db, now = new Date(), timeZone = "UTC"): Stats {
     .where(
       and(
         lte(reviewStates.due, now),
-        eq(cards.suspended, false),
-        sql`(${reviewStates.mode} = 'meaning' or (${reviewStates.mode} = 'speech' and ${cards.speakable} = 1) or (${reviewStates.mode} = 'listening' and ${hasCurrentAudio}))`,
+        reviewable,
       ),
     )
     .groupBy(reviewStates.mode)

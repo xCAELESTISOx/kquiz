@@ -11,6 +11,7 @@ import { ReviewScreen } from "./screens/Review";
 import { ShadowingScreen } from "./screens/Shadowing";
 import { SoundsScreen } from "./screens/Sounds";
 import { SpeechScreen } from "./screens/Speech";
+import { StatsScreen } from "./screens/Stats";
 import { TodayScreen } from "./screens/Today";
 import { TabBar } from "./ui/TabBar";
 
@@ -45,6 +46,8 @@ export function App() {
         <CardsScreen key="cards" filter={param === "queued" || param === "paused" ? param : undefined} />
       ) : route === "card" ? (
         <CardScreen key={param} id={Number(param)} />
+      ) : route === "stats" ? (
+        <StatsScreen />
       ) : route === "leeches" ? (
         <LeechesScreen />
       ) : (

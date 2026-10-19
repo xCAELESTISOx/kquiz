@@ -61,6 +61,13 @@ Card: `{ id, korean, meaning, pronunciation, romanization, examples, notes, tags
 - `POST /` `{ reviews: [{ id: uuid, cardId, mode, rating: again|hard|good|easy, reviewedAt, elapsedMs? }] }` (≤ 200) → `{ results: [{ id, status: applied|duplicate|card_not_found, due? }] }`. A resent `id` is a no-op; a batch is applied in `reviewedAt` order.
 - `GET /stats` → `{ cards, due: { meaning, speech, listening }, reviewedToday, newCards: { introduced, limit, queued } }` (day in `TIME_ZONE`)
 - `GET /leeches` → `{ items: [{ card, forgotten: { meaning?, speech?, listening? }, lastForgottenAt }] }`: hard cards, forgotten on 6+ different days (UTC) in a mode since the card's last edit. Editing a card takes it off the list. Claude reads the same list with the MCP tool `get_leeches` and reworks the cards with `update_card`.
+- `GET /fsrs` → `{ modes: [{ mode, desiredRetention, personal, reviews, minReviews, trainedOnReviews, optimizedAt }], retentionRange: { min, max } }`
+- `PUT /fsrs` `{ mode, desiredRetention }` (0.85–0.95) → same as `GET /fsrs`
+
+FSRS weights are fitted per mode to the owner's own `review_log` (`src/fsrsOptimizer.ts`, fsrs-rs via `@open-spaced-repetition/binding`): first once a mode has 1000 reviews, then at most monthly when there are new ones. A fit is kept only if it predicts that history better than the current weights; then stability and difficulty are replayed with it, due dates stay. Days between reviews are counted in `TIME_ZONE` (default `Asia/Seoul`), starting at 4 am.
+
+**Statistics** (`/api/stats`)
+- `GET /?tz=540` (minutes east of UTC; days start at the owner's midnight) → `{ today, streak: { current, best, reviewedToday }, activity: [{ day, reviews }] (17 weeks), forecast: [{ day, due: { <mode>: n } }] (30 days, today includes overdue, new cards left out), retention: { <mode>: { reviews, recalled } } (30 days, without first sightings and reviews < 12 h apart), targetRetention: { <mode>: 0.9 }, cards: { total, byMode: { <mode>: { new, learning, young, mature } } }, speech: { weeks: [{ start, attempts, avgScore }] (8), sounds: [{ phone, attempts, errors, recent, previous }] } }`. Modes are whatever `review_states` holds, so a new mode appears without an API change. `sounds` are the worst by overall error rate (≥ 3 attempts); `recent` is the last 14 days, `previous` the 14 before.
 
 **Pronunciation** (`/api/score`)
 - `POST /?cardId=` with the recording as the body (`content-type: audio/wav`, ≤ 1 MB, ≤ 10 s; the web app sends 16 kHz mono 16-bit PCM) → `{ attemptId, cardId, score, pronunciation, syllables: [{ text, pron, status: ok|weak|wrong }], errors: [{ syllable, position, kind, status, expected, heard }], suggestedRating }`. Fields are the scorer's (services/scorer/README.md).

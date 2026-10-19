@@ -111,6 +111,43 @@ export interface Settings {
   newPerDay: number;
 }
 
+/** GET /api/stats. Modes are keys, so a mode added later shows up without a contract change. */
+export interface StatsOverview {
+  today: string;
+  streak: { current: number; best: number; reviewedToday: boolean };
+  activity: { day: string; reviews: number }[];
+  forecast: { day: string; due: Record<string, number> }[];
+  retention: Record<string, { reviews: number; recalled: number }>;
+  targetRetention: Record<string, number>;
+  cards: { total: number; byMode: Record<string, { new: number; learning: number; young: number; mature: number }> };
+  speech: {
+    weeks: { start: string; attempts: number; avgScore: number | null }[];
+    sounds: {
+      phone: string;
+      attempts: number;
+      errors: number;
+      recent: { attempts: number; errors: number };
+      previous: { attempts: number; errors: number };
+    }[];
+  };
+}
+
+export interface FsrsModeStatus {
+  mode: ReviewMode;
+  desiredRetention: number;
+  /** True once intervals use parameters fitted to the owner's own reviews. */
+  personal: boolean;
+  reviews: number;
+  minReviews: number;
+  trainedOnReviews: number | null;
+  optimizedAt: string | null;
+}
+
+export interface FsrsStatus {
+  modes: FsrsModeStatus[];
+  retentionRange: { min: number; max: number };
+}
+
 export interface AuthStatus {
   authenticated: boolean;
   setupRequired: boolean;

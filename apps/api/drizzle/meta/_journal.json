@@ -47,8 +47,15 @@
     {
       "idx": 6,
       "version": "6",
-      "when": 1792413819394,
-      "tag": "0006_sound_drills",
+      "when": 1792413728975,
+      "tag": "0006_fsrs_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1792415640052,
+      "tag": "0007_sound_drills",
       "breakpoints": true
     }
   ]

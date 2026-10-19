@@ -88,6 +88,19 @@ export const reviewLog = sqliteTable(
   (t) => [index("review_log_card").on(t.cardId)],
 );
 
+// Per-mode FSRS setup. No row means FSRS defaults at 90 % retention. `weights` stays null until
+// the optimizer has fitted the owner's own review history and the fit beat the current weights.
+export const fsrsSettings = sqliteTable("fsrs_settings", {
+  mode: text("mode", { enum: ["meaning", "speech", "listening"] }).primaryKey(),
+  desiredRetention: real("desired_retention").notNull().default(0.9),
+  weights: text("weights", { mode: "json" }).$type<number[]>(),
+  // Size of the history behind `weights`, and when the optimizer last ran (accepted or not).
+  trainedOnReviews: integer("trained_on_reviews"),
+  optimizedAt: timestamp("optimized_at"),
+  checkedAt: timestamp("checked_at"),
+  checkedOnReviews: integer("checked_on_reviews"),
+});
+
 export const authCredentials = sqliteTable("auth_credentials", {
   id: text("id").primaryKey(),
   publicKey: text("public_key").notNull(),

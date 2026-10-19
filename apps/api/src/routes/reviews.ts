@@ -4,6 +4,8 @@ import type { AuthVariables } from "../auth/sessions.js";
 import type { Db } from "../db/client.js";
 import { findLeeches } from "../leeches.js";
 import { introduceDailyCards } from "../newCards.js";
+import { RETENTION_RANGE, setDesiredRetention } from "../fsrs.js";
+import { fsrsStatus } from "../fsrsOptimizer.js";
 import { ratings } from "../review.js";
 import { applyReviews, dueQueue, getStats } from "../reviewStore.js";
 
@@ -48,6 +50,18 @@ export function reviewRoutes(db: Db, now: () => Date, timeZone: string) {
 
   // Cards forgotten again and again (leeches.ts), for the app's list; Claude gets them through get_leeches.
   app.get("/leeches", (c) => c.json({ items: findLeeches(db) }));
+
+  app.get("/fsrs", (c) => c.json({ modes: fsrsStatus(db), retentionRange: RETENTION_RANGE }));
+
+  // Target retention per mode: lower means fewer reviews a day and more forgotten cards.
+  app.put("/fsrs", async (c) => {
+    const body = z
+      .object({ mode, desiredRetention: z.number().min(RETENTION_RANGE.min).max(RETENTION_RANGE.max) })
+      .safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "invalid_request", issues: body.error.issues }, 400);
+    setDesiredRetention(db, body.data.mode, Math.round(body.data.desiredRetention * 100) / 100);
+    return c.json({ modes: fsrsStatus(db), retentionRange: RETENTION_RANGE });
+  });
 
   return app;
 }

@@ -5,6 +5,7 @@ import { hideSplash } from "../lib/splash";
 import type { QueueItem, Stats } from "../lib/types";
 import { HeadphonesIcon, MicIcon } from "../ui/icons";
 import { PracticeLinks } from "../ui/PracticeLinks";
+import { ScheduleSettings } from "./ScheduleSettings";
 
 const PREVIEW = 14;
 
@@ -128,6 +129,8 @@ export function TodayScreen() {
       )}
 
       {stats && <PracticeLinks />}
+
+      {stats && <ScheduleSettings />}
 
       <div aria-live="polite">
         {error && <p className="notice notice-error">Не получилось загрузить данные: {error}. Обнови страницу.</p>}

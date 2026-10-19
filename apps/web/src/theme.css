@@ -320,15 +320,16 @@ p {
 .tabbar-inner {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  width: min(380px, 100%);
+  grid-template-columns: repeat(var(--tabs, 2), 1fr);
+  width: min(calc(var(--tabs, 2) * 136px), 100%);
 }
 
 /* A column-wide track whose centered pill sits behind the active icon; it slides with the route. */
 .tab-indicator {
   position: absolute;
   inset: 0 auto 0 0;
-  width: calc(100% / 3);
+  width: calc(100% / var(--tabs, 2));
+  transform: translateX(calc(100% * var(--active, 0)));
   pointer-events: none;
   transition: transform var(--dur-3) var(--ease-spring);
 }
@@ -344,14 +345,6 @@ p {
   border-radius: 999px;
   background: var(--accent-soft);
   box-shadow: inset 0 0 0 1px rgb(124 140 255 / 0.16);
-}
-
-.tabbar-inner[data-active="cards"] .tab-indicator {
-  transform: translateX(100%);
-}
-
-.tabbar-inner[data-active="add"] .tab-indicator {
-  transform: translateX(200%);
 }
 
 .tab {
@@ -526,6 +519,83 @@ p {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* ---------- Schedule settings ---------- */
+
+.schedule {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.schedule summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: var(--tap);
+  cursor: pointer;
+  list-style: none;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.schedule summary::-webkit-details-marker {
+  display: none;
+}
+
+.schedule summary .muted {
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.schedule > p {
+  margin: 0 0 12px;
+}
+
+.schedule-mode {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.schedule-mode p {
+  margin: 8px 0 0;
+}
+
+.schedule-mode-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: var(--fs-sm);
+}
+
+.retention-picker {
+  display: flex;
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.retention-picker button {
+  min-height: 36px;
+  min-width: 60px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  transition:
+    background var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+
+.retention-picker button[aria-pressed="true"] {
+  background: var(--surface-hover);
+  color: var(--text);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
 }
 
 /* ---------- Notices ---------- */

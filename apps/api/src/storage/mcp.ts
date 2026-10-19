@@ -14,6 +14,7 @@ import { findLeeches } from "../leeches.js";
 import { introduceDailyCards } from "../newCards.js";
 import { addDrills, listDrills } from "../practice.js";
 import { getStats } from "../reviewStore.js";
+import { statsOverview, zoneOffset } from "../statsStore.js";
 
 export type StoredCard = NewCard & {
   id: string;
@@ -118,6 +119,14 @@ export class SqliteCardStore implements CardStore {
   async stats(now: Date) {
     introduceDailyCards(this.db, now, this.timeZone);
     const stats = getStats(this.db, now, this.timeZone);
+    const overview = statsOverview(this.db, now, zoneOffset(this.timeZone, now));
+    const dueNext7Days: Record<string, number> = {};
+    for (const { due } of overview.forecast.slice(0, 7)) {
+      for (const [mode, n] of Object.entries(due)) dueNext7Days[mode] = (dueNext7Days[mode] ?? 0) + n;
+    }
+    const retention30d = Object.fromEntries(
+      Object.entries(overview.retention).map(([mode, r]) => [mode, r.reviews ? Math.round((r.recalled / r.reviews) * 100) / 100 : null]),
+    );
     return {
       cards: stats.cards,
       dueMeaning: stats.due.meaning,
@@ -126,6 +135,8 @@ export class SqliteCardStore implements CardStore {
       queued: stats.newCards.queued,
       newPerDay: stats.newCards.limit,
       streakDays: streakDays(this.db, now),
+      dueNext7Days,
+      retention30d,
     };
   }
 
