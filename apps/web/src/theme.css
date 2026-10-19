@@ -260,7 +260,7 @@ p {
   flex-wrap: wrap;
   align-items: baseline;
   gap: 4px 14px;
-  font-size: clamp(30px, 9vw, 40px);
+  font-size: clamp(30px, 10.5vw, 48px);
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.2;
