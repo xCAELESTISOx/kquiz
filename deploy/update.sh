@@ -18,6 +18,9 @@ pull_images() {
 # Wrapped in a function so bash reads the whole script before git replaces this file.
 main() {
   cd "$(dirname "$0")"
+  # systemd starts the timer's run without HOME; docker needs it to find the ghcr.io login.
+  : "${HOME:=$(getent passwd "$(id -u)" | cut -d: -f6)}"
+  export HOME
   git -C .. fetch -q origin main
   local target build=()
   target=$(git -C .. rev-parse origin/main)

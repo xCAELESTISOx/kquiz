@@ -65,12 +65,18 @@ docker compose logs api | grep 'setup code'   # если SETUP_CODE не зад�
 
 Модель оценки произношения в образ не входит: она лежит в томе `scorer-models`, который переживает обновления, и скачивается один раз на сервер.
 
-**Доступ сервера к образам.** Репозиторий приватный, и образы GHCR по умолчанию тоже. Один из двух вариантов:
+**Доступ сервера к образам.** Репозиторий приватный, образы в GHCR тоже, поэтому сервер входит в реестр токеном только на чтение. Fine-grained токены GHCR не поддерживает, нужен classic.
 
-1. Сделать образы публичными (секретов в них нет: настройки и база передаются при запуске). GitHub → профиль → Packages → `kquiz-api`, `kquiz-caddy`, `kquiz-scorer` → Package settings → Change visibility → Public.
-2. Оставить приватными и залогинить сервер токеном только на чтение (classic token со скоупом `read:packages`): `echo <токен> | docker login ghcr.io -u xcaelestisox --password-stdin` на сервере.
+1. GitHub → Settings → Developer settings → Personal access tokens → **Tokens (classic)** → Generate new token (classic). Note: `kquiz server`, Expiration: No expiration (или срок, после которого токен надо обновить), галочка только **`read:packages`**. Скопировать токен.
+2. Timeweb Cloud → сервер → **Консоль**, войти как root и выполнить:
+   ```sh
+   docker login ghcr.io -u xcaelestisox
+   ```
+   На вопрос `Password:` вставить токен (он не появится в истории команд). Должно ответить `Login Succeeded`.
 
-Пока ни то ни другое не сделано, сервер собирает образы на месте.
+Docker хранит вход в `/root/.docker/config.json`, `update.sh` берёт его оттуда. Другой вариант без токена: сделать три пакета публичными (Package settings → Change visibility → Public).
+
+Пока вход не выполнен, сервер собирает образы на месте.
 
 ## Обслуживание
 
