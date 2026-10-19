@@ -49,4 +49,17 @@ describe("MockApi", () => {
     expect(api.queue("meaning").some((i) => i.card.korean === "TV 보다")).toBe(true);
     expect(api.queue("speech").some((i) => i.card.korean === "TV 보다")).toBe(false);
   });
+
+  it("offers Hangul cards for listening on a schedule of their own", () => {
+    const now = new Date("2026-10-19T10:00:00Z");
+    const api = new MockApi(memoryStorage(), () => now);
+    api.addCard({ korean: "TV 보다", meaning: "смотреть ТВ" });
+    const listening = api.queue("listening");
+    expect(listening.length).toBeGreaterThan(0);
+    expect(listening.some((i) => i.card.korean === "TV 보다")).toBe(false);
+    const first = listening[0]!;
+    api.review([{ id: "l1", cardId: first.card.id, mode: "listening", rating: "good", reviewedAt: now.toISOString() }]);
+    expect(api.queue("listening").some((i) => i.card.id === first.card.id)).toBe(false);
+    expect(api.queue("meaning").some((i) => i.card.id === first.card.id)).toBe(true);
+  });
 });

@@ -4,6 +4,9 @@ import { App } from "./App";
 import { registerServiceWorker } from "./lib/serviceWorker";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "./theme.css";
+import { scheduleSplashTimeout } from "./lib/splash";
+
+scheduleSplashTimeout();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
