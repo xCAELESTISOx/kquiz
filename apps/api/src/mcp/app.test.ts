@@ -4,7 +4,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { beforeEach, describe, expect, it } from "vitest";
 import { CLAUDE_REDIRECT_URIS, createMcpApp } from "./app.js";
 import { MemoryOAuthStore } from "./oauth-store.js";
-import { MemoryCardStore } from "./store.js";
+import { MemoryCardStore, MemoryDrillStore } from "./store.js";
 
 const ORIGIN = "https://kquiz.test";
 const REDIRECT = CLAUDE_REDIRECT_URIS[0]!;
@@ -14,6 +14,7 @@ const challenge = createHash("sha256").update(verifier).digest("base64url");
 let clock: number;
 let session: { authenticatedAt: Date } | null;
 let cards: MemoryCardStore;
+let drills: MemoryDrillStore;
 let oauth: MemoryOAuthStore;
 let app: ReturnType<typeof createMcpApp>;
 
@@ -21,10 +22,12 @@ beforeEach(() => {
   clock = Date.parse("2026-10-19T10:00:00Z");
   session = { authenticatedAt: new Date(clock) };
   cards = new MemoryCardStore();
+  drills = new MemoryDrillStore();
   oauth = new MemoryOAuthStore();
   app = createMcpApp({
     publicUrl: ORIGIN,
     cards,
+    drills,
     oauth,
     owner: { session: async () => session, loginUrl: (r) => `/login?return_to=${encodeURIComponent(r)}` },
     maxClients: 3,
@@ -232,7 +235,16 @@ describe("mcp tools", () => {
   it("lists the tools without a delete", async () => {
     const client = await mcpClient((await connect()).access_token);
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["add_cards", "find_cards", "get_leeches", "get_stats", "get_weak_sounds", "update_card"]);
+    expect(tools.map((t) => t.name).sort()).toEqual([
+      "add_cards",
+      "add_sound_drills",
+      "find_cards",
+      "get_leeches",
+      "get_stats",
+      "get_weak_sounds",
+      "list_sound_drills",
+      "update_card",
+    ]);
     expect(client.getInstructions()).toContain("Hangul");
   });
 
@@ -331,5 +343,26 @@ describe("mcp tools", () => {
     const client = await mcpClient((await connect()).access_token);
     await client.callTool({ name: "add_cards", arguments: { cards: [{ korean: "물", meaning: "вода", examples }] } });
     expect(parse(await client.callTool({ name: "get_stats", arguments: {} }))).toMatchObject({ cards: 1, dueMeaning: 0, queued: 1 });
+  });
+
+  it("adds sound drills, skipping repeats and malformed sets", async () => {
+    const client = await mcpClient((await connect()).access_token);
+    const result = parse(
+      await client.callTool({
+        name: "add_sound_drills",
+        arguments: {
+          drills: [
+            { contrast: "ㅂ/ㅍ/ㅃ", words: [{ korean: "불", meaning: "огонь" }, { korean: "풀", meaning: "трава" }, { korean: "뿔" }] },
+            { contrast: "ㅂ/ㅍ/ㅃ", words: [{ korean: "뿔" }, { korean: "불 " }, { korean: "풀" }] },
+            { contrast: "ㄱ/ㅋ", words: [{ korean: "gal" }, { korean: "칼" }] },
+            { contrast: "ㄱ/ㄱ", words: [{ korean: "달" }, { korean: "달" }] },
+          ],
+        },
+      }),
+    );
+    expect(result.created).toEqual([{ id: 1, contrast: "ㅂ/ㅍ/ㅃ", words: ["불", "풀", "뿔"] }]);
+    expect(result.duplicates).toEqual([{ contrast: "ㅂ/ㅍ/ㅃ", words: ["뿔", "불", "풀"], existingId: 1 }]);
+    expect(result.rejected).toHaveLength(2);
+    expect(parse(await client.callTool({ name: "list_sound_drills", arguments: {} })).drills).toHaveLength(1);
   });
 });

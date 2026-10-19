@@ -152,3 +152,51 @@ export class MemoryCardStore implements CardStore {
     return [];
   }
 }
+
+export interface DrillWord {
+  korean: string;
+  meaning?: string;
+}
+
+export interface NewDrill {
+  contrast: string;
+  words: DrillWord[];
+}
+
+export interface StoredDrill extends NewDrill {
+  id: number;
+  correct: number;
+  wrong: number;
+}
+
+/** Listening drills on similar sounds (apps/api/src/practice.ts). Claude can add and list them, not delete. */
+export interface DrillStore {
+  add(drills: NewDrill[]): Promise<{ created: { id: number; contrast: string; words: string[] }[]; duplicates: { contrast: string; words: string[]; existingId: number }[] }>;
+  list(): Promise<StoredDrill[]>;
+}
+
+export class MemoryDrillStore implements DrillStore {
+  readonly drills: StoredDrill[] = [];
+
+  async add(drills: NewDrill[]) {
+    const created: { id: number; contrast: string; words: string[] }[] = [];
+    const duplicates: { contrast: string; words: string[]; existingId: number }[] = [];
+    const key = (d: NewDrill) => d.words.map((w) => normalizeKorean(w.korean)).sort().join("|");
+    for (const drill of drills) {
+      const words = drill.words.map((w) => normalizeKorean(w.korean));
+      const existing = this.drills.find((d) => key(d) === key(drill));
+      if (existing) {
+        duplicates.push({ contrast: drill.contrast, words, existingId: existing.id });
+        continue;
+      }
+      const stored = { ...drill, id: this.drills.length + 1, correct: 0, wrong: 0 };
+      this.drills.push(stored);
+      created.push({ id: stored.id, contrast: drill.contrast, words });
+    }
+    return { created, duplicates };
+  }
+
+  async list() {
+    return this.drills;
+  }
+}

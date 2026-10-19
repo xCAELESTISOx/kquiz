@@ -8,6 +8,8 @@ import { CardScreen } from "./screens/Card";
 import { CardsScreen } from "./screens/Cards";
 import { LoginScreen } from "./screens/Login";
 import { ReviewScreen } from "./screens/Review";
+import { ShadowingScreen } from "./screens/Shadowing";
+import { SoundsScreen } from "./screens/Sounds";
 import { SpeechScreen } from "./screens/Speech";
 import { StatsScreen } from "./screens/Stats";
 import { TodayScreen } from "./screens/Today";
@@ -33,6 +35,8 @@ export function App() {
   if (route === "review") return <ReviewScreen key="meaning" mode="meaning" />;
   if (route === "listen") return <ReviewScreen key="listening" mode="listening" />;
   if (route === "speech") return <SpeechScreen />;
+  if (route === "shadow") return <ShadowingScreen />;
+  if (route === "sounds") return <SoundsScreen />;
 
   return (
     <div className="shell">

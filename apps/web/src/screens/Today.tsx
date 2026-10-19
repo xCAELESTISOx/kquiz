@@ -4,6 +4,7 @@ import { cardsWord } from "../lib/plural";
 import { hideSplash } from "../lib/splash";
 import type { QueueItem, Stats } from "../lib/types";
 import { HeadphonesIcon, MicIcon } from "../ui/icons";
+import { PracticeLinks } from "../ui/PracticeLinks";
 import { ScheduleSettings } from "./ScheduleSettings";
 
 const PREVIEW = 14;
@@ -126,6 +127,8 @@ export function TodayScreen() {
           <span className="button-count">{leeches}</span>
         </a>
       )}
+
+      {stats && <PracticeLinks />}
 
       {stats && <ScheduleSettings />}
 

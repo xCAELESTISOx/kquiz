@@ -9,9 +9,10 @@ import type { Db } from "../db/client.js";
 import { cards, oauthClients, oauthCodes, oauthGrants, phoneStats, reviewLog } from "../db/schema.js";
 import type { OwnerAuth } from "../mcp/app.js";
 import type { OAuthStore } from "../mcp/oauth-store.js";
-import type { CardStore } from "../mcp/store.js";
+import type { CardStore, DrillStore, NewDrill } from "../mcp/store.js";
 import { findLeeches } from "../leeches.js";
 import { introduceDailyCards } from "../newCards.js";
+import { addDrills, listDrills } from "../practice.js";
 import { getStats } from "../reviewStore.js";
 import { statsOverview, zoneOffset } from "../statsStore.js";
 
@@ -152,6 +153,24 @@ export class SqliteCardStore implements CardStore {
 
   async hardCards(limit: number) {
     return findLeeches(this.db, limit).map(({ card, ...rest }) => ({ card: toStoredCard(card), ...rest }));
+  }
+}
+
+export class SqliteDrillStore implements DrillStore {
+  constructor(private readonly db: Db) {}
+
+  async add(drills: NewDrill[]) {
+    return addDrills(this.db, drills, "claude");
+  }
+
+  async list() {
+    return listDrills(this.db).map(({ id, contrast, words, correct, wrong }) => ({
+      id,
+      contrast,
+      words: words.map((w) => (w.meaning ? { korean: w.korean, meaning: w.meaning } : { korean: w.korean })),
+      correct,
+      wrong,
+    }));
   }
 }
 

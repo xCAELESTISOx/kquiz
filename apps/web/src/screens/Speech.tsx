@@ -5,10 +5,12 @@ import { useLeechIds } from "../lib/leeches";
 import { describeErrors, segments, verdict } from "../lib/pronunciation";
 import { canRecord, MAX_SECONDS, Recorder, RecorderFailure, type RecorderError } from "../lib/recorder";
 import { navigate } from "../lib/router";
+import { cardAudioUrl, useIntonation } from "../lib/practice";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
 import type { Card, QueueItem, RatingName, ScoreResult } from "../lib/types";
 import { LeechBadge } from "../ui/LeechBadge";
 import { CloseIcon, MicIcon, PlayIcon, RetryIcon, SpeakerIcon, StopIcon } from "../ui/icons";
+import { IntonationChart } from "../ui/IntonationChart";
 import { useCountUp } from "../ui/motion";
 import { Spinner } from "../ui/Spinner";
 
@@ -56,6 +58,7 @@ export function SpeechScreen() {
   const [level, setLevel] = useState(0);
   const [seconds, setSeconds] = useState(0);
   const [take, setTake] = useState<string>();
+  const [takeWav, setTakeWav] = useState<Uint8Array>();
   const recorder = useRef<Recorder>(undefined);
   const shownAt = useRef(performance.now());
   const startedAt = useRef(0);
@@ -87,6 +90,7 @@ export function SpeechScreen() {
   const card = item?.card;
   const cloze = useMemo(() => item && clozeFor(item), [item]);
   const leeches = useLeechIds("speech");
+  const intonation = useIntonation(card ? cardAudioUrl(card.id) : "", takeWav);
 
   // The next few too, so their audio is ready by the time they come up.
   useEffect(() => {
@@ -105,6 +109,7 @@ export function SpeechScreen() {
       return;
     }
     setTake(URL.createObjectURL(new Blob([recorded.wav], { type: "audio/wav" })));
+    setTakeWav(recorded.wav);
     try {
       setResult(await api.score(card.id, recorded.wav));
       setScoreFailed(undefined);
@@ -156,6 +161,7 @@ export function SpeechScreen() {
       setScoreFailed(undefined);
       setError(undefined);
       setTake(undefined);
+      setTakeWav(undefined);
       shownAt.current = performance.now();
     },
     [card, phase],
@@ -243,6 +249,7 @@ export function SpeechScreen() {
               )}
 
               {phase === "result" && <ResultDetails result={result} failed={scoreFailed} />}
+              {phase === "result" && <IntonationChart state={intonation} compact />}
               </div>
 
               {canSpeak() && (
@@ -365,18 +372,22 @@ function ScoreRing({ score, tone }: { score: number; tone: string }) {
   );
 }
 
-function RecordButton({
+export function RecordButton({
   phase,
   level,
   seconds,
   disabled,
   onPress,
+  idleCaption = "Нажми и скажи слово",
+  busyCaption = "Слушаю…",
 }: {
   phase: Phase;
   level: number;
   seconds: number;
   disabled: boolean;
   onPress: () => void;
+  idleCaption?: string;
+  busyCaption?: string;
 }) {
   const recording = phase === "recording";
   const scoring = phase === "scoring";
@@ -407,10 +418,10 @@ function RecordButton({
         {disabled
           ? "Запись здесь недоступна"
           : scoring
-            ? "Слушаю…"
+            ? busyCaption
             : recording
               ? `Говори. Нажми, когда закончишь · ${Math.ceil(left)} с`
-              : "Нажми и скажи слово"}
+              : idleCaption}
       </p>
     </div>
   );

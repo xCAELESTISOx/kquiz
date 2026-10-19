@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { createApp, type AppDeps } from "./app.js";
 import { createMcpApp } from "./mcp/app.js";
 import { requireCloudflare } from "./security/origin.js";
-import { ownerAuth, SqliteCardStore, SqliteOAuthStore } from "./storage/mcp.js";
+import { ownerAuth, SqliteCardStore, SqliteDrillStore, SqliteOAuthStore } from "./storage/mcp.js";
 
 /** The whole HTTP surface: the app's /api plus the MCP endpoint and its OAuth routes. */
 export function createServer(deps: AppDeps & { mcpRedirectUris?: string[] }) {
@@ -11,6 +11,7 @@ export function createServer(deps: AppDeps & { mcpRedirectUris?: string[] }) {
     // One domain for the app, the API and the MCP endpoint (docs/PLAN.md §3).
     publicUrl: config.origin,
     cards: new SqliteCardStore(db, config.timeZone),
+    drills: new SqliteDrillStore(db),
     oauth: new SqliteOAuthStore(db),
     owner: ownerAuth(db, config, now),
     redirectUris: deps.mcpRedirectUris,

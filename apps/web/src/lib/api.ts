@@ -66,7 +66,7 @@ interface RequestOptions<T> {
   accept?: number[];
 }
 
-async function request<T>(method: string, path: string, opts: RequestOptions<T> = {}, retried = false): Promise<T> {
+export async function request<T>(method: string, path: string, opts: RequestOptions<T> = {}, retried = false): Promise<T> {
   const { body, fallback } = opts;
   // Any change (a rating, new cards) can change the queue.
   if (method !== "GET") recentQueues.clear();
