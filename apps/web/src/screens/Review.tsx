@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { api, submitReview } from "../lib/api";
+import { clozeFor } from "../lib/cloze";
+import { useLeechIds } from "../lib/leeches";
 import { navigate } from "../lib/router";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
-import type { Card, RatingName, ReviewMode } from "../lib/types";
+import type { Card, QueueItem, RatingName, ReviewMode } from "../lib/types";
 import { CloseIcon, SpeakerIcon } from "../ui/icons";
+import { LeechBadge } from "../ui/LeechBadge";
 import { useGlide } from "../ui/motion";
 
 const RATINGS: { name: RatingName; label: string; key: string }[] = [
@@ -21,7 +24,7 @@ const SWIPE_THRESHOLD = 90;
  */
 export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "listening"> }) {
   const listening = mode === "listening";
-  const [queue, setQueue] = useState<Card[]>();
+  const [queue, setQueue] = useState<QueueItem[]>();
   const [total, setTotal] = useState(0);
   const [done, setDone] = useState(0);
   const [revealed, setRevealed] = useState(false);
@@ -35,7 +38,7 @@ export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "
     document.title = listening ? "На слух · KQuiz" : "Повторение · KQuiz";
     api.queue(mode).then(
       ({ items }) => {
-        setQueue(items.map((item) => item.card));
+        setQueue(items);
         setTotal(items.length);
         shownAt.current = performance.now();
         // The tap that opened the screen may still count; if not, the big button is right there.
@@ -45,12 +48,16 @@ export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "
     );
   }, [mode, listening]);
 
-  const card = queue?.[0];
+  const item = queue?.[0];
+  const card = item?.card;
+  // Listening shows no text before the answer, so only meaning reviews ask through an example.
+  const cloze = useMemo(() => (item && !listening ? clozeFor(item) : undefined), [item, listening]);
+  const leeches = useLeechIds(mode);
 
   // The next few too, so their audio is ready by the time they come up (listening plays the next
   // card straight from the grading tap).
   useEffect(() => {
-    if (queue) preloadSpeech(...queue.slice(0, 3));
+    if (queue) preloadSpeech(...queue.slice(0, 3).map((i) => i.card));
   }, [queue]);
 
   const reveal = useCallback(() => {
@@ -74,7 +81,7 @@ export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "
       const next = queue ? (rating === "again" ? [...queue.slice(1), queue[0]!] : queue.slice(1)) : queue;
       setQueue(next);
       // Inside the tap, where iOS still lets audio play.
-      if (listening && next?.[0]) speak(next[0]);
+      if (listening && next?.[0]) speak(next[0].card);
       if (rating !== "again") setDone((n) => n + 1);
       setRevealed(false);
       setStep((n) => n + 1);
@@ -122,7 +129,7 @@ export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "
 
       {queue && !card && <Finished count={done} />}
 
-      {card && (
+      {queue && card && (
         <>
           <SwipeCard
             key={step}
@@ -149,6 +156,7 @@ export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "
               )
             }
           >
+            {leeches.has(card.id) && <LeechBadge />}
             {listening && !revealed ? (
               <button
                 type="button"
@@ -162,6 +170,12 @@ export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "
               >
                 <SpeakerIcon />
               </button>
+            ) : cloze ? (
+              <GlideText className="review-korean review-sentence" on={revealed}>
+                {cloze.before}
+                <mark className="cloze-mark">{cloze.word}</mark>
+                {cloze.after}
+              </GlideText>
             ) : (
               <GlideText className="review-korean" on={revealed}>
                 {card.korean}
@@ -169,6 +183,11 @@ export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "
             )}
             {revealed ? (
               <div className="review-answer">
+                {cloze && (
+                  <p className="review-word" lang="ko">
+                    {card.korean}
+                  </p>
+                )}
                 {(card.pronunciation && card.pronunciation !== card.korean) || card.romanization ? (
                   <p className="review-pron">
                     {card.pronunciation && card.pronunciation !== card.korean && (
@@ -191,7 +210,9 @@ export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "
                 {card.notes && <p className="review-notes muted">{card.notes}</p>}
               </div>
             ) : (
-              <p className="review-hint muted">{listening ? "Послушай и вспомни перевод" : "Вспомни перевод"}</p>
+              <p className="review-hint muted">
+                {listening ? "Послушай и вспомни перевод" : cloze ? "Вспомни перевод выделенного слова" : "Вспомни перевод"}
+              </p>
             )}
             {canSpeak() && (!listening || revealed) && (
               <button
