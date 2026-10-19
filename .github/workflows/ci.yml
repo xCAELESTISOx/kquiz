@@ -74,7 +74,7 @@ jobs:
       # The cache keeps unchanged layers (torch in the scorer) byte for byte the same, so the
       # server downloads only the layers a commit changed. It lives in the Actions cache:
       # GHCR answers 403 to buildkit's registry cache export.
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: deploy/Dockerfile.${{ matrix.image }}
