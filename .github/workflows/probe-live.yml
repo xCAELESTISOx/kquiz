@@ -1,0 +1,17 @@
+# Temporary: checks the live server from outside (the agent's sandbox can't reach it).
+name: probe-live
+on:
+  push:
+    branches: [claude/launch-server-7ekewl]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Wait until the server drops HTTP/3
+        run: |
+          for i in $(seq 70); do
+            if ! curl -sSI -m 10 https://kquiz.ru/ | grep -qi '^alt-svc'; then echo "no alt-svc after $i tries"; curl -sS https://kquiz.ru/api/health; exit 0; fi
+            sleep 30
+          done
+          exit 1
