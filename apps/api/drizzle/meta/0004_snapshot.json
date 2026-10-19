@@ -1,8 +1,8 @@
 {
+  "id": "a0c7acb5-e151-4f8f-b53a-56989a5f7d6b",
+  "prevId": "1234846b-6628-45f5-8298-408494a4afc5",
   "version": "6",
   "dialect": "sqlite",
-  "id": "4d202e45-adf7-49c8-97e2-ae26a6d3fb8e",
-  "prevId": "1234846b-6628-45f5-8298-408494a4afc5",
   "tables": {
     "attempts": {
       "name": "attempts",
@@ -78,15 +78,15 @@
         "attempts_card_id_cards_id_fk": {
           "name": "attempts_card_id_cards_id_fk",
           "tableFrom": "attempts",
-          "tableTo": "cards",
           "columnsFrom": [
             "card_id"
           ],
+          "tableTo": "cards",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -300,15 +300,15 @@
         "card_audio_card_id_cards_id_fk": {
           "name": "card_audio_card_id_cards_id_fk",
           "tableFrom": "card_audio",
-          "tableTo": "cards",
           "columnsFrom": [
             "card_id"
           ],
+          "tableTo": "cards",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -537,15 +537,15 @@
         "oauth_codes_client_id_oauth_clients_client_id_fk": {
           "name": "oauth_codes_client_id_oauth_clients_client_id_fk",
           "tableFrom": "oauth_codes",
-          "tableTo": "oauth_clients",
           "columnsFrom": [
             "client_id"
           ],
+          "tableTo": "oauth_clients",
           "columnsTo": [
             "client_id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -646,15 +646,15 @@
         "oauth_grants_client_id_oauth_clients_client_id_fk": {
           "name": "oauth_grants_client_id_oauth_clients_client_id_fk",
           "tableFrom": "oauth_grants",
-          "tableTo": "oauth_clients",
           "columnsFrom": [
             "client_id"
           ],
+          "tableTo": "oauth_clients",
           "columnsTo": [
             "client_id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -760,15 +760,15 @@
         "review_log_card_id_cards_id_fk": {
           "name": "review_log_card_id_cards_id_fk",
           "tableFrom": "review_log",
-          "tableTo": "cards",
           "columnsFrom": [
             "card_id"
           ],
+          "tableTo": "cards",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -877,15 +877,15 @@
         "review_states_card_id_cards_id_fk": {
           "name": "review_states_card_id_cards_id_fk",
           "tableFrom": "review_states",
-          "tableTo": "cards",
           "columnsFrom": [
             "card_id"
           ],
+          "tableTo": "cards",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {
@@ -899,135 +899,14 @@
       },
       "uniqueConstraints": {},
       "checkConstraints": {}
-    },
-    "sound_drills": {
-      "name": "sound_drills",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "contrast": {
-          "name": "contrast",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "words": {
-          "name": "words",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "words_key": {
-          "name": "words_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "correct": {
-          "name": "correct",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "wrong": {
-          "name": "wrong",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "last_practiced_at": {
-          "name": "last_practiced_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "sound_drills_words": {
-          "name": "sound_drills_words",
-          "columns": [
-            "words_key"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "speech_audio": {
-      "name": "speech_audio",
-      "columns": {
-        "text": {
-          "name": "text",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "mime": {
-          "name": "mime",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "data": {
-          "name": "data",
-          "type": "blob",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
     }
   },
   "views": {},
   "enums": {},
   "_meta": {
+    "columns": {},
     "schemas": {},
-    "tables": {},
-    "columns": {}
+    "tables": {}
   },
   "internal": {
     "indexes": {}

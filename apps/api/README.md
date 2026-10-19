@@ -1,6 +1,6 @@
 # @kquiz/api
 
-Hono + SQLite (better-sqlite3, Drizzle). One owner, passkey login, FSRS scheduling in two modes.
+Hono + SQLite (better-sqlite3, Drizzle). One owner, passkey login, FSRS scheduling in three modes: meaning, speech (say it aloud) and listening (hear it, no text).
 
 ```sh
 pnpm dev            # http://127.0.0.1:8787, prints a one-time setup code on first start
@@ -48,9 +48,9 @@ All JSON. Everything except health and `/auth/status|login|register` needs the s
 Card: `{ id, korean, meaning, pronunciation, romanization, examples, notes, tags, speakable, readyForSpeech, source, createdAt, updatedAt }`, where `examples` is up to 3 `{ ko, ru }` sentences (Claude must always send exactly 3 through MCP). Duplicates are detected ignoring spaces and punctuation. `readyForSpeech` is false when `korean` has non-Hangul text; such cards never become `speakable`.
 
 **Reviews** (`/api/reviews`)
-- `GET /queue?mode=meaning|speech&limit=50` → `{ items: [{ card, mode, due, state, reps, lapses }] }`, most overdue first; speech only for speakable cards
+- `GET /queue?mode=meaning|speech|listening&limit=50` → `{ items: [{ card, mode, due, state, reps, lapses }] }`, most overdue first; speech only for speakable cards, listening only for cards whose recording is made from their current Korean (the phone's voice is no model for the ear)
 - `POST /` `{ reviews: [{ id: uuid, cardId, mode, rating: again|hard|good|easy, reviewedAt, elapsedMs? }] }` (≤ 200) → `{ results: [{ id, status: applied|duplicate|card_not_found, due? }] }`. A resent `id` is a no-op; a batch is applied in `reviewedAt` order.
-- `GET /stats` → `{ cards, due: { meaning, speech }, reviewedToday }` (UTC day)
+- `GET /stats` → `{ cards, due: { meaning, speech, listening }, reviewedToday }` (UTC day)
 
 **Pronunciation** (`/api/score`)
 - `POST /?cardId=` with the recording as the body (`content-type: audio/wav`, ≤ 1 MB, ≤ 10 s; the web app sends 16 kHz mono 16-bit PCM) → `{ attemptId, cardId, score, pronunciation, syllables: [{ text, pron, status: ok|weak|wrong }], errors: [{ syllable, position, kind, status, expected, heard }], suggestedRating }`. Fields are the scorer's (services/scorer/README.md).

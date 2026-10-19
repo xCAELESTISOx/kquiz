@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 
 // A handful of screens doesn't justify a router dependency. Screens live in the hash, so the PWA works
 // from any static host; /login is a real path because the MCP OAuth consent links to it.
-export type Route = "today" | "add" | "review" | "speech" | "shadow" | "sounds" | "login";
+export type Route = "today" | "add" | "review" | "speech" | "listen" | "shadow" | "sounds" | "login";
 
 function parse(): Route {
   if (location.pathname === "/login") return "login";
   const path = location.hash.replace(/^#\/?/, "");
-  return path === "add" || path === "review" || path === "speech" || path === "shadow" || path === "sounds" ? path : "today";
+  return path === "add" || path === "review" || path === "speech" || path === "listen" || path === "shadow" || path === "sounds"
+    ? path
+    : "today";
 }
 
 export function navigate(route: Exclude<Route, "login">) {
