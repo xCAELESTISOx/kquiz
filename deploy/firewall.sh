@@ -13,6 +13,5 @@ else
 fi
 ufw allow 80/tcp comment caddy
 ufw allow 443/tcp comment caddy
-ufw allow 443/udp comment caddy-http3
 ufw --force enable
 ufw status verbose
