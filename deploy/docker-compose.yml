@@ -52,8 +52,9 @@ services:
     pids_limit: 100
     depends_on: [api]
 
-  # Pronunciation scoring. Downloads the model (~1.3 GB) into scorer-models on first start;
-  # the volume outlives image updates, so the model is downloaded once per server.
+  # Pronunciation scoring and card audio. Downloads the scoring model (~1.3 GB) into scorer-models
+  # on first start and the TTS model (~400 MB) on the first /tts call; the volume outlives image
+  # updates, so each is downloaded once per server. In memory: ~2 GB + ~0.5 GB.
   scorer:
     <<: *hardening
     build: { context: .., dockerfile: deploy/Dockerfile.scorer }

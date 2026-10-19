@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { api, submitReview } from "../lib/api";
 import { navigate } from "../lib/router";
-import { canSpeak, speak } from "../lib/speech";
+import { canSpeak, preloadSpeech, speak } from "../lib/speech";
 import type { Card, RatingName } from "../lib/types";
 import { CloseIcon, SpeakerIcon } from "../ui/icons";
 import { useGlide } from "../ui/motion";
@@ -39,6 +39,10 @@ export function ReviewScreen() {
   }, []);
 
   const card = queue?.[0];
+
+  useEffect(() => {
+    if (card) preloadSpeech(card);
+  }, [card]);
 
   const reveal = useCallback(() => {
     if (card && !revealed) setRevealed(true);
@@ -168,7 +172,7 @@ export function ReviewScreen() {
                 aria-label="Послушать"
                 onClick={(e) => {
                   e.stopPropagation();
-                  speak(card.korean);
+                  speak(card);
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
               >

@@ -54,7 +54,7 @@ iPhone (PWA)                 Claude (claude.ai / app)
 - React + Vite + TypeScript, роутинг на TanStack Router или React Router, данные через TanStack Query.
 - Офлайн: service worker кэширует приложение и очередь карточек на день. Оценки, сделанные офлайн, копятся в IndexedDB и отправляются при появлении сети. У каждой оценки свой UUID, поэтому повторная отправка безопасна.
 - Запись звука через Web Audio (AudioWorklet) в PCM 16 кГц моно, WAV собирается на клиенте. MediaRecorder не используем из-за бага iOS в PWA с домашнего экрана и формата `audio/mp4` в Safari.
-- Эталонная озвучка через `speechSynthesis` с голосом `ko-KR`. Позже — серверный TTS с кэшем файлов.
+- Эталонная озвучка: MP3 от серверного TTS (Supertonic 3 в `services/scorer`), сделанный один раз на карточку; пока его нет, `speechSynthesis` с голосом `ko-KR`.
 
 Экраны:
 

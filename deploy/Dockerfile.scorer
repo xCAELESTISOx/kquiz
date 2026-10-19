@@ -1,7 +1,8 @@
 # Pronunciation scorer, CPU only. Build context is the repository root.
 FROM python:3.13-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
-    HF_HOME=/models NLTK_DATA=/usr/share/nltk_data
+    HF_HOME=/models NLTK_DATA=/usr/share/nltk_data \
+    SUPERTONIC_CACHE_DIR=/models/supertonic3 HF_HUB_DISABLE_XET=1
 WORKDIR /app
 COPY services/scorer/requirements.txt services/scorer/requirements-ml.txt ./
 RUN pip install -r requirements.txt \

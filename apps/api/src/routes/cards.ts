@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AuthVariables } from "../auth/sessions.js";
+import { getCardAudio } from "../cardAudio.js";
 import { createCards, deleteCard, getCard, listCards, updateCard } from "../cardStore.js";
 import { cardPatchSchema, newCardSchema, parseBulk } from "../cards.js";
 import type { Db } from "../db/client.js";
@@ -76,6 +77,16 @@ export function cardRoutes(db: Db, now: () => Date) {
     const id = idParam.safeParse(c.req.param("id"));
     const card = id.success ? getCard(db, id.data) : undefined;
     return card ? c.json({ card }) : c.json({ error: "not_found" }, 404);
+  });
+
+  // Reference audio (cardAudio.ts). 404 until the worker has made it; the app then uses the phone's voice.
+  app.get("/:id/audio", (c) => {
+    const id = idParam.safeParse(c.req.param("id"));
+    const audio = id.success ? getCardAudio(db, id.data) : undefined;
+    if (!audio) return c.json({ error: "not_found" }, 404);
+    const headers = { "cache-control": "private, no-cache", etag: audio.etag };
+    if (c.req.header("if-none-match") === audio.etag) return c.body(null, 304, headers);
+    return c.body(audio.data as Uint8Array<ArrayBuffer>, 200, { ...headers, "content-type": audio.mime });
   });
 
   app.patch("/:id", async (c) => {

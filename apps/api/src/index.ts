@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { serve } from "@hono/node-server";
 import { count } from "drizzle-orm";
+import { audioWorker, httpSpeaker } from "./cardAudio.js";
 import { loadConfig } from "./config.js";
 import { openDb } from "./db/client.js";
 import { authCredentials } from "./db/schema.js";
@@ -24,6 +25,9 @@ const server = createServer({
   setupCode,
   mcpRedirectUris: process.env.MCP_REDIRECT_URIS?.split(",").map((uri) => uri.trim()),
 });
+
+// Reference audio for new and changed cards, made by the scorer in the background.
+audioWorker(db, httpSpeaker(config.scorerUrl)).start();
 
 const port = Number(process.env.PORT ?? 8787);
 // Bound to localhost: only Caddy on the same host may reach the API.
