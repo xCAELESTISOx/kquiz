@@ -6,3 +6,9 @@ export function cardsWord(n: number): string {
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "карточки";
   return "карточек";
 }
+
+/** Nominative: 1 карточка, 2 карточки, 5 карточек. */
+export function cardsCount(n: number): string {
+  const word = cardsWord(n);
+  return `${n} ${word === "карточку" ? "карточка" : word}`;
+}
