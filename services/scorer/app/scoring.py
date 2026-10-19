@@ -14,6 +14,7 @@ from .phones import label
 from .recognizer import BLANK_ID, CLASS_INDEX, CLASSES, Recognizer, project, projection
 
 # Thresholds to calibrate in stage 0 with the eval harness (app/eval.py).
+ACCEPTED_VARIANT = 0.3  # at or below: an accepted variant (계 [게], 의 [에], weak ㅎ), not an error
 WEAK_SUBSTITUTION = 0.5  # substitutions at or below this cost are "weak", above are "wrong"
 LOW_CONFIDENCE = 0.35  # a matched sound with GOP confidence below this is "weak"
 LOW_CONFIDENCE_CREDIT = 0.7
@@ -124,6 +125,9 @@ def score_logp(logp: np.ndarray, ref: Reference) -> Result:
                 mark(tp.syllable, "weak")
             else:
                 credit[tp.syllable].append(1.0)
+            continue
+        if op.cost <= ACCEPTED_VARIANT:
+            credit[tp.syllable].append(1.0)
             continue
         status = "weak" if op.cost <= WEAK_SUBSTITUTION else "wrong"
         credit[tp.syllable].append(max(0.0, 1.0 - op.cost))

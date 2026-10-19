@@ -100,7 +100,7 @@ def ctc_forced_align(logp: np.ndarray, target: list[int], blank: int) -> list[tu
     states = np.empty(t_len, dtype=int)
     for t in range(t_len - 1, -1, -1):
         states[t] = s
-        s -= back[t, s]
+        s -= int(back[t, s])  # keep s a Python int: int8 arithmetic would overflow
     spans: list[tuple[int, int]] = [(-1, -1)] * len(target)
     for t, st in enumerate(states):
         if st % 2 == 1:

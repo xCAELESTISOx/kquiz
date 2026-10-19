@@ -36,7 +36,13 @@ def test_run_and_summary(tmp_path):
     scorer = Scorer(QueueRecognizer([perfect, ["k", "u", "k", "m", "u", "l"], perfect]))
     rows = run(read_manifest(tmp_path / "manifest.csv"), scorer, tmp_path)
     s = summarize(rows)
-    assert s["references"] == {"count": 1, "mean_score": 100, "share_ge_90": 1.0, "below_90": []}
+    assert s["references"] == {
+        "count": 1,
+        "mean_score": 100,
+        "share_ge_90": 1.0,
+        "syllables_flagged": 0.0,
+        "below_90": [],
+    }
     assert s["broken"]["detected"] == 1.0 and s["broken"]["pinpointed"] == 1.0
     assert s["mine"]["syllables_flagged"] == 0.0
     assert s["criteria"] == {"references_score_90": True, "broken_sounds_found": True}

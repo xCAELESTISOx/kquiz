@@ -21,9 +21,14 @@ def test_model_labels_onset_and_coda_variants_match():
     assert score(["G", "U", "k", "M", "U", "L"], raw=True).syllables[0].status == "wrong"
 
 
+def test_accepted_variants_are_not_errors():
+    assert score(["s", "i", "k", "e"], text="시계").errors == []  # 계 [게] is standard
+    assert score(["u", "l", "i", "e"], text="우리의").errors == []  # 의 [에]
+
+
 def test_diphthong_glide_loss_is_weak():
-    r = score(["s", "i", "k", "e"], text="시계")  # 계 said as [ke]
-    assert [s.status for s in r.syllables] == ["ok", "weak"]
+    r = score(["a", "k", "u"], text="야구")  # 야 said as [아]
+    assert [s.status for s in r.syllables] == ["weak", "ok"]
 
 
 def test_near_miss_is_weak():

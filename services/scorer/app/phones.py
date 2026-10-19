@@ -293,11 +293,15 @@ _NEAR_VOWELS = {
     frozenset({"ɯ", "i"}): 0.6,
     frozenset({"a", "e"}): 0.6,
 }
-# Dropping or adding the glide of a diphthong (계 [ke], 의사 [이사]) is a near miss.
+# Dropping the glide of a diphthong is a near miss; for ㅖ (계 [게]) and ㅢ
+# (희망 [히망], 의 [에]) the standard allows it, so it costs no more than an accepted variant.
 _GLIDE_LOSS = {"je": 0.3, "ɰi": 0.3}
+_ACCEPTED = {frozenset({"ɰi", "e"}): 0.3}  # the particle 의 said as [에]
 
 
 def _vowel_cost(a: Phone, b: Phone) -> float:
+    if frozenset({a.ipa, b.ipa}) in _ACCEPTED:
+        return _ACCEPTED[frozenset({a.ipa, b.ipa})]
     if a.glide and b.glide:
         if a.glide == b.glide:
             return _vowel_cost(PHONES[a.base], PHONES[b.base])
@@ -332,7 +336,7 @@ def substitution_cost(expected: str, heard: str) -> float:
 
 def deletion_cost(phone: str) -> float:
     if phone == "h":
-        return 0.5  # intervocalic ㅎ is often weak in native speech
+        return 0.3  # ㅎ between voiced sounds is weak or silent in native speech
     return 1.0
 
 

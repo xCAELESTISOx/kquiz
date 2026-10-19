@@ -1,9 +1,12 @@
 """Stage 0 data without recording anything yourself.
 
     python -m app.dataset commons recordings/commons --limit 60
+    python -m app.dataset zeroth recordings/zeroth --limit 60   # needs pyarrow and ffmpeg
 
-1. Downloads native Korean word recordings from Wikimedia Commons (Lingua
-   Libre, CC BY-SA; the author of each file is kept in the manifest).
+1. Downloads native Korean recordings: single words from Wikimedia Commons
+   (Lingua Libre, CC BY-SA / CC0) or short read sentences from the Zeroth
+   Korean test set (CC BY 4.0, via Hugging Face). Authors and licenses go to
+   CREDITS.tsv.
 2. Writes a manifest for app.eval: each recording once as `native`, and once
    more as `broken` with a text that differs from what was said in exactly one
    sound (달 said, 딸 expected). The scorer must flag that syllable.
@@ -16,6 +19,7 @@ import csv
 import json
 import random
 import re
+import subprocess
 import sys
 import time
 import urllib.error
@@ -204,6 +208,53 @@ def cmd_commons(args) -> int:
     return 0
 
 
+ZEROTH_URL = (
+    "https://huggingface.co/datasets/Bingsu/zeroth-korean/resolve/main/"
+    "data/test-00000-of-00001-a41b955a631e582e.parquet"
+)
+
+
+def _flac_to_wav(data: bytes) -> bytes:
+    cmd = ["ffmpeg", "-v", "error", "-i", "-", "-ac", "1", "-ar", "16000", "-f", "wav", "-"]
+    return subprocess.run(cmd, input=data, check=True, capture_output=True, timeout=30).stdout
+
+
+def cmd_zeroth(args) -> int:
+    import pyarrow.parquet as pq
+
+    from .audio import decode_wav
+    from .g2p import clean_text
+
+    out = Path(args.out)
+    (out / "audio").mkdir(parents=True, exist_ok=True)
+    parquet = out / "zeroth-test.parquet"
+    if not parquet.exists():
+        download(ZEROTH_URL, parquet)
+    files = []
+    for i, row in enumerate(pq.read_table(parquet).to_pylist()):
+        try:
+            text = clean_text(row["text"])
+        except InvalidText:
+            continue
+        wav = _flac_to_wav(row["audio"]["bytes"])
+        x, rate = decode_wav(wav)
+        if len(x) / rate > args.max_seconds:
+            continue
+        name = f"audio/zeroth-{i:03d}.wav"
+        (out / name).write_bytes(wav)
+        files.append({"file": name, "word": text})
+        if len(files) >= args.limit:
+            break
+    (out / "CREDITS.tsv").write_text(
+        "Zeroth Korean test set (Atlas Guide, Goodatlas, Lucas Jo, Wonkyum Lee), CC BY 4.0, "
+        "https://huggingface.co/datasets/Bingsu/zeroth-korean\n",
+        encoding="utf-8",
+    )
+    n = build_manifest(files, out, args.seed)
+    print(f"{len(files)} recordings, {n} manifest rows in {out / 'manifest.csv'}", file=sys.stderr)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m app.dataset",
@@ -217,6 +268,12 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--seed", type=int, default=0)
     c.add_argument("--delay", type=float, default=1.0, help="seconds between downloads")
     c.set_defaults(fn=cmd_commons)
+    z = sub.add_parser("zeroth", help="short read sentences from the Zeroth Korean test set")
+    z.add_argument("out")
+    z.add_argument("--limit", type=int, default=60)
+    z.add_argument("--max-seconds", type=float, default=9.5)
+    z.add_argument("--seed", type=int, default=0)
+    z.set_defaults(fn=cmd_zeroth)
     args = parser.parse_args(argv)
     return args.fn(args)
 

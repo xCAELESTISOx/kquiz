@@ -95,6 +95,11 @@ def summarize(rows: list[Row]) -> dict:
 
     detected = share(broken, lambda r: set(r.bad) <= set(r.flagged))
     pinpoint = share(broken, lambda r: set(r.flagged) == set(r.bad))
+    # Broken rows built from a native recording: the bad syllable must be flagged
+    # where the same audio against the right text left it alone.
+    native_flags = {r.file: set(r.flagged) for r in refs}
+    paired = [r for r in broken if r.file in native_flags and not set(r.bad) & native_flags[r.file]]
+    caught = share(paired, lambda r: set(r.bad) <= set(r.flagged))
     times = sorted(r.seconds for r in done)
     rtf = [r.seconds / r.speech_s for r in done if r.speech_s]
     out = {
@@ -104,6 +109,7 @@ def summarize(rows: list[Row]) -> dict:
             "count": len(refs),
             "mean_score": round(statistics.mean(r.score for r in refs), 1) if refs else None,
             "share_ge_90": share(refs, lambda r: r.score >= REFERENCE_TARGET),
+            "syllables_flagged": share([s for r in refs for s in r.statuses], lambda s: s != "ok"),
             "below_90": [f"{r.file} ({r.score})" for r in refs if r.score < REFERENCE_TARGET],
         },
         "mine": {
@@ -115,6 +121,8 @@ def summarize(rows: list[Row]) -> dict:
             "count": len(broken),
             "detected": detected,
             "pinpointed": pinpoint,
+            "paired": len(paired),
+            "caught_vs_native": caught,
             "missed": [
                 f"{r.file} (bad {r.bad}, flagged {r.flagged})"
                 for r in broken
@@ -130,7 +138,9 @@ def summarize(rows: list[Row]) -> dict:
     refs_ok = out["references"]["share_ge_90"]
     out["criteria"] = {
         "references_score_90": None if refs_ok is None else refs_ok >= 0.9,
-        "broken_sounds_found": None if detected is None else detected > DETECTION_TARGET,
+        "broken_sounds_found": None
+        if detected is None
+        else (caught if caught is not None else detected) > DETECTION_TARGET,
     }
     return out
 

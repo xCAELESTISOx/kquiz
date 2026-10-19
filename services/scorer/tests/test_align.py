@@ -42,3 +42,11 @@ def test_forced_align_spans_and_goodness():
 
 def test_forced_align_too_short():
     assert ctc_forced_align(_logp([1]), [1, 1], blank=0) is None
+
+
+def test_forced_align_long_target():
+    # more than 127 CTC states: the backtrace index must not overflow
+    target = [1, 2, 3] * 30
+    path = [0] + [c for lab in target for c in (lab, lab, 0)]
+    spans = ctc_forced_align(_logp(path), target, blank=0)
+    assert spans is not None and spans[-1] == (len(path) - 3, len(path) - 1)
