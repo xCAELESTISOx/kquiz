@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { api, submitReview } from "../lib/api";
+import { clozeFor } from "../lib/cloze";
+import { useLeechIds } from "../lib/leeches";
 import { navigate } from "../lib/router";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
-import type { Card, RatingName } from "../lib/types";
+import type { Card, QueueItem, RatingName } from "../lib/types";
 import { CloseIcon, SpeakerIcon } from "../ui/icons";
+import { LeechBadge } from "../ui/LeechBadge";
 import { useGlide } from "../ui/motion";
 
 const RATINGS: { name: RatingName; label: string; key: string }[] = [
@@ -16,7 +19,7 @@ const RATINGS: { name: RatingName; label: string; key: string }[] = [
 const SWIPE_THRESHOLD = 90;
 
 export function ReviewScreen() {
-  const [queue, setQueue] = useState<Card[]>();
+  const [queue, setQueue] = useState<QueueItem[]>();
   const [total, setTotal] = useState(0);
   const [done, setDone] = useState(0);
   const [revealed, setRevealed] = useState(false);
@@ -30,7 +33,7 @@ export function ReviewScreen() {
     document.title = "Повторение · KQuiz";
     api.queue("meaning").then(
       ({ items }) => {
-        setQueue(items.map((item) => item.card));
+        setQueue(items);
         setTotal(items.length);
         shownAt.current = performance.now();
       },
@@ -38,7 +41,10 @@ export function ReviewScreen() {
     );
   }, []);
 
-  const card = queue?.[0];
+  const item = queue?.[0];
+  const card = item?.card;
+  const cloze = useMemo(() => item && clozeFor(item), [item]);
+  const leeches = useLeechIds("meaning");
 
   useEffect(() => {
     if (card) preloadSpeech(card);
@@ -109,7 +115,7 @@ export function ReviewScreen() {
 
       {queue && !card && <Finished count={done} />}
 
-      {card && (
+      {queue && card && (
         <>
           <SwipeCard
             key={step}
@@ -136,11 +142,25 @@ export function ReviewScreen() {
               )
             }
           >
-            <GlideText className="review-korean" on={revealed}>
-              {card.korean}
-            </GlideText>
+            {leeches.has(card.id) && <LeechBadge />}
+            {cloze ? (
+              <GlideText className="review-korean review-sentence" on={revealed}>
+                {cloze.before}
+                <mark className="cloze-mark">{cloze.word}</mark>
+                {cloze.after}
+              </GlideText>
+            ) : (
+              <GlideText className="review-korean" on={revealed}>
+                {card.korean}
+              </GlideText>
+            )}
             {revealed ? (
               <div className="review-answer">
+                {cloze && (
+                  <p className="review-word" lang="ko">
+                    {card.korean}
+                  </p>
+                )}
                 {(card.pronunciation && card.pronunciation !== card.korean) || card.romanization ? (
                   <p className="review-pron">
                     {card.pronunciation && card.pronunciation !== card.korean && (
@@ -163,7 +183,7 @@ export function ReviewScreen() {
                 {card.notes && <p className="review-notes muted">{card.notes}</p>}
               </div>
             ) : (
-              <p className="review-hint muted">Вспомни перевод</p>
+              <p className="review-hint muted">{cloze ? "Вспомни перевод выделенного слова" : "Вспомни перевод"}</p>
             )}
             {canSpeak() && (
               <button

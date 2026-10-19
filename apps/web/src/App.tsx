@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { flushPendingReviews } from "./lib/api";
 import { useRoute } from "./lib/router";
 import { AddScreen } from "./screens/Add";
+import { LeechesScreen } from "./screens/Leeches";
 import { LoginScreen } from "./screens/Login";
 import { ReviewScreen } from "./screens/Review";
 import { SpeechScreen } from "./screens/Speech";
@@ -25,7 +26,7 @@ export function App() {
 
   return (
     <div className="shell">
-      {route === "add" ? <AddScreen /> : <TodayScreen />}
+      {route === "add" ? <AddScreen /> : route === "leeches" ? <LeechesScreen /> : <TodayScreen />}
       <TabBar route={route} />
     </div>
   );

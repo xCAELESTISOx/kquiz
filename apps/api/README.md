@@ -51,6 +51,7 @@ Card: `{ id, korean, meaning, pronunciation, romanization, examples, notes, tags
 - `GET /queue?mode=meaning|speech&limit=50` → `{ items: [{ card, mode, due, state, reps, lapses }] }`, most overdue first; speech only for speakable cards
 - `POST /` `{ reviews: [{ id: uuid, cardId, mode, rating: again|hard|good|easy, reviewedAt, elapsedMs? }] }` (≤ 200) → `{ results: [{ id, status: applied|duplicate|card_not_found, due? }] }`. A resent `id` is a no-op; a batch is applied in `reviewedAt` order.
 - `GET /stats` → `{ cards, due: { meaning, speech }, reviewedToday }` (UTC day)
+- `GET /leeches` → `{ items: [{ card, forgotten: { meaning?, speech? }, lastForgottenAt }] }`: hard cards, forgotten on 6+ different days (UTC) in a mode since the card's last edit. Editing a card takes it off the list. Claude reads the same list with the MCP tool `get_leeches` and reworks the cards with `update_card`.
 
 **Pronunciation** (`/api/score`)
 - `POST /?cardId=` with the recording as the body (`content-type: audio/wav`, ≤ 1 MB, ≤ 10 s; the web app sends 16 kHz mono 16-bit PCM) → `{ attemptId, cardId, score, pronunciation, syllables: [{ text, pron, status: ok|weak|wrong }], errors: [{ syllable, position, kind, status, expected, heard }], suggestedRating }`. Fields are the scorer's (services/scorer/README.md).

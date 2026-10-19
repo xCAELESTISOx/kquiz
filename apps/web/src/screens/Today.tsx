@@ -10,6 +10,7 @@ export function TodayScreen() {
   const [stats, setStats] = useState<Stats>();
   const [preview, setPreview] = useState<QueueItem[]>([]);
   const [error, setError] = useState<string>();
+  const [leeches, setLeeches] = useState(0);
 
   useEffect(() => {
     document.title = "KQuiz";
@@ -20,6 +21,7 @@ export function TodayScreen() {
       },
       (e: Error) => setError(e.message),
     );
+    api.leeches().then(({ items }) => setLeeches(items.length), () => {});
   }, []);
 
   const due = stats?.due.meaning ?? 0;
@@ -83,6 +85,13 @@ export function TodayScreen() {
             <dd>{stats.reviewedToday}</dd>
           </div>
         </dl>
+      )}
+
+      {leeches > 0 && (
+        <a className="leech-link" href="#/leeches">
+          Трудные карточки
+          <span className="button-count">{leeches}</span>
+        </a>
       )}
 
       <div aria-live="polite">

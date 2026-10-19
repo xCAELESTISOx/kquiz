@@ -13,7 +13,8 @@ const instructions = `KQuiz is the owner's personal Korean flashcard deck. Cards
 - examples (required, exactly ${EXAMPLES_PER_CARD}): short natural Korean sentences that use the word, each with its Russian translation, as {"ko", "ru"}. Vary the forms and situations, keep them at the owner's level. Every add_cards card and every update_card call must carry all ${EXAMPLES_PER_CARD}; when editing, send the card's current examples again if they stay as they are.
 - notes (optional): grammar, usage or anything else worth remembering.
 - tags: lowercase topics such as "еда" or "глаголы".
-Call find_cards before adding words the owner may already have; add_cards also reports duplicates. To fix a card, use update_card instead of adding a new one: any field can be changed, and an empty string clears pronunciation, romanization or notes. Cards cannot be deleted from here.`;
+Call find_cards before adding words the owner may already have; add_cards also reports duplicates. To fix a card, use update_card instead of adding a new one: any field can be changed, and an empty string clears pronunciation, romanization or notes. Cards cannot be deleted from here.
+When the owner asks to fix hard cards, call get_leeches and rework each with update_card: a clearer meaning, a mnemonic or the confusing neighbour in notes, ${EXAMPLES_PER_CARD} fresh examples. A card that mixes two senses can be split: narrow it with update_card and add the other sense with add_cards. If a card should go, tell the owner; only they can delete it in the app.`;
 
 const cardInput = z.object({
   korean: z.string(),
@@ -130,6 +131,18 @@ export function createMcpServer(store: CardStore): McpServer {
       annotations: { readOnlyHint: true },
     },
     async ({ limit }) => json({ sounds: await store.weakSounds(limit) }),
+  );
+
+  server.registerTool(
+    "get_leeches",
+    {
+      title: "Get hard cards",
+      description:
+        "Cards the owner keeps forgetting (leeches): forgotten on several different days since the card was last edited, per mode (meaning: recalling the translation; speech: saying it in Korean). Rework them with update_card; an edit gives a card a fresh start and takes it off this list.",
+      inputSchema: { limit: z.number().int().min(1).max(50).default(20) },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ limit }) => json({ cards: await store.hardCards(limit) }),
   );
 
   server.registerTool(

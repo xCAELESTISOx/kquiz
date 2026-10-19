@@ -4,6 +4,7 @@ import type {
   AddCardsResult,
   AuthStatus,
   Card,
+  Leech,
   NewCard,
   QueueItem,
   ReviewInput,
@@ -150,6 +151,8 @@ export const api = {
     request<{ results: ReviewResult[] }>("POST", "/reviews", { body: { reviews }, fallback: (m) => m.review(reviews) }),
 
   stats: () => request<Stats>("GET", "/reviews/stats", { fallback: (m) => m.stats() }),
+
+  leeches: () => request<{ items: Leech[] }>("GET", "/reviews/leeches", { fallback: () => ({ items: [] }) }),
 
   /** Scores a recording against the card. It is not a review: the rating is sent separately. */
   score: (cardId: number, wav: Uint8Array<ArrayBuffer>) =>
