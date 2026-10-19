@@ -11,6 +11,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from functools import lru_cache
+from unittest.mock import patch
 
 from .phones import CODA_PHONES, TargetPhone, decompose, is_syllable, syllable_phones
 
@@ -36,7 +37,17 @@ def clean_text(text: str) -> str:
 
 @lru_cache(maxsize=1)
 def _g2p():
-    from g2pkiwi import G2p
+    import nltk
+
+    try:
+        nltk.data.find("corpora/cmudict")
+    except LookupError:
+        from g2pkiwi import G2p
+    else:
+        # g2pkiwi calls nltk.download("cmudict") on import even when it is installed, which needs
+        # the network and a writable home; the deploy container has neither.
+        with patch.object(nltk, "download", return_value=True):
+            from g2pkiwi import G2p
 
     return G2p()
 
