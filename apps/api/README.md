@@ -45,7 +45,7 @@ All JSON. Everything except health and `/auth/status|login|register` needs the s
 - `POST /bulk/preview` `{ text }` → parsed lines without saving
 - `GET /:id`, `PATCH /:id` (partial; `""` clears an optional field), `DELETE /:id`
 
-Card: `{ id, korean, meaning, pronunciation, romanization, exampleKo, exampleMeaning, notes, tags, speakable, readyForSpeech, source, createdAt, updatedAt }`. Duplicates are detected ignoring spaces and punctuation. `readyForSpeech` is false when `korean` has non-Hangul text; such cards never become `speakable`.
+Card: `{ id, korean, meaning, pronunciation, romanization, examples, notes, tags, speakable, readyForSpeech, source, createdAt, updatedAt }`, where `examples` is up to 3 `{ ko, ru }` sentences (Claude must always send exactly 3 through MCP). Duplicates are detected ignoring spaces and punctuation. `readyForSpeech` is false when `korean` has non-Hangul text; such cards never become `speakable`.
 
 **Reviews** (`/api/reviews`)
 - `GET /queue?mode=meaning|speech&limit=50` → `{ items: [{ card, mode, due, state, reps, lapses }] }`, most overdue first; speech only for speakable cards

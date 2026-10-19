@@ -36,9 +36,13 @@ const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
 
 const SEED: NewCard[] = [
-  { korean: "안녕하세요", meaning: "здравствуйте", pronunciation: "안녕하세요", romanization: "annyeonghaseyo", exampleKo: "선생님, 안녕하세요!", exampleMeaning: "Здравствуйте, учитель!" },
+  { korean: "안녕하세요", meaning: "здравствуйте", pronunciation: "안녕하세요", romanization: "annyeonghaseyo", examples: [
+      { ko: "선생님, 안녕하세요!", ru: "Здравствуйте, учитель!" },
+      { ko: "여러분, 안녕하세요.", ru: "Здравствуйте, все." },
+      { ko: "안녕하세요, 처음 뵙겠습니다.", ru: "Здравствуйте, приятно познакомиться." },
+    ] },
   { korean: "감사합니다", meaning: "спасибо", pronunciation: "감사함니다", romanization: "gamsahamnida" },
-  { korean: "물", meaning: "вода", romanization: "mul", exampleKo: "물 좀 주세요.", exampleMeaning: "Дайте, пожалуйста, воды." },
+  { korean: "물", meaning: "вода", romanization: "mul", examples: [{ ko: "물 좀 주세요.", ru: "Дайте, пожалуйста, воды." }] },
   { korean: "괜찮아요", meaning: "всё в порядке", pronunciation: "괜차나요", romanization: "gwaenchanayo" },
   { korean: "맛있다", meaning: "вкусный", pronunciation: "마싣따", romanization: "masitda" },
 ];
@@ -189,8 +193,7 @@ export class MockApi {
       meaning: input.meaning.trim(),
       pronunciation: input.pronunciation ?? null,
       romanization: input.romanization ?? null,
-      exampleKo: input.exampleKo ?? null,
-      exampleMeaning: input.exampleMeaning ?? null,
+      examples: input.examples ?? [],
       notes: input.notes ?? null,
       tags: input.tags ?? [],
       speakable: readyForSpeech && syllables > 0 && syllables <= 12,

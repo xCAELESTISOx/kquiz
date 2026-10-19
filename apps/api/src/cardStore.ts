@@ -1,5 +1,5 @@
 import { and, desc, eq, lt, sql, type SQL } from "drizzle-orm";
-import { isKoreanOnly, isSpeakable, koreanKey, normalizeKorean, type CardPatch, type NewCard } from "./cards.js";
+import { isKoreanOnly, isSpeakable, koreanKey, normalizeKorean, type CardPatch, type Example, type NewCard } from "./cards.js";
 import type { Db } from "./db/client.js";
 import { cards, reviewStates } from "./db/schema.js";
 import { newReviewState, toStateRow, type ReviewMode } from "./review.js";
@@ -13,8 +13,7 @@ export type CardDto = {
   meaning: string;
   pronunciation: string | null;
   romanization: string | null;
-  exampleKo: string | null;
-  exampleMeaning: string | null;
+  examples: Example[];
   notes: string | null;
   tags: string[];
   speakable: boolean;
@@ -32,8 +31,7 @@ export function toCardDto(row: CardRow): CardDto {
     meaning: row.meaning,
     pronunciation: row.pronunciation,
     romanization: row.romanization,
-    exampleKo: row.exampleKo,
-    exampleMeaning: row.exampleMeaning,
+    examples: row.examples,
     notes: row.notes,
     tags: row.tags,
     speakable: row.speakable,
@@ -76,8 +74,7 @@ export function createCards(db: Db, inputs: NewCard[], source: CardSource, now =
           meaning: input.meaning,
           pronunciation: emptyToNull(input.pronunciation),
           romanization: emptyToNull(input.romanization),
-          exampleKo: emptyToNull(input.exampleKo),
-          exampleMeaning: emptyToNull(input.exampleMeaning),
+          examples: input.examples ?? [],
           notes: emptyToNull(input.notes),
           tags: uniqueTags(input.tags),
           speakable: (input.speakable ?? isSpeakable(korean)) && isKoreanOnly(korean),
@@ -158,8 +155,7 @@ export function updateCard(db: Db, id: number, patch: CardPatch, now = new Date(
         meaning: patch.meaning ?? current.meaning,
         pronunciation: optional(patch.pronunciation, current.pronunciation),
         romanization: optional(patch.romanization, current.romanization),
-        exampleKo: optional(patch.exampleKo, current.exampleKo),
-        exampleMeaning: optional(patch.exampleMeaning, current.exampleMeaning),
+        examples: patch.examples ?? current.examples,
         notes: optional(patch.notes, current.notes),
         tags: patch.tags ? uniqueTags(patch.tags) : current.tags,
         speakable: (patch.speakable ?? (patch.korean === undefined ? current.speakable : isSpeakable(korean))) && isKoreanOnly(korean),

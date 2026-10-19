@@ -989,16 +989,30 @@ p {
   text-wrap: balance;
 }
 
+.review-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .review-example {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-width: 100%;
-  padding: 12px 16px;
+  gap: 2px;
+  padding: 10px 14px;
   border-radius: var(--radius-sm);
   background: var(--surface-raised);
   border: 1px solid var(--border);
   font-size: 15px;
+  text-align: left;
+}
+
+.review-example .muted {
+  font-size: 13px;
 }
 
 .review-notes {

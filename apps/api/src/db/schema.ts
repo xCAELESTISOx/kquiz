@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import type { Example } from "../cards.js";
 import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 const timestamp = (name: string) => integer(name, { mode: "timestamp_ms" });
@@ -13,8 +14,7 @@ export const cards = sqliteTable(
     meaning: text("meaning").notNull(),
     pronunciation: text("pronunciation"),
     romanization: text("romanization"),
-    exampleKo: text("example_ko"),
-    exampleMeaning: text("example_meaning"),
+    examples: text("examples", { mode: "json" }).$type<Example[]>().notNull().default(sql`'[]'`),
     notes: text("notes"),
     tags: text("tags", { mode: "json" }).$type<string[]>().notNull().default(sql`'[]'`),
     speakable: integer("speakable", { mode: "boolean" }).notNull(),
