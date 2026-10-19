@@ -75,6 +75,9 @@ class Wav2Vec2Recognizer:
         vocab = tokenizer.get_vocab()
         self.vocab = [t for t, _ in sorted(vocab.items(), key=lambda kv: kv[1])]
         self.model = Wav2Vec2ForCTC.from_pretrained(name).eval()
+        # The tokenizer can list extra added tokens the CTC head has no output for.
+        size = self.model.config.vocab_size
+        self.vocab = (self.vocab + ["[UNK]"] * size)[:size]
         pad = tokenizer.pad_token
         if pad is not None and pad in vocab:
             # The CTC blank is the pad token; make sure it maps to BLANK whatever it is called.
