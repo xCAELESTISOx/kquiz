@@ -78,6 +78,15 @@ python -m app.eval run recordings/manifest.csv --json recordings/report.json
 
 Отчёт показывает: долю эталонов с баллом ≥ 90 (критерий плана), долю испорченных слогов, которые нашлись, сколько слогов помечено в обычных записях и скорость (p50/p95 и отношение ко времени речи).
 
+### Без своих записей
+
+```sh
+python -m app.dataset commons recordings/commons --limit 60
+python -m app.eval run recordings/commons/manifest.csv
+```
+
+Скачивает записи слов носителями с Wikimedia Commons (Lingua Libre, CC BY-SA, авторы в `CREDITS.tsv`). Каждая запись идёт в манифест дважды: как `native` с правильным текстом и как `broken` с текстом, который отличается ровно одним звуком (сказано 달, ожидается 딸). Изменения, которые правила произношения сводят на нет (학교 и так звучит как 학꾜), отбрасываются. Нужен доступ к `commons.wikimedia.org` и `upload.wikimedia.org`.
+
 ## Тесты
 
 ```sh
