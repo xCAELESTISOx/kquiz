@@ -9,6 +9,8 @@ import type { Config } from "./config.js";
 import type { Db } from "./db/client.js";
 import { cardRoutes } from "./routes/cards.js";
 import { reviewRoutes } from "./routes/reviews.js";
+import { scoreRoutes } from "./routes/score.js";
+import { httpScorer, type Scorer } from "./scorer.js";
 import { requireCloudflare } from "./security/origin.js";
 import { clientIp, rateLimit } from "./security/rateLimit.js";
 
@@ -18,13 +20,15 @@ export type AppDeps = {
   /** One-time code for binding the first passkey; undefined once one is bound. */
   setupCode?: string;
   webauthn?: WebAuthn;
+  /** Pronunciation scorer; defaults to services/scorer at `config.scorerUrl`. */
+  scorer?: Scorer;
   now?: () => Date;
 };
 
 // Generous for one person, low enough that a stolen session can't hammer the disk.
 const API_LIMIT = { limit: 300, windowMs: 60_000 };
 
-export function createApp({ db, config, setupCode, webauthn, now = () => new Date() }: AppDeps) {
+export function createApp({ db, config, setupCode, webauthn, scorer, now = () => new Date() }: AppDeps) {
   const app = new Hono<{ Variables: AuthVariables }>().basePath("/api");
 
   app.get("/health", (c) => c.json({ ok: true }));
@@ -40,8 +44,10 @@ export function createApp({ db, config, setupCode, webauthn, now = () => new Dat
 
   app.use("/cards/*", requireSession(db, config.secureCookies, now));
   app.use("/reviews/*", requireSession(db, config.secureCookies, now));
+  app.use("/score", requireSession(db, config.secureCookies, now));
   app.route("/cards", cardRoutes(db, now));
   app.route("/reviews", reviewRoutes(db, now));
+  app.route("/score", scoreRoutes(db, scorer ?? httpScorer(config.scorerUrl), now));
 
   app.notFound((c) => c.json({ error: "not_found" }, 404));
   app.onError((err, c) => {

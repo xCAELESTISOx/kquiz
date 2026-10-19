@@ -10,6 +10,7 @@ import type {
   ReviewInput,
   ReviewMode,
   ReviewResult,
+  ScoreResult,
   Stats,
 } from "./types";
 
@@ -126,6 +127,55 @@ export class MockApi {
     };
   }
 
+  /**
+   * Fake scoring, deterministic per word so the screen can be designed and screenshotted:
+   * words of two or more syllables get one wrong syllable, longer ones also a weak one.
+   */
+  score(cardId: number): ScoreResult {
+    const card = this.state.cards.find((c) => c.id === cardId);
+    if (!card) throw new Error("card not found");
+    const texts = card.korean.match(/[가-힣]/g) ?? [];
+    const prons = (card.pronunciation ?? card.korean).match(/[가-힣]/g) ?? [];
+    const sum = texts.reduce((n, ch) => n + ch.charCodeAt(0), 0);
+    const wrong = texts.length >= 2 ? sum % texts.length : -1;
+    const weak = texts.length >= 3 ? (wrong + 1) % texts.length : -1;
+    const syllables = texts.map((text, i) => ({
+      text,
+      pron: prons.length === texts.length ? prons[i]! : text,
+      status: i === wrong ? ("wrong" as const) : i === weak ? ("weak" as const) : ("ok" as const),
+    }));
+    const errors: ScoreResult["errors"] = [];
+    if (wrong >= 0) {
+      const onset = ONSETS[((syllables[wrong]!.pron.charCodeAt(0) - 0xac00) / 588) | 0]!;
+      errors.push(
+        onset[0] === "ㅇ"
+          ? { syllable: wrong, position: "vowel", kind: "substitution", status: "wrong", expected: { ipa: "ʌ", jamo: "ㅓ" }, heard: { ipa: "o", jamo: "ㅗ" } }
+          : {
+              syllable: wrong,
+              position: "onset",
+              kind: "substitution",
+              status: "wrong",
+              expected: { ipa: onset[1], jamo: onset[0] },
+              heard: onset[0] === "ㄷ" ? { ipa: "tʰ", jamo: "ㅌ" } : { ipa: "t", jamo: "ㄷ" },
+            },
+      );
+    }
+    if (weak >= 0) {
+      errors.push({ syllable: weak, position: "vowel", kind: "unclear", status: "weak", expected: { ipa: "a", jamo: "ㅏ" }, heard: { ipa: "a", jamo: "ㅏ" } });
+    }
+    const score = Math.round((100 * syllables.reduce((n, s) => n + (s.status === "ok" ? 0.97 : s.status === "weak" ? 0.8 : 0.4), 0)) / Math.max(syllables.length, 1));
+    const wrongCount = syllables.filter((s) => s.status === "wrong").length;
+    return {
+      attemptId: Date.now(),
+      cardId,
+      score,
+      pronunciation: syllables.map((s) => s.pron).join(""),
+      syllables,
+      errors,
+      suggestedRating: wrongCount === 0 ? "good" : wrongCount / syllables.length <= 0.5 ? "hard" : "again",
+    };
+  }
+
   private insert(input: NewCard, source: CardSource): AddCardResult {
     const korean = normalizeKorean(input.korean);
     const existing = this.state.cards.find((c) => dedupeKey(c.korean) === dedupeKey(korean));
@@ -159,6 +209,12 @@ export class MockApi {
     this.storage.setItem(KEY, JSON.stringify(this.state));
   }
 }
+
+// Initial consonants in Unicode order, with their IPA, for the fake score.
+const ONSETS: [string, string][] = [
+  ["ㄱ", "k"], ["ㄲ", "k͈"], ["ㄴ", "n"], ["ㄷ", "t"], ["ㄸ", "t͈"], ["ㄹ", "ɾ"], ["ㅁ", "m"], ["ㅂ", "p"], ["ㅃ", "p͈"],
+  ["ㅅ", "s"], ["ㅆ", "s͈"], ["ㅇ", ""], ["ㅈ", "tɕ"], ["ㅉ", "t͈ɕ"], ["ㅊ", "tɕʰ"], ["ㅋ", "kʰ"], ["ㅌ", "tʰ"], ["ㅍ", "pʰ"], ["ㅎ", "h"],
+];
 
 function interval(rating: RatingName, reps: number): number {
   switch (rating) {

@@ -1,5 +1,6 @@
 // Test helpers: an app over an in-memory database, a fake authenticator and a cookie jar.
 import type { WebAuthn } from "./auth/routes.js";
+import type { Scorer } from "./scorer.js";
 import { createServer } from "./server.js";
 import { loadConfig } from "./config.js";
 import { openDb } from "./db/client.js";
@@ -41,24 +42,26 @@ export function fakeWebAuthn(): WebAuthn {
   };
 }
 
-export function testApp(env: Record<string, string> = {}) {
+export function testApp(env: Record<string, string> = {}, deps: { scorer?: Scorer } = {}) {
   const config = loadConfig({ ORIGIN, NODE_ENV: "test", ...env });
   const db = openDb(":memory:");
   const clock = { now: new Date("2026-10-19T10:00:00Z") };
-  const app = createServer({ db, config, setupCode: SETUP_CODE, webauthn: fakeWebAuthn(), now: () => clock.now });
+  const app = createServer({ db, config, setupCode: SETUP_CODE, webauthn: fakeWebAuthn(), scorer: deps.scorer, now: () => clock.now });
 
   let cookie = "";
   let csrfToken = "";
   /** Paths are under /api unless they start with "//", which marks a path from the site root. */
+  /** A `Uint8Array` body is sent as is (audio/wav); anything else as JSON. */
   async function request(path: string, init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) {
+    const raw = init.body instanceof Uint8Array;
     const headers: Record<string, string> = { origin: ORIGIN, ...init.headers };
     if (cookie) headers.cookie = cookie;
     if (csrfToken) headers["x-csrf-token"] ??= csrfToken;
-    if (init.body !== undefined) headers["content-type"] = "application/json";
+    if (init.body !== undefined) headers["content-type"] ??= raw ? "audio/wav" : "application/json";
     const res = await app.request(path.startsWith("//") ? path.slice(1) : `/api${path}`, {
       method: init.method ?? (init.body === undefined ? "GET" : "POST"),
       headers,
-      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      body: init.body === undefined ? undefined : raw ? (init.body as Uint8Array) : JSON.stringify(init.body),
     });
     const set = res.headers.get("set-cookie");
     if (set) cookie = set.split(";")[0]!;

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, pendingReviewCount } from "../lib/api";
 import { cardsWord } from "../lib/plural";
 import type { QueueItem, Stats } from "../lib/types";
+import { MicIcon } from "../ui/icons";
 
 const PREVIEW = 14;
 
@@ -22,6 +23,7 @@ export function TodayScreen() {
   }, []);
 
   const due = stats?.due.meaning ?? 0;
+  const speechDue = stats?.due.speech ?? 0;
   const pending = pendingReviewCount();
   const today = new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
 
@@ -51,7 +53,11 @@ export function TodayScreen() {
             <span lang="ko" className="word-wall-done">
               다 했어요
             </span>
-            <span className="muted">На сейчас всё повторено. Новые слова можно добавить в любой момент.</span>
+            <span className="muted">
+              {speechDue > 0
+                ? `Значения повторены. Осталось проговорить вслух: ${speechDue}.`
+                : "На сейчас всё повторено. Новые слова можно добавить в любой момент."}
+            </span>
           </p>
         )}
         {!stats && !error && <div className="skeleton" />}
@@ -84,11 +90,18 @@ export function TodayScreen() {
       </div>
 
       <div className="bottom-actions">
-        {due > 0 ? (
+        {due > 0 && (
           <a className="button primary" href="#/review">
             Повторить {due} {cardsWord(due)}
           </a>
-        ) : (
+        )}
+        {speechDue > 0 && (
+          <a className={`button${due > 0 ? "" : " primary"}`} href="#/speech">
+            <MicIcon />
+            Произношение · {speechDue}
+          </a>
+        )}
+        {due === 0 && speechDue === 0 && (
           <a className="button" href="#/add">
             Добавить слова
           </a>
