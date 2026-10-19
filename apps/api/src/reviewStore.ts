@@ -2,6 +2,7 @@ import { and, asc, count, eq, lte, sql } from "drizzle-orm";
 import { toCardDto, type CardDto } from "./cardStore.js";
 import type { Db } from "./db/client.js";
 import { cards, reviewLog, reviewStates } from "./db/schema.js";
+import { getFsrsSetup, schedulerFor } from "./fsrs.js";
 import { applyRating, fromStateRow, toStateRow, type RatingName, type ReviewMode } from "./review.js";
 
 export type QueueItem = { card: CardDto; mode: ReviewMode; due: string; state: number; reps: number; lapses: number };
@@ -75,7 +76,8 @@ function applyOne(tx: Pick<Db, "select" | "update" | "insert">, review: ReviewIn
   // A clock from the future can't be trusted, and FSRS can't go back before the last review.
   let at = review.reviewedAt > now ? now : review.reviewedAt;
   if (row.lastReview && at < row.lastReview) at = row.lastReview;
-  const next = toStateRow(applyRating(fromStateRow(row), review.rating, at));
+  const scheduler = schedulerFor(getFsrsSetup(tx, review.mode));
+  const next = toStateRow(applyRating(fromStateRow(row), review.rating, at, scheduler));
   tx.update(reviewStates).set(next).where(where).run();
   tx.insert(reviewLog)
     .values({

@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { AuthVariables } from "../auth/sessions.js";
 import type { Db } from "../db/client.js";
+import { RETENTION_RANGE, setDesiredRetention } from "../fsrs.js";
+import { fsrsStatus } from "../fsrsOptimizer.js";
 import { ratings } from "../review.js";
 import { applyReviews, dueQueue, getStats } from "../reviewStore.js";
 
@@ -39,6 +41,18 @@ export function reviewRoutes(db: Db, now: () => Date) {
   });
 
   app.get("/stats", (c) => c.json(getStats(db, now())));
+
+  app.get("/fsrs", (c) => c.json({ modes: fsrsStatus(db), retentionRange: RETENTION_RANGE }));
+
+  // Target retention per mode: lower means fewer reviews a day and more forgotten cards.
+  app.put("/fsrs", async (c) => {
+    const body = z
+      .object({ mode, desiredRetention: z.number().min(RETENTION_RANGE.min).max(RETENTION_RANGE.max) })
+      .safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "invalid_request", issues: body.error.issues }, 400);
+    setDesiredRetention(db, body.data.mode, Math.round(body.data.desiredRetention * 100) / 100);
+    return c.json({ modes: fsrsStatus(db), retentionRange: RETENTION_RANGE });
+  });
 
   return app;
 }

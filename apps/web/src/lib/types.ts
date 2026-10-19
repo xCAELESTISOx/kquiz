@@ -76,6 +76,22 @@ export interface Stats {
   reviewedToday: number;
 }
 
+export interface FsrsModeStatus {
+  mode: ReviewMode;
+  desiredRetention: number;
+  /** True once intervals use parameters fitted to the owner's own reviews. */
+  personal: boolean;
+  reviews: number;
+  minReviews: number;
+  trainedOnReviews: number | null;
+  optimizedAt: string | null;
+}
+
+export interface FsrsStatus {
+  modes: FsrsModeStatus[];
+  retentionRange: { min: number; max: number };
+}
+
 export interface AuthStatus {
   authenticated: boolean;
   setupRequired: boolean;

@@ -1,4 +1,4 @@
-import { createEmptyCard, fsrs, Rating, type Card, type Grade, type State } from "ts-fsrs";
+import { createEmptyCard, fsrs, Rating, type Card, type FSRS, type Grade, type State } from "ts-fsrs";
 
 export type ReviewMode = "meaning" | "speech";
 
@@ -11,13 +11,13 @@ export const ratings = {
 
 export type RatingName = keyof typeof ratings;
 
-const scheduler = fsrs({ enable_fuzz: true });
+const defaultScheduler = fsrs({ enable_fuzz: true });
 
 export function newReviewState(now = new Date()): Card {
   return createEmptyCard(now);
 }
 
-export function applyRating(state: Card, rating: RatingName, now = new Date()): Card {
+export function applyRating(state: Card, rating: RatingName, now = new Date(), scheduler: FSRS = defaultScheduler): Card {
   return scheduler.next(state, now, ratings[rating]).card;
 }
 
