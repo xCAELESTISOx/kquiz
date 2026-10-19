@@ -12,6 +12,9 @@ export type QueueItem = { card: CardDto; mode: ReviewMode; due: string; state: n
 // voice is a poor model for training the ear, so until the recording is there the card waits.
 const hasCurrentAudio = sql`exists (select 1 from ${cardAudio} where ${cardAudio.cardId} = ${cards.id} and ${cardAudio.text} = ${cards.korean})`;
 
+/** Review states a mode can actually show, for queries over `review_states` joined with `cards`; paused cards never. */
+export const reviewable = sql`${cards.suspended} = 0 and (${reviewStates.mode} = 'meaning' or (${reviewStates.mode} = 'speech' and ${cards.speakable} = 1) or (${reviewStates.mode} = 'listening' and ${hasCurrentAudio}))`;
+
 /**
  * Cards due in a mode, most overdue first, with the never-reviewed ones spread among them at random
  * instead of in a block at the end. Only speakable cards enter the pronunciation queue, only cards
@@ -125,8 +128,7 @@ export function getStats(db: Db, now = new Date(), timeZone = "UTC"): Stats {
     .where(
       and(
         lte(reviewStates.due, now),
-        eq(cards.suspended, false),
-        sql`(${reviewStates.mode} = 'meaning' or (${reviewStates.mode} = 'speech' and ${cards.speakable} = 1) or (${reviewStates.mode} = 'listening' and ${hasCurrentAudio}))`,
+        reviewable,
       ),
     )
     .groupBy(reviewStates.mode)

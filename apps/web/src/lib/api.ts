@@ -18,6 +18,7 @@ import type {
   ScoreResult,
   Settings,
   Stats,
+  StatsOverview,
   UpdateCardResult,
 } from "./types";
 
@@ -205,6 +206,10 @@ export const api = {
     request<{ results: ReviewResult[] }>("POST", "/reviews", { body: { reviews }, fallback: (m) => m.review(reviews) }),
 
   stats: () => request<Stats>("GET", "/reviews/stats", { fallback: (m) => m.stats() }),
+
+  /** The statistics screen, with days in the phone's time zone. */
+  statsOverview: () =>
+    request<StatsOverview>("GET", `/stats?tz=${-new Date().getTimezoneOffset()}`, { fallback: (m) => m.statsOverview() }),
 
   leeches: () => request<{ items: Leech[] }>("GET", "/reviews/leeches", { fallback: () => ({ items: [] }) }),
 

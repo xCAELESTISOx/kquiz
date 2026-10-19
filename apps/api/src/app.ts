@@ -11,6 +11,7 @@ import { cardRoutes } from "./routes/cards.js";
 import { exportRoutes } from "./routes/export.js";
 import { reviewRoutes } from "./routes/reviews.js";
 import { scoreRoutes } from "./routes/score.js";
+import { statsRoutes } from "./routes/stats.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { httpScorer, type Scorer } from "./scorer.js";
 import { requireCloudflare } from "./security/origin.js";
@@ -47,12 +48,14 @@ export function createApp({ db, config, setupCode, webauthn, scorer, now = () =>
   app.use("/cards/*", requireSession(db, config.secureCookies, now));
   app.use("/reviews/*", requireSession(db, config.secureCookies, now));
   app.use("/score", requireSession(db, config.secureCookies, now));
+  app.use("/stats", requireSession(db, config.secureCookies, now));
   app.use("/settings", requireSession(db, config.secureCookies, now));
   app.use("/export", requireSession(db, config.secureCookies, now));
   app.route("/cards", cardRoutes(db, now));
   app.route("/reviews", reviewRoutes(db, now, config.timeZone));
   app.route("/settings", settingsRoutes(db));
   app.route("/export", exportRoutes(db, now));
+  app.route("/stats", statsRoutes(db, now, config.timeZone));
   app.route("/score", scoreRoutes(db, scorer ?? httpScorer(config.scorerUrl), now));
 
   app.notFound((c) => c.json({ error: "not_found" }, 404));
