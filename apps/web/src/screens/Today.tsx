@@ -153,7 +153,7 @@ export function TodayScreen() {
             {speechDue > 0 && (
               <a className={`button${due > 0 || listenDue > 0 ? "" : " primary"}`} href="#/speech">
                 <MicIcon />
-                Произношение
+                Вслух
                 <span className="button-count">{speechDue}</span>
               </a>
             )}
