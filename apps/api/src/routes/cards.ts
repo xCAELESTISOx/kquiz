@@ -2,9 +2,10 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { AuthVariables } from "../auth/sessions.js";
 import { getCardAudio } from "../cardAudio.js";
-import { createCards, deleteCard, getCard, listCards, updateCard } from "../cardStore.js";
-import { cardPatchSchema, newCardSchema, parseBulk } from "../cards.js";
+import { cardCounts, createCards, deleteCard, getCard, listCards, listTags, updateCard } from "../cardStore.js";
+import { newCardSchema, parseBulk } from "../cards.js";
 import type { Db } from "../db/client.js";
+import { introduceEarly } from "../newCards.js";
 
 export const MAX_BATCH = 50;
 
@@ -19,7 +20,14 @@ const listQuery = z.object({
     .transform((v) => v !== undefined),
   limit: z.coerce.number().int().min(1).max(200).optional(),
   before: z.coerce.number().int().positive().optional(),
+  status: z.enum(["queued", "paused"]).optional(),
 });
+
+// Pausing is the owner's call, so `suspended` is only in the app's patch, not in Claude's.
+const appPatchSchema = newCardSchema
+  .extend({ tags: newCardSchema.shape.tags.unwrap(), suspended: z.boolean() })
+  .partial()
+  .refine((patch) => Object.keys(patch).length > 0, "nothing to update");
 
 const bulkBody = z.union([
   z.object({ text: z.string().max(100_000) }),
@@ -34,6 +42,9 @@ export function cardRoutes(db: Db, now: () => Date) {
     if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
     return c.json(listCards(db, query.data));
   });
+
+  // For the filter chips of the cards screen.
+  app.get("/summary", (c) => c.json({ counts: cardCounts(db), tags: listTags(db) }));
 
   app.post("/", async (c) => {
     const body = newCardSchema.safeParse(await c.req.json().catch(() => null));
@@ -92,12 +103,21 @@ export function cardRoutes(db: Db, now: () => Date) {
   app.patch("/:id", async (c) => {
     const id = idParam.safeParse(c.req.param("id"));
     if (!id.success) return c.json({ error: "not_found" }, 404);
-    const patch = cardPatchSchema.safeParse(await c.req.json().catch(() => null));
+    const patch = appPatchSchema.safeParse(await c.req.json().catch(() => null));
     if (!patch.success) return c.json({ error: "invalid_request", issues: patch.error.issues }, 400);
     const result = updateCard(db, id.data, patch.data, now());
     if ("card" in result) return c.json(result);
     if (result.error === "duplicate") return c.json(result, 409);
     return c.json(result, 404);
+  });
+
+  // Pulls a card out of the new-card queue into reviews now, past the daily allowance.
+  app.post("/:id/introduce", (c) => {
+    const id = idParam.safeParse(c.req.param("id"));
+    const result = id.success ? introduceEarly(db, id.data, now()) : "not_found";
+    if (result === "not_found") return c.json({ error: "not_found" }, 404);
+    if (result === "not_queued") return c.json({ error: "not_queued" }, 409);
+    return c.json({ card: getCard(db, id.data!) });
   });
 
   // Only the app deletes cards; the MCP server for Claude has no delete (docs/PLAN.md §6).

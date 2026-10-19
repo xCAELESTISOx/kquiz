@@ -4,7 +4,7 @@ import { createEmptyCard, type Card } from "ts-fsrs";
 import type { Db } from "./db/client.js";
 import { fsrsSettings, reviewLog, reviewStates } from "./db/schema.js";
 import { currentWeights, getFsrsSetup, schedulerFor } from "./fsrs.js";
-import { reviewModes } from "./cardStore.js";
+import { reviewModes } from "./newCards.js";
 import { applyRating, ratings, type RatingName, type ReviewMode } from "./review.js";
 
 /** The FSRS authors suggest about this many reviews before personal weights beat the defaults. */

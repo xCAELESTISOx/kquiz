@@ -102,6 +102,15 @@ export function TodayScreen() {
         </dl>
       )}
 
+      {stats && stats.newCards.queued > 0 && (
+        <a className="queue-link" href="#/cards/queued">
+          <span>
+            В очереди новых: <strong>{stats.newCards.queued}</strong>
+          </span>
+          <span className="muted">по {stats.newCards.limit} в день</span>
+        </a>
+      )}
+
       {stats && <ScheduleSettings />}
 
       <div aria-live="polite">

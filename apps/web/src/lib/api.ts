@@ -4,6 +4,10 @@ import type {
   AddCardsResult,
   AuthStatus,
   Card,
+  CardFilter,
+  CardList,
+  CardPatch,
+  CardSummary,
   FsrsStatus,
   NewCard,
   QueueItem,
@@ -11,7 +15,9 @@ import type {
   ReviewMode,
   ReviewResult,
   ScoreResult,
+  Settings,
   Stats,
+  UpdateCardResult,
 } from "./types";
 
 export class ApiError extends Error {
@@ -141,6 +147,39 @@ export const api = {
 
   addCards: (cards: NewCard[]) =>
     request<AddCardsResult>("POST", "/cards/bulk", { body: { cards }, fallback: (m) => m.addCards(cards) }),
+
+  cards(query: { q?: string; tag?: string; status?: CardFilter; before?: number; limit?: number } = {}) {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== "") params.set(key, String(value));
+    return request<CardList>("GET", `/cards?${params}`, { fallback: (m) => m.cards(query) });
+  },
+
+  cardSummary: () => request<CardSummary>("GET", "/cards/summary", { fallback: (m) => m.cardSummary() }),
+
+  card: (id: number) => request<{ card: Card }>("GET", `/cards/${id}`, { fallback: (m) => ({ card: m.card(id) }) }),
+
+  async updateCard(id: number, patch: CardPatch): Promise<UpdateCardResult> {
+    const res = await request<{ card: Card } | { error: "duplicate"; existingId: number }>("PATCH", `/cards/${id}`, {
+      body: patch,
+      accept: [409],
+      fallback: (m) => ({ card: m.updateCard(id, patch) }),
+    });
+    return "card" in res ? { status: "saved", card: res.card } : { status: "duplicate", existingId: res.existingId };
+  },
+
+  deleteCard: (id: number) => request<{ ok: true }>("DELETE", `/cards/${id}`, { fallback: (m) => m.deleteCard(id) }),
+
+  /** Takes a queued card into reviews now, outside the daily allowance. */
+  introduceCard: (id: number) =>
+    request<{ card: Card }>("POST", `/cards/${id}/introduce`, { body: {}, fallback: (m) => ({ card: m.introduce(id) }) }),
+
+  settings: () => request<Settings>("GET", "/settings", { fallback: (m) => m.settings() }),
+
+  updateSettings: (patch: Partial<Settings>) =>
+    request<Settings>("PATCH", "/settings", { body: patch, fallback: (m) => m.updateSettings(patch) }),
+
+  /** A JSON file with every card, its schedule and the review history; opened as a download. */
+  exportUrl: "/api/export",
 
   queue: (mode: ReviewMode, limit = 50) =>
     request<{ items: QueueItem[] }>("GET", `/reviews/queue?mode=${mode}&limit=${limit}`, {

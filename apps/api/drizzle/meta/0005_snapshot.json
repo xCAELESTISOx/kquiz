@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "da17ef43-8670-4d6c-bdde-e9abaeb315e5",
+  "id": "9979f06b-5a16-4551-98d3-676ae1539c7e",
   "prevId": "a0c7acb5-e151-4f8f-b53a-56989a5f7d6b",
   "tables": {
     "attempts": {
@@ -405,6 +405,28 @@
           "autoincrement": false,
           "default": "'ko'"
         },
+        "suspended": {
+          "name": "suspended",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "introduced_at": {
+          "name": "introduced_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "introduction": {
+          "name": "introduction",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -427,68 +449,15 @@
             "korean_key"
           ],
           "isUnique": true
+        },
+        "cards_introduced": {
+          "name": "cards_introduced",
+          "columns": [
+            "introduced_at"
+          ],
+          "isUnique": false
         }
       },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "fsrs_settings": {
-      "name": "fsrs_settings",
-      "columns": {
-        "mode": {
-          "name": "mode",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "desired_retention": {
-          "name": "desired_retention",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0.9
-        },
-        "weights": {
-          "name": "weights",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "trained_on_reviews": {
-          "name": "trained_on_reviews",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "optimized_at": {
-          "name": "optimized_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "checked_at": {
-          "name": "checked_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "checked_on_reviews": {
-          "name": "checked_on_reviews",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -957,6 +926,30 @@
           "name": "review_states_card_id_mode_pk"
         }
       },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "settings": {
+      "name": "settings",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
     }

@@ -17,6 +17,7 @@ pnpm db:generate    # after editing src/db/schema.ts; migrations in drizzle/ app
 | `MCP_REDIRECT_URIS` | Claude's callbacks | Comma-separated OAuth redirect URIs a client may register |
 | `ORIGIN_SECRET` | — | Required in production. Cloudflare adds it as header `x-kquiz-origin` (Transform Rule); requests without it get 403 |
 | `SETUP_CODE` | random, printed to the log | Code for binding the first passkey; useless once one is bound |
+| `TIME_ZONE` | `Asia/Seoul` | Where "today" starts: reviewed today and the daily new-card allowance |
 | `SCORER_URL` | `http://127.0.0.1:8788` | services/scorer; it listens on localhost only |
 | `HOST` / `PORT` | `127.0.0.1` / `8787` | Only Caddy on the same host talks to the API |
 
@@ -39,22 +40,30 @@ All JSON. Everything except health and `/auth/status|login|register` needs the s
 - `POST /logout`, `GET /passkeys`, `DELETE /passkeys/:id` (the last passkey can't be removed)
 
 **Cards** (`/api/cards`)
-- `GET /?q=&tag=&notReady=1&limit=50&before=<id>` → `{ cards, nextBefore }`, newest first
+- `GET /?q=&tag=&notReady=1&status=queued|paused&limit=50&before=<id>` → `{ cards, nextBefore }`, newest first
+- `GET /summary` → `{ counts: { all, queued, paused }, tags: [{ tag, count }] }`
 - `POST /` card → `201 { card }`, `409 { error: "duplicate", existingId }`
 - `POST /bulk` `{ text }` (lines `한국어 — перевод`) or `{ cards: [...] }`, ≤ 50 → `{ created, duplicates, rejected }`
 - `POST /bulk/preview` `{ text }` → parsed lines without saving
-- `GET /:id`, `PATCH /:id` (partial; `""` clears an optional field), `DELETE /:id`
+- `GET /:id`, `PATCH /:id` (partial; `""` clears an optional field; `suspended` pauses), `DELETE /:id`
+- `POST /:id/introduce` → `{ card }`: takes a queued card into reviews now, outside the daily allowance; `409 not_queued`
 
-Card: `{ id, korean, meaning, pronunciation, romanization, examples, notes, tags, speakable, readyForSpeech, source, createdAt, updatedAt }`, where `examples` is up to 3 `{ ko, ru }` sentences (Claude must always send exactly 3 through MCP). Duplicates are detected ignoring spaces and punctuation. `readyForSpeech` is false when `korean` has non-Hangul text; such cards never become `speakable`.
+Card: `{ id, korean, meaning, pronunciation, romanization, examples, notes, tags, speakable, readyForSpeech, source, suspended, queued, createdAt, updatedAt }`, where `examples` is up to 3 `{ ko, ru }` sentences (Claude must always send exactly 3 through MCP). Duplicates are detected ignoring spaces and punctuation. `readyForSpeech` is false when `korean` has non-Hangul text; such cards never become `speakable`.
+
+**New-card queue** (`src/newCards.ts`). Cards Claude adds through MCP don't enter reviews at once: they are `queued` and come in `newPerDay` a day (default 15), picked at random, the first time the queue or stats are read that day (`TIME_ZONE` midnight). Cards added in the app, one or in bulk, skip the queue. A paused (`suspended`) card is in no review queue and isn't picked from the new-card queue.
+
+**Settings** (`/api/settings`): `GET` → `{ newPerDay }`, `PATCH { newPerDay: 0–200 }`.
+
+**Export** (`/api/export`): `GET` → a JSON download (`kquiz-YYYY-MM-DD.json`): `{ app, version, exportedAt, settings, cards (with reviewStates), reviewLog, attempts }`.
 
 **Reviews** (`/api/reviews`)
-- `GET /queue?mode=meaning|speech|listening&limit=50` → `{ items: [{ card, mode, due, state, reps, lapses }] }`, most overdue first; speech only for speakable cards, listening only for cards whose recording is made from their current Korean (the phone's voice is no model for the ear)
+- `GET /queue?mode=meaning|speech|listening&limit=50` → `{ items: [{ card, mode, due, state, reps, lapses }] }`, most overdue first with never-reviewed cards spread among them at random; speech only for speakable cards, listening only for cards whose recording is made from their current Korean (the phone's voice is no model for the ear), paused cards never
 - `POST /` `{ reviews: [{ id: uuid, cardId, mode, rating: again|hard|good|easy, reviewedAt, elapsedMs? }] }` (≤ 200) → `{ results: [{ id, status: applied|duplicate|card_not_found, due? }] }`. A resent `id` is a no-op; a batch is applied in `reviewedAt` order.
-- `GET /stats` → `{ cards, due: { meaning, speech, listening }, reviewedToday }` (UTC day)
+- `GET /stats` → `{ cards, due: { meaning, speech, listening }, reviewedToday, newCards: { introduced, limit, queued } }` (day in `TIME_ZONE`)
 - `GET /fsrs` → `{ modes: [{ mode, desiredRetention, personal, reviews, minReviews, trainedOnReviews, optimizedAt }], retentionRange: { min, max } }`
 - `PUT /fsrs` `{ mode, desiredRetention }` (0.85–0.95) → same as `GET /fsrs`
 
-FSRS weights are fitted per mode to the owner's own `review_log` (`src/fsrsOptimizer.ts`, fsrs-rs via `@open-spaced-repetition/binding`): first once a mode has 1000 reviews, then at most monthly when there are new ones. A fit is kept only if it predicts that history better than the current weights; then stability and difficulty are replayed with it, due dates stay. Days between reviews are counted in `TIMEZONE` (default `Asia/Seoul`), starting at 4 am.
+FSRS weights are fitted per mode to the owner's own `review_log` (`src/fsrsOptimizer.ts`, fsrs-rs via `@open-spaced-repetition/binding`): first once a mode has 1000 reviews, then at most monthly when there are new ones. A fit is kept only if it predicts that history better than the current weights; then stability and difficulty are replayed with it, due dates stay. Days between reviews are counted in `TIME_ZONE` (default `Asia/Seoul`), starting at 4 am.
 
 **Pronunciation** (`/api/score`)
 - `POST /?cardId=` with the recording as the body (`content-type: audio/wav`, ≤ 1 MB, ≤ 10 s; the web app sends 16 kHz mono 16-bit PCM) → `{ attemptId, cardId, score, pronunciation, syllables: [{ text, pron, status: ok|weak|wrong }], errors: [{ syllable, position, kind, status, expected, heard }], suggestedRating }`. Fields are the scorer's (services/scorer/README.md).
