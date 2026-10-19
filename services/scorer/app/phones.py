@@ -19,11 +19,13 @@ OTHER = "?"  # a model token we could not map; shows up as an unknown sound
 @dataclass(frozen=True)
 class Phone:
     ipa: str
-    kind: str  # "C" consonant, "V" vowel, "G" glide
+    kind: str  # "C" consonant, "V" vowel (diphthongs included)
     jamo: str  # shown to the user
     place: str = ""
     manner: str = ""
     phonation: str = ""  # lenis / aspirated / tense / "" for sonorants
+    glide: str = ""  # diphthongs: j / w / ɰ
+    base: str = ""  # diphthongs: the vowel after the glide
 
 
 _INVENTORY = [
@@ -53,9 +55,17 @@ _INVENTORY = [
     Phone("ɯ", "V", "ㅡ"),
     Phone("i", "V", "ㅣ"),
     Phone("e", "V", "ㅔ"),  # ㅐ and ㅔ are one vowel in Seoul speech
-    Phone("j", "G", "y"),
-    Phone("w", "G", "w"),
-    Phone("ɰ", "G", "ㅢ"),
+    # Diphthongs are single units, as in the acoustic model's label set.
+    Phone("ja", "V", "ㅑ", glide="j", base="a"),
+    Phone("je", "V", "ㅖ", glide="j", base="e"),  # ㅒ and ㅖ
+    Phone("jʌ", "V", "ㅕ", glide="j", base="ʌ"),
+    Phone("jo", "V", "ㅛ", glide="j", base="o"),
+    Phone("ju", "V", "ㅠ", glide="j", base="u"),
+    Phone("wa", "V", "ㅘ", glide="w", base="a"),
+    Phone("we", "V", "ㅚ", glide="w", base="e"),  # ㅙ, ㅚ and ㅞ in Seoul speech
+    Phone("wʌ", "V", "ㅝ", glide="w", base="ʌ"),
+    Phone("wi", "V", "ㅟ", glide="w", base="i"),
+    Phone("ɰi", "V", "ㅢ", glide="ɰ", base="i"),
 ]
 
 PHONES: dict[str, Phone] = {p.ipa: p for p in _INVENTORY}
@@ -90,28 +100,11 @@ ONSET_PHONES = {
 }
 
 VOWEL_PHONES = {
-    "ㅏ": ["a"],
-    "ㅐ": ["e"],
-    "ㅑ": ["j", "a"],
-    "ㅒ": ["j", "e"],
-    "ㅓ": ["ʌ"],
-    "ㅔ": ["e"],
-    "ㅕ": ["j", "ʌ"],
-    "ㅖ": ["j", "e"],
-    "ㅗ": ["o"],
-    "ㅘ": ["w", "a"],
-    "ㅙ": ["w", "e"],
-    "ㅚ": ["w", "e"],
-    "ㅛ": ["j", "o"],
-    "ㅜ": ["u"],
-    "ㅝ": ["w", "ʌ"],
-    "ㅞ": ["w", "e"],
-    "ㅟ": ["w", "i"],
-    "ㅠ": ["j", "u"],
-    "ㅡ": ["ɯ"],
-    "ㅢ": ["ɰ", "i"],
-    "ㅣ": ["i"],
-}
+    "ㅏ": ["a"], "ㅐ": ["e"], "ㅑ": ["ja"], "ㅒ": ["je"], "ㅓ": ["ʌ"], "ㅔ": ["e"],
+    "ㅕ": ["jʌ"], "ㅖ": ["je"], "ㅗ": ["o"], "ㅘ": ["wa"], "ㅙ": ["we"], "ㅚ": ["we"],
+    "ㅛ": ["jo"], "ㅜ": ["u"], "ㅝ": ["wʌ"], "ㅞ": ["we"], "ㅟ": ["wi"], "ㅠ": ["ju"],
+    "ㅡ": ["ɯ"], "ㅢ": ["ɰi"], "ㅣ": ["i"],
+}  # fmt: skip
 
 # Codas are neutralised to seven sounds; complex codas keep the one that is
 # pronounced before a pause (g2p already resolves them in context).
@@ -238,15 +231,21 @@ _BASE = {
     "æ": "e",
     "ø": "e",
     "y": "i",
-    "j": "j",
-    "w": "w",
-    "ɰ": "ɰ",
-    "ɥ": "w",
-    "ʋ": "w",
 }
 
 _TENSE_OF = {"k": "k͈", "t": "t͈", "p": "p͈", "tɕ": "t͈ɕ", "s": "s͈"}
 _ASPIRATED_OF = {"k": "kʰ", "t": "tʰ", "p": "pʰ", "tɕ": "tɕʰ"}
+
+# Labels of slplab/wav2vec2-xls-r-300m_phone-mfa_korean: romanised jamo, upper
+# case for onsets and vowels, lower-case k/p/t for unreleased codas.
+SLPLAB_LABELS = {
+    "G": "k", "GG": "k͈", "Kh": "kʰ", "k": "k", "D": "t", "DD": "t͈", "Th": "tʰ", "t": "t",
+    "B": "p", "BB": "p͈", "Ph": "pʰ", "p": "p", "J": "tɕ", "JJ": "t͈ɕ", "CHh": "tɕʰ",
+    "S": "s", "SS": "s͈", "H": "h", "M": "m", "N": "n", "NG": "ŋ", "L": "l", "R": "l",
+    "A": "a", "EO": "ʌ", "O": "o", "U": "u", "EU": "ɯ", "I": "i", "E": "e",
+    "iA": "ja", "iE": "je", "iEO": "jʌ", "iO": "jo", "iU": "ju",
+    "oA": "wa", "oE": "we", "uEO": "wʌ", "uI": "wi", "euI": "ɰi",
+}  # fmt: skip
 
 SPECIAL_TOKENS = {"<pad>", "<s>", "</s>", "<unk>", "|", "[PAD]", "[UNK]", "", " ", "sil", "sp", "spn"}
 
@@ -259,6 +258,8 @@ def normalize_token(token: str) -> str | None:
     """
     if token in SPECIAL_TOKENS or token.startswith("<") or token.startswith("["):
         return BLANK
+    if token in SLPLAB_LABELS:
+        return SLPLAB_LABELS[token]
     s = unicodedata.normalize("NFD", token)
     tense = any(m in s for m in _TENSE_MARKS)
     aspirated = "ʰ" in s or (s[-1:] == "h" and s[:-1] in _ASPIRATED_OF)
@@ -292,28 +293,36 @@ _NEAR_VOWELS = {
     frozenset({"ɯ", "i"}): 0.6,
     frozenset({"a", "e"}): 0.6,
 }
-_GLIDE_VOWEL = {
-    frozenset({"j", "i"}): 0.4,
-    frozenset({"w", "u"}): 0.4,
-    frozenset({"w", "o"}): 0.5,
-    frozenset({"ɰ", "ɯ"}): 0.4,
-}
+# Dropping the glide of a diphthong is a near miss; for ㅖ (계 [게]) and ㅢ
+# (희망 [히망], 의 [에]) the standard allows it, so it costs no more than an accepted variant.
+_GLIDE_LOSS = {"je": 0.3, "ɰi": 0.3}
+_ACCEPTED = {frozenset({"ɰi", "e"}): 0.3}  # the particle 의 said as [에]
+
+
+def _vowel_cost(a: Phone, b: Phone) -> float:
+    if frozenset({a.ipa, b.ipa}) in _ACCEPTED:
+        return _ACCEPTED[frozenset({a.ipa, b.ipa})]
+    if a.glide and b.glide:
+        if a.glide == b.glide:
+            return _vowel_cost(PHONES[a.base], PHONES[b.base])
+        return 0.5 if a.base == b.base else 0.8
+    if a.glide or b.glide:
+        di, mono = (a, b) if a.glide else (b, a)
+        if di.base == mono.ipa:
+            return _GLIDE_LOSS.get(di.ipa, 0.4)
+        return 0.8
+    return _NEAR_VOWELS.get(frozenset({a.ipa, b.ipa}), 0.8)
 
 
 def substitution_cost(expected: str, heard: str) -> float:
-    """0 for the same sound, around 0.4-0.5 for near misses, up to 1 for far ones."""
+    """0 for the same sound, around 0.3-0.5 for near misses, up to 1 for far ones."""
     if expected == heard:
         return 0.0
     if heard == OTHER or expected == OTHER:
         return 0.9
     a, b = PHONES[expected], PHONES[heard]
-    pair = frozenset({expected, heard})
     if a.kind == b.kind == "V":
-        return _NEAR_VOWELS.get(pair, 0.8)
-    if a.kind == b.kind == "G":
-        return 0.5
-    if {a.kind, b.kind} == {"V", "G"}:
-        return _GLIDE_VOWEL.get(pair, 0.8)
+        return _vowel_cost(a, b)
     if a.kind == b.kind == "C":
         if a.place == b.place and a.manner == b.manner:
             return 0.4  # ㄱ/ㅋ/ㄲ, ㅅ/ㅆ: phonation only
@@ -326,17 +335,12 @@ def substitution_cost(expected: str, heard: str) -> float:
 
 
 def deletion_cost(phone: str) -> float:
-    kind = PHONES[phone].kind
-    if kind == "G":
-        return 0.4  # 계 [ke], 의 [이] in casual speech
     if phone == "h":
-        return 0.5  # intervocalic ㅎ is often weak in native speech
+        return 0.3  # ㅎ between voiced sounds is weak or silent in native speech
     return 1.0
 
 
 def insertion_cost(phone: str) -> float:
-    if phone != OTHER and PHONES[phone].kind == "G":
-        return 0.3
     return 0.5
 
 

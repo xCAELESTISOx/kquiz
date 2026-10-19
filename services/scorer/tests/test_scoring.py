@@ -15,10 +15,20 @@ def test_perfect():
     assert r.syllables[0].text == "국" and r.syllables[0].pron == "궁"
 
 
-def test_allophones_are_not_errors():
-    # voiced [ɡ], unreleased coda, flap [ɾ] for ㄹ are all fine
-    r = score(["ɡ", "u", "ŋ", "m", "u", "ɾ"])
-    assert r.score == 100
+def test_model_labels_onset_and_coda_variants_match():
+    # the model writes onset ㄱ as G and coda ㄱ as k, ㄹ as R or L
+    assert score(["G", "U", "NG", "M", "U", "R"], raw=True).score == 100
+    assert score(["G", "U", "k", "M", "U", "L"], raw=True).syllables[0].status == "wrong"
+
+
+def test_accepted_variants_are_not_errors():
+    assert score(["s", "i", "k", "e"], text="시계").errors == []  # 계 [게] is standard
+    assert score(["u", "l", "i", "e"], text="우리의").errors == []  # 의 [에]
+
+
+def test_diphthong_glide_loss_is_weak():
+    r = score(["a", "k", "u"], text="야구")  # 야 said as [아]
+    assert [s.status for s in r.syllables] == ["weak", "ok"]
 
 
 def test_near_miss_is_weak():
