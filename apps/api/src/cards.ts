@@ -14,13 +14,27 @@ export const newCardSchema = z.object({
   exampleMeaning: z.string().trim().max(500).optional(),
   notes: z.string().trim().max(2000).optional(),
   tags: z.array(z.string().trim().min(1).max(50)).max(20).default([]),
+  // Defaults to isSpeakable(korean); true is accepted only for Hangul-only text.
+  speakable: z.boolean().optional(),
 });
+
+export const cardPatchSchema = newCardSchema
+  .extend({ tags: newCardSchema.shape.tags.unwrap() })
+  .partial()
+  .refine((patch) => Object.keys(patch).length > 0, "nothing to update");
+
+export type CardPatch = z.infer<typeof cardPatchSchema>;
 
 export type NewCard = z.infer<typeof newCardSchema>;
 
 /** Collapses whitespace so "감사  합니다 " and "감사 합니다" count as one card. */
 export function normalizeKorean(text: string): string {
   return text.normalize("NFC").trim().replace(/\s+/g, " ");
+}
+
+/** Key for duplicate detection: spacing and punctuation don't make a different word. */
+export function koreanKey(text: string): string {
+  return normalizeKorean(text).replace(/[\s.,!?~…'"·-]/g, "");
 }
 
 export function isKoreanOnly(text: string): boolean {

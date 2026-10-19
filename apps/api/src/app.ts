@@ -1,18 +1,54 @@
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { bodyLimit } from "hono/body-limit";
+import { csrf } from "hono/csrf";
 import { secureHeaders } from "hono/secure-headers";
-import { parseBulk } from "./cards.js";
+import { authRoutes, type WebAuthn } from "./auth/routes.js";
+import { requireSession, type AuthVariables } from "./auth/sessions.js";
+import type { Config } from "./config.js";
+import type { Db } from "./db/client.js";
+import { cardRoutes } from "./routes/cards.js";
+import { reviewRoutes } from "./routes/reviews.js";
+import { requireCloudflare } from "./security/origin.js";
+import { clientIp, rateLimit } from "./security/rateLimit.js";
 
-export const app = new Hono().basePath("/api");
+export type AppDeps = {
+  db: Db;
+  config: Config;
+  /** One-time code for binding the first passkey; undefined once one is bound. */
+  setupCode?: string;
+  webauthn?: WebAuthn;
+  now?: () => Date;
+};
 
-app.use(secureHeaders());
-app.use(bodyLimit({ maxSize: 1024 * 1024 }));
+// Generous for one person, low enough that a stolen session can't hammer the disk.
+const API_LIMIT = { limit: 300, windowMs: 60_000 };
 
-app.get("/health", (c) => c.json({ ok: true }));
+export function createApp({ db, config, setupCode, webauthn, now = () => new Date() }: AppDeps) {
+  const app = new Hono<{ Variables: AuthVariables }>().basePath("/api");
 
-// Preview only for now: storage and auth arrive in stage 1 (docs/PLAN.md §9).
-app.post("/cards/bulk/preview", async (c) => {
-  const { text } = await c.req.json<{ text?: string }>();
-  if (typeof text !== "string") return c.json({ error: "text is required" }, 400);
-  return c.json(parseBulk(text));
-});
+  app.get("/health", (c) => c.json({ ok: true }));
+
+  app.use(requireCloudflare(config.originSecret));
+  app.use(secureHeaders());
+  app.use(bodyLimit({ maxSize: 1024 * 1024, onError: (c) => c.json({ error: "payload_too_large" }, 413) }));
+  // Browsers send Origin on every POST; a foreign one means a cross-site request.
+  app.use(csrf({ origin: config.origin }));
+  app.use(rateLimit({ ...API_LIMIT, key: (c) => clientIp(c), now: () => now().getTime() }));
+
+  app.route("/auth", authRoutes({ db, config, setupCode, webauthn, now }));
+
+  app.use("/cards/*", requireSession(db, config.secureCookies, now));
+  app.use("/reviews/*", requireSession(db, config.secureCookies, now));
+  app.route("/cards", cardRoutes(db, now));
+  app.route("/reviews", reviewRoutes(db, now));
+
+  app.notFound((c) => c.json({ error: "not_found" }, 404));
+  app.onError((err, c) => {
+    if (err instanceof HTTPException) return err.getResponse();
+    console.error(err);
+    return c.json({ error: "internal" }, 500);
+  });
+
+  return app;
+}
