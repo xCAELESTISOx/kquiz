@@ -8,6 +8,7 @@ import type {
   CardList,
   CardPatch,
   CardSummary,
+  Leech,
   NewCard,
   QueueItem,
   ReviewInput,
@@ -208,6 +209,8 @@ export const api = {
   /** The statistics screen, with days in the phone's time zone. */
   statsOverview: () =>
     request<StatsOverview>("GET", `/stats?tz=${-new Date().getTimezoneOffset()}`, { fallback: (m) => m.statsOverview() }),
+
+  leeches: () => request<{ items: Leech[] }>("GET", "/reviews/leeches", { fallback: () => ({ items: [] }) }),
 
   /** Scores a recording against the card. It is not a review: the rating is sent separately. */
   score: (cardId: number, wav: Uint8Array<ArrayBuffer>) =>

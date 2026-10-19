@@ -38,6 +38,14 @@ export interface Stats {
   retention30d?: Record<string, number | null>;
 }
 
+/** A card forgotten again and again since its last edit (apps/api/src/leeches.ts). */
+export interface HardCard {
+  card: StoredCard;
+  /** Days it was forgotten since the last edit, per review mode at the threshold. */
+  forgotten: { meaning?: number; speech?: number; listening?: number };
+  lastForgottenAt: string;
+}
+
 export interface WeakSound {
   phone: string;
   attempts: number;
@@ -58,6 +66,7 @@ export interface CardStore {
   update(id: string, patch: CardPatch): Promise<StoredCard | null>;
   stats(now: Date): Promise<Stats>;
   weakSounds(limit: number): Promise<WeakSound[]>;
+  hardCards(limit: number): Promise<HardCard[]>;
 }
 
 export class MemoryCardStore implements CardStore {
@@ -136,6 +145,10 @@ export class MemoryCardStore implements CardStore {
   }
 
   async weakSounds(): Promise<WeakSound[]> {
+    return [];
+  }
+
+  async hardCards(): Promise<HardCard[]> {
     return [];
   }
 }
