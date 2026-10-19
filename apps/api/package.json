@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",
+    "@modelcontextprotocol/sdk": "1.32.1",
     "hono": "^4.13.13",
     "ts-fsrs": "^5.4.2",
     "zod": "^4.6.7"
