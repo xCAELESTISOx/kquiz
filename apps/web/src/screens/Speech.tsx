@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { api, ApiError, submitReview } from "../lib/api";
 import { describeErrors, segments, verdict } from "../lib/pronunciation";
 import { canRecord, MAX_SECONDS, Recorder, RecorderFailure, type RecorderError } from "../lib/recorder";
@@ -6,6 +6,7 @@ import { navigate } from "../lib/router";
 import { canSpeak, speak } from "../lib/speech";
 import type { Card, RatingName, ScoreResult } from "../lib/types";
 import { CloseIcon, MicIcon, PlayIcon, RetryIcon, SpeakerIcon, StopIcon } from "../ui/icons";
+import { useCountUp } from "../ui/motion";
 import { Spinner } from "../ui/Spinner";
 
 const RATINGS: { name: RatingName; label: string; key: string }[] = [
@@ -196,11 +197,11 @@ export function SpeechScreen() {
 
               {revealed ? (
                 <div className="speech-word">
-                  <p className="review-korean" lang="ko" aria-label={card.korean}>
+                  <p className={`review-korean${result ? " is-scored" : ""}`} lang="ko" aria-label={card.korean}>
                     {result
                       ? segments(card.korean, result.syllables).map((s, i) =>
                           s.status ? (
-                            <span key={i} className={`syl syl-${s.status}`}>
+                            <span key={i} className={`syl syl-${s.status}`} style={{ "--i": i } as CSSProperties}>
                               {s.text}
                             </span>
                           ) : (
@@ -245,7 +246,7 @@ export function SpeechScreen() {
                     </button>
                   )}
                 </div>
-                <div className="ratings">
+                <div className="ratings is-in">
                   {RATINGS.map((r) => (
                     <button
                       key={r.name}
@@ -297,15 +298,13 @@ function ResultDetails({ result, failed }: { result?: ScoreResult; failed?: stri
     <div className="speech-result">
       <div className="speech-verdict">
         <p className={`speech-verdict-title tone-${v.tone}`}>{v.title}</p>
-        <p className="speech-score" aria-label={`Балл ${result.score} из 100`}>
-          {result.score}
-        </p>
+        <ScoreRing score={result.score} tone={v.tone} />
       </div>
       <p className="speech-verdict-text">{v.text}</p>
       {lines.length > 0 && (
         <ul className="speech-errors">
           {lines.map((line, i) => (
-            <li key={i} className={`speech-error is-${line.status}`}>
+            <li key={i} className={`speech-error is-${line.status}`} style={{ "--i": i } as CSSProperties}>
               <span className={`syl-chip syl-${line.status}`} lang="ko">
                 {line.syllable}
               </span>
@@ -318,6 +317,27 @@ function ResultDetails({ result, failed }: { result?: ScoreResult; failed?: stri
         </ul>
       )}
     </div>
+  );
+}
+
+/** The score fills its ring while the number counts up, so the result lands as one moment. */
+function ScoreRing({ score, tone }: { score: number; tone: string }) {
+  const shown = useCountUp(score);
+  return (
+    <p className={`speech-score tone-${tone}`} aria-label={`Балл ${score} из 100`}>
+      <svg viewBox="0 0 48 48" aria-hidden="true">
+        <circle className="score-track" cx="24" cy="24" r="20" pathLength={100} />
+        <circle
+          className="score-fill"
+          cx="24"
+          cy="24"
+          r="20"
+          pathLength={100}
+          style={{ "--score": score } as CSSProperties}
+        />
+      </svg>
+      <span aria-hidden="true">{shown}</span>
+    </p>
   );
 }
 
@@ -347,7 +367,16 @@ function RecordButton({
         disabled={disabled || scoring}
         onClick={onPress}
       >
-        <span className="record-level" style={{ transform: `scale(${1 + level * 0.22})` }} aria-hidden="true" />
+        {recording && (
+          <>
+            <span className="record-ripple" aria-hidden="true" />
+            <span className="record-ripple record-ripple-late" aria-hidden="true" />
+            <svg className="record-timer" viewBox="0 0 100 100" aria-hidden="true">
+              <circle cx="50" cy="50" r="48" pathLength={1} style={{ animationDuration: `${MAX_SECONDS}s` }} />
+            </svg>
+          </>
+        )}
+        <span className="record-level" style={{ transform: `scale(${1 + level * 0.3})` }} aria-hidden="true" />
         {scoring ? <Spinner /> : recording ? <StopIcon /> : <MicIcon />}
       </button>
       <p className="record-caption" aria-live="polite">

@@ -4,6 +4,7 @@ import { navigate } from "../lib/router";
 import { canSpeak, speak } from "../lib/speech";
 import type { Card, RatingName } from "../lib/types";
 import { CloseIcon, SpeakerIcon } from "../ui/icons";
+import { useGlide } from "../ui/motion";
 
 const RATINGS: { name: RatingName; label: string; key: string }[] = [
   { name: "again", label: "Снова", key: "1" },
@@ -21,6 +22,8 @@ export function ReviewScreen() {
   const [revealed, setRevealed] = useState(false);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string>();
+  // The card just graded, drawn once more on its way out. Purely decorative: the next card is live at once.
+  const [exit, setExit] = useState<{ step: number; rating: RatingName; card: Card }>();
   const shownAt = useRef(performance.now());
 
   useEffect(() => {
@@ -42,8 +45,10 @@ export function ReviewScreen() {
   }, [card, revealed]);
 
   const rate = useCallback(
-    (rating: RatingName) => {
+    (rating: RatingName, swiped = false) => {
       if (!card || !revealed) return;
+      // A swiped card has already flown off under the finger.
+      setExit(swiped ? undefined : { step, rating, card });
       void submitReview({
         id: crypto.randomUUID(),
         cardId: card.id,
@@ -59,7 +64,7 @@ export function ReviewScreen() {
       setStep((n) => n + 1);
       shownAt.current = performance.now();
     },
-    [card, revealed],
+    [card, revealed, step],
   );
 
   useEffect(() => {
@@ -102,10 +107,34 @@ export function ReviewScreen() {
 
       {card && (
         <>
-          <SwipeCard key={step} enabled={revealed} onTap={reveal} onSwipe={rate}>
-            <p className="review-korean" lang="ko">
+          <SwipeCard
+            key={step}
+            enabled={revealed}
+            onTap={reveal}
+            onSwipe={(r) => rate(r, true)}
+            deck={queue.length > 1}
+            behind={
+              exit && (
+                <div
+                  key={exit.step}
+                  className="review-card card-ghost"
+                  data-exit={exit.rating}
+                  aria-hidden="true"
+                  onAnimationEnd={() => setExit(undefined)}
+                >
+                  <p className="review-korean" lang="ko">
+                    {exit.card.korean}
+                  </p>
+                  <div className="review-answer">
+                    <p className="review-meaning">{exit.card.meaning}</p>
+                  </div>
+                </div>
+              )
+            }
+          >
+            <GlideText className="review-korean" on={revealed}>
               {card.korean}
-            </p>
+            </GlideText>
             {revealed ? (
               <div className="review-answer">
                 {(card.pronunciation && card.pronunciation !== card.korean) || card.romanization ? (
@@ -146,7 +175,7 @@ export function ReviewScreen() {
 
           <footer className="review-actions">
             {revealed ? (
-              <div className="ratings">
+              <div className="ratings is-in">
                 {RATINGS.map((r) => (
                   <button key={r.name} type="button" className={`rating rating-${r.name}`} onClick={() => rate(r.name)}>
                     {r.label}
@@ -166,15 +195,31 @@ export function ReviewScreen() {
   );
 }
 
+/** The Hangul glides up to make room for the answer instead of jumping. */
+function GlideText({ className, on, children }: { className: string; on: boolean; children: ReactNode }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  useGlide(ref, on);
+  return (
+    <p ref={ref} className={className} lang="ko">
+      {children}
+    </p>
+  );
+}
+
 function SwipeCard({
   enabled,
   onTap,
   onSwipe,
+  deck,
+  behind,
   children,
 }: {
   enabled: boolean;
   onTap: () => void;
   onSwipe: (rating: RatingName) => void;
+  /** More cards wait under this one. */
+  deck?: boolean;
+  behind?: ReactNode;
   children: ReactNode;
 }) {
   const [dx, setDx] = useState(0);
@@ -217,9 +262,10 @@ function SwipeCard({
   const tone = dx > 0 || leaving === "good" ? "good" : "again";
 
   return (
-    <div className="review-stage">
+    <div className={`review-stage${deck ? " has-deck" : ""}`}>
+      {behind}
       <div
-        className={`review-card${dx === 0 && !leaving ? " settle" : ""}${leaving ? " leaving" : ""}`}
+        className={`review-card is-live${dx === 0 && !leaving ? " settle" : ""}${leaving ? " leaving" : ""}`}
         style={{ transform: `translateX(${offset}px) rotate(${offset / 30}deg)` }}
         data-tone={dx !== 0 || leaving ? tone : undefined}
         onPointerDown={onPointerDown}

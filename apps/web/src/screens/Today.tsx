@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { api, pendingReviewCount } from "../lib/api";
 import { cardsWord } from "../lib/plural";
 import type { QueueItem, Stats } from "../lib/types";
@@ -41,15 +41,20 @@ export function TodayScreen() {
         {stats && due > 0 && (
           <p className="word-wall-words" lang="ko">
             {preview.map(({ card }, i) => (
-              <span key={card.id} style={{ opacity: Math.max(1 - i * 0.065, 0.22) }}>
+              <span key={card.id} style={{ opacity: Math.max(1 - i * 0.065, 0.22), "--i": i } as CSSProperties}>
                 {card.korean}
               </span>
             ))}
-            {due > preview.length && <span className="word-wall-more">+{due - preview.length}</span>}
+            {due > preview.length && (
+              <span className="word-wall-more" style={{ "--i": preview.length } as CSSProperties}>
+                +{due - preview.length}
+              </span>
+            )}
           </p>
         )}
         {stats && due === 0 && (
           <p className="word-wall-empty">
+            <DoneMark />
             <span lang="ko" className="word-wall-done">
               다 했어요
             </span>
@@ -65,15 +70,15 @@ export function TodayScreen() {
 
       {stats && (
         <dl className="facts">
-          <div>
+          <div style={{ "--i": 0 } as CSSProperties}>
             <dt>К повторению</dt>
             <dd>{due}</dd>
           </div>
-          <div>
+          <div style={{ "--i": 1 } as CSSProperties}>
             <dt>Произношение</dt>
             <dd>{stats.due.speech}</dd>
           </div>
-          <div>
+          <div style={{ "--i": 2 } as CSSProperties}>
             <dt>Повторено</dt>
             <dd>{stats.reviewedToday}</dd>
           </div>
@@ -89,7 +94,8 @@ export function TodayScreen() {
         )}
       </div>
 
-      <div className="bottom-actions">
+      {/* Wait for the numbers, so the wrong button never flashes while they load. */}
+      <div className="bottom-actions" hidden={!stats && !error}>
         {due > 0 && (
           <a className="button primary" href="#/review">
             Повторить {due} {cardsWord(due)}
@@ -98,7 +104,8 @@ export function TodayScreen() {
         {speechDue > 0 && (
           <a className={`button${due > 0 ? "" : " primary"}`} href="#/speech">
             <MicIcon />
-            Произношение · {speechDue}
+            Произношение
+            <span className="button-count">{speechDue}</span>
           </a>
         )}
         {due === 0 && speechDue === 0 && (
@@ -108,5 +115,15 @@ export function TodayScreen() {
         )}
       </div>
     </main>
+  );
+}
+
+/** A check that draws itself once: the one celebratory moment of an empty queue. */
+function DoneMark() {
+  return (
+    <svg className="done-mark" width="56" height="56" viewBox="0 0 56 56" aria-hidden="true">
+      <circle className="done-mark-ring" cx="28" cy="28" r="25" pathLength={1} />
+      <path className="done-mark-check" d="m17 29 7.5 7.5L39 21" pathLength={1} />
+    </svg>
   );
 }

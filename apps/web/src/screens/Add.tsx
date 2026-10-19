@@ -32,7 +32,7 @@ export function AddScreen() {
         <p className="subtitle">Новая карточка</p>
       </header>
 
-      <div className="segmented" role="tablist" aria-label="Способ добавления">
+      <div className="segmented" role="tablist" aria-label="Способ добавления" data-mode={mode}>
         <button type="button" role="tab" aria-selected={mode === "single"} onClick={() => switchMode("single")}>
           Одна
         </button>
@@ -41,7 +41,7 @@ export function AddScreen() {
         </button>
       </div>
 
-      {mode === "single" ? <SingleForm /> : <BulkForm />}
+      {mode === "single" ? <SingleForm key="single" /> : <BulkForm key="bulk" />}
     </main>
   );
 }
@@ -163,7 +163,7 @@ function SingleForm() {
       </label>
 
       {more ? (
-        <>
+        <div className="more-fields">
           <label className="field">
             <span className="field-label">Пример</span>
             <input
@@ -198,7 +198,7 @@ function SingleForm() {
               onChange={(e) => setTags(e.target.value)}
             />
           </label>
-        </>
+        </div>
       ) : (
         <button type="button" className="link-button" onClick={() => setMore(true)}>
           Пример, заметка, теги
