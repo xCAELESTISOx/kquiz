@@ -82,3 +82,35 @@ export const RetryIcon = () => (
     <path d="M4 4v4h4" />
   </Icon>
 );
+
+export const CardsIcon = () => (
+  <Icon>
+    <rect x="4" y="7" width="13" height="13" rx="2.5" />
+    <path d="M8 4h9.5A2.5 2.5 0 0 1 20 6.5V16" />
+  </Icon>
+);
+
+export const SearchIcon = () => (
+  <Icon>
+    <circle cx="11" cy="11" r="6.5" />
+    <path d="m20 20-4.2-4.2" />
+  </Icon>
+);
+
+export const BackIcon = () => (
+  <Icon>
+    <path d="M15 5 8 12l7 7" />
+  </Icon>
+);
+
+export const DownloadIcon = () => (
+  <Icon>
+    <path d="M12 4v11M7 10.5l5 5 5-5M5 20h14" />
+  </Icon>
+);
+
+export const MinusIcon = () => (
+  <Icon>
+    <path d="M5 12h14" />
+  </Icon>
+);

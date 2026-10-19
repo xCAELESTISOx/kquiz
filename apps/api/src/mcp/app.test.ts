@@ -252,7 +252,7 @@ describe("mcp tools", () => {
         },
       }),
     );
-    expect(result.created).toEqual([{ id: expect.any(String), korean: "읽다", meaning: "читать", speakable: true }]);
+    expect(result.created).toEqual([{ id: expect.any(String), korean: "읽다", meaning: "читать", speakable: true, queued: true }]);
     expect(result.duplicates.map((d: { korean: string }) => d.korean)).toEqual(["물"]);
     expect(result.rejected.map((r: { reason: string }) => r.reason)).toEqual(["repeated in this batch", expect.any(String)]);
 
@@ -330,6 +330,6 @@ describe("mcp tools", () => {
   it("reports stats", async () => {
     const client = await mcpClient((await connect()).access_token);
     await client.callTool({ name: "add_cards", arguments: { cards: [{ korean: "물", meaning: "вода", examples }] } });
-    expect(parse(await client.callTool({ name: "get_stats", arguments: {} }))).toMatchObject({ cards: 1, dueMeaning: 1 });
+    expect(parse(await client.callTool({ name: "get_stats", arguments: {} }))).toMatchObject({ cards: 1, dueMeaning: 0, queued: 1 });
   });
 });

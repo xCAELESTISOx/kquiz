@@ -108,6 +108,15 @@ export function TodayScreen() {
         </dl>
       )}
 
+      {stats && stats.newCards.queued > 0 && (
+        <a className="queue-link" href="#/cards/queued">
+          <span>
+            В очереди новых: <strong>{stats.newCards.queued}</strong>
+          </span>
+          <span className="muted">по {stats.newCards.limit} в день</span>
+        </a>
+      )}
+
       <div aria-live="polite">
         {error && <p className="notice notice-error">Не получилось загрузить данные: {error}. Обнови страницу.</p>}
         {pending > 0 && (
