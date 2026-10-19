@@ -13,6 +13,7 @@ const instructions = `KQuiz is the owner's personal Korean flashcard deck. Cards
 - examples (required, exactly ${EXAMPLES_PER_CARD}): short natural Korean sentences that use the word, each with its Russian translation, as {"ko", "ru"}. Vary the forms and situations, keep them at the owner's level. Every add_cards card and every update_card call must carry all ${EXAMPLES_PER_CARD}; when editing, send the card's current examples again if they stay as they are.
 - notes (optional): grammar, usage or anything else worth remembering.
 - tags: lowercase topics such as "еда" or "глаголы".
+Cards added here don't enter reviews at once: they wait in a new-card queue and come in a few a day, mixed at random (the owner sets how many and can pull cards in early). So adding many words at once is fine.
 Call find_cards before adding words the owner may already have; add_cards also reports duplicates. To fix a card, use update_card instead of adding a new one: any field can be changed, and an empty string clears pronunciation, romanization or notes. Cards cannot be deleted from here.`;
 
 const cardInput = z.object({
@@ -54,7 +55,7 @@ export function createMcpServer(store: CardStore): McpServer {
     "add_cards",
     {
       title: "Add cards",
-      description: `Adds up to ${MAX_CARDS_PER_CALL} Korean flashcards. Every card needs exactly ${EXAMPLES_PER_CARD} examples. Returns created cards, duplicates of existing cards and rejected ones with the reason.`,
+      description: `Adds up to ${MAX_CARDS_PER_CALL} Korean flashcards to the new-card queue, from which a few enter reviews each day. Every card needs exactly ${EXAMPLES_PER_CARD} examples. Returns created cards, duplicates of existing cards and rejected ones with the reason.`,
       inputSchema: { cards: z.array(newCardInput).min(1).max(MAX_CARDS_PER_CALL) },
       annotations: { destructiveHint: false, idempotentHint: true },
     },
@@ -76,7 +77,7 @@ export function createMcpServer(store: CardStore): McpServer {
       const fresh = [...valid].filter(([key]) => !existing.has(key)).map(([, card]) => card);
       const created = await store.insert(fresh, "claude");
       return json({
-        created: created.map(({ id, korean, meaning, speakable }) => ({ id, korean, meaning, speakable })),
+        created: created.map(({ id, korean, meaning, speakable, queued }) => ({ id, korean, meaning, speakable, queued })),
         duplicates: [...existing.values()].map(({ id, korean, meaning }) => ({ id, korean, meaning })),
         rejected,
       });
@@ -136,7 +137,8 @@ export function createMcpServer(store: CardStore): McpServer {
     "get_stats",
     {
       title: "Get stats",
-      description: "Number of cards, cards due now in each mode, the current streak in days, reviews coming due in the next 7 days, and the share of reviews recalled over the last 30 days (FSRS aims for 0.9).",
+      description:
+        "Number of cards, cards due now in each mode, cards waiting in the new-card queue and how many enter reviews per day, the current streak in days, reviews coming due in the next 7 days, and the share of reviews recalled over the last 30 days (FSRS aims for 0.9).",
       annotations: { readOnlyHint: true },
     },
     async () => json(await store.stats(new Date())),

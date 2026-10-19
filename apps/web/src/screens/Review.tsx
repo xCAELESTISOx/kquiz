@@ -46,13 +46,12 @@ export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "
   }, [mode, listening]);
 
   const card = queue?.[0];
-  const upcoming = queue?.[1];
 
+  // The next few too, so their audio is ready by the time they come up (listening plays the next
+  // card straight from the grading tap).
   useEffect(() => {
-    if (card) preloadSpeech(card);
-    // Listening plays the next card straight from the grading tap, so it should be loaded by then.
-    if (listening && upcoming) preloadSpeech(upcoming);
-  }, [card, upcoming, listening]);
+    if (queue) preloadSpeech(...queue.slice(0, 3));
+  }, [queue]);
 
   const reveal = useCallback(() => {
     if (card && !revealed) setRevealed(true);

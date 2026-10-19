@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { recordAttempt } from "./attemptStore.js";
 import type { ScoreResult } from "./scorer.js";
-import { ACTIVITY_DAYS, FORECAST_DAYS, streaks } from "./statsStore.js";
+import { ACTIVITY_DAYS, FORECAST_DAYS, streaks, zoneOffset } from "./statsStore.js";
 import { testApp } from "./testing.js";
 
 const DAY = 86_400_000;
@@ -27,6 +27,14 @@ describe("streaks", () => {
     expect(streaks([99, 98, 97, 90, 89, 88, 87], 100)).toEqual({ current: 3, best: 4 });
     expect(streaks([100, 99], 100)).toEqual({ current: 2, best: 2 });
     expect(streaks([98, 97], 100)).toEqual({ current: 0, best: 2 });
+  });
+});
+
+describe("zoneOffset", () => {
+  it("gives minutes east of UTC", () => {
+    expect(zoneOffset("Asia/Seoul")).toBe(540);
+    expect(zoneOffset("UTC")).toBe(0);
+    expect(zoneOffset("America/New_York", new Date("2026-01-15T12:00:00Z"))).toBe(-300);
   });
 });
 
@@ -64,7 +72,7 @@ describe("GET /stats", () => {
     const seoul = (await t.request("/stats?tz=540")).json;
     expect(seoul.today).toBe("2026-10-19");
     expect(seoul.streak).toEqual({ current: 2, best: 2, reviewedToday: false });
-    const utc = (await t.request("/stats")).json;
+    const utc = (await t.request("/stats?tz=0")).json;
     expect(utc.today).toBe("2026-10-18");
     expect(utc.streak).toMatchObject({ current: 2, reviewedToday: true });
 
@@ -84,6 +92,15 @@ describe("GET /stats", () => {
     expect(seoul.cards.byMode.meaning.new).toBe(1);
     expect(seoul.cards.byMode.speech.new).toBe(1);
     expect(seoul.cards.byMode.meaning.young + seoul.cards.byMode.meaning.learning).toBe(1);
+  });
+
+  it("leaves paused cards out of the forecast and card states", async () => {
+    const t = testApp();
+    await t.signIn();
+    const card = (await t.request("/cards", { body: { korean: "물", meaning: "вода" } })).json.card;
+    expect((await t.request("/stats")).json.cards.byMode.meaning.new).toBe(1);
+    expect((await t.request(`/cards/${card.id}`, { method: "PATCH", body: { suspended: true } })).status).toBe(200);
+    expect((await t.request("/stats")).json.cards.byMode.meaning).toBeUndefined();
   });
 
   it("shows weekly pronunciation scores and the trend of weak sounds", async () => {

@@ -34,6 +34,10 @@ export interface Card {
   /** False when `korean` has non-Hangul text; such cards never become speakable. */
   readyForSpeech: boolean;
   source: CardSource;
+  /** Paused: in no review queue, schedule kept. */
+  suspended: boolean;
+  /** Waiting in the new-card queue (cards from Claude), not yet in reviews. */
+  queued: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -52,6 +56,8 @@ export interface AddCardsResult {
   duplicates: { korean: string; existingId: number }[];
   rejected: { input: string; reason: string }[];
 }
+
+export type UpdateCardResult = { status: "saved"; card: Card } | { status: "duplicate"; existingId: number };
 
 export type AddCardResult = { status: "created"; card: Card } | { status: "duplicate"; existingId: number };
 
@@ -75,6 +81,27 @@ export interface Stats {
   cards: number;
   due: Record<ReviewMode, number>;
   reviewedToday: number;
+  /** New cards let in from the queue today, the daily allowance and what still waits. */
+  newCards: { introduced: number; limit: number; queued: number };
+}
+
+/** PATCH /api/cards/:id: any field; "" clears an optional one. */
+export type CardPatch = Partial<Omit<NewCard, "tags">> & { tags?: string[]; speakable?: boolean; suspended?: boolean };
+
+export type CardFilter = "queued" | "paused";
+
+export interface CardList {
+  cards: Card[];
+  nextBefore: number | null;
+}
+
+export interface CardSummary {
+  counts: { all: number; queued: number; paused: number };
+  tags: { tag: string; count: number }[];
+}
+
+export interface Settings {
+  newPerDay: number;
 }
 
 /** GET /api/stats. Modes are keys, so a mode added later shows up without a contract change. */

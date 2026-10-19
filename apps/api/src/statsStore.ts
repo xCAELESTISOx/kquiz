@@ -48,6 +48,17 @@ export type StatsOverview = {
   };
 };
 
+/** Minutes east of UTC of an IANA time zone at `at` (540 for Asia/Seoul). */
+export function zoneOffset(timeZone: string, at = new Date()): number {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", { timeZone, hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric" })
+      .formatToParts(at)
+      .map((p) => [p.type, Number(p.value)]),
+  );
+  const local = Date.UTC(parts.year!, parts.month! - 1, parts.day!, parts.hour!, parts.minute!);
+  return Math.round((local - Math.floor(at.getTime() / 60_000) * 60_000) / 60_000);
+}
+
 /** `tzOffsetMinutes` is minutes east of UTC (540 for Seoul), so days start at the owner's midnight. */
 export function statsOverview(db: Db, now = new Date(), tzOffsetMinutes = 0): StatsOverview {
   const shift = tzOffsetMinutes * 60_000;
