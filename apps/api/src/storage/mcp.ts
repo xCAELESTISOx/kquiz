@@ -1,6 +1,4 @@
-// SQLite implementations of the stores the MCP server needs (CardStore, OAuthStore and
-// OwnerAuth in src/mcp/, PR #1). They are typed structurally here so this module does not
-// depend on the MCP code; `index.ts` passes them to createMcpApp.
+// SQLite implementations of the stores the MCP server needs; `index.ts` passes them to createMcpApp.
 import { desc, eq, inArray, lt, sql } from "drizzle-orm";
 import type { Context } from "hono";
 import { readSession } from "../auth/sessions.js";
@@ -9,6 +7,9 @@ import { koreanKey, normalizeKorean, type CardPatch, type NewCard } from "../car
 import type { Config } from "../config.js";
 import type { Db } from "../db/client.js";
 import { cards, oauthClients, oauthCodes, oauthGrants, phoneStats, reviewLog } from "../db/schema.js";
+import type { OwnerAuth } from "../mcp/app.js";
+import type { OAuthStore } from "../mcp/oauth-store.js";
+import type { CardStore } from "../mcp/store.js";
 import { getStats } from "../reviewStore.js";
 
 export type StoredCard = NewCard & {
@@ -59,7 +60,7 @@ export function streakDays(db: Db, now: Date): number {
   return streak;
 }
 
-export class SqliteCardStore {
+export class SqliteCardStore implements CardStore {
   constructor(private readonly db: Db) {}
 
   async findByKorean(korean: string[]): Promise<Map<string, StoredCard>> {
@@ -130,7 +131,7 @@ type Grant = typeof oauthGrants.$inferSelect;
 const withoutNulls = <T extends object>(row: T) =>
   Object.fromEntries(Object.entries(row).filter(([, value]) => value !== null)) as { [K in keyof T]: Exclude<T[K], null> };
 
-export class SqliteOAuthStore {
+export class SqliteOAuthStore implements OAuthStore {
   constructor(private readonly db: Db) {}
 
   async countClients() {
@@ -215,7 +216,7 @@ export class SqliteOAuthStore {
  * The owner's passkey session for the OAuth consent page. `authenticatedAt` is when the
  * session was created, i.e. the moment of the passkey assertion.
  */
-export function ownerAuth(db: Db, config: Config, now: () => Date = () => new Date()) {
+export function ownerAuth(db: Db, config: Config, now: () => Date = () => new Date()): OwnerAuth {
   return {
     async session(c: Context) {
       const session = readSession(c, db, config.secureCookies, now());

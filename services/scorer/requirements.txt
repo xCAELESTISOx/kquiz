@@ -1,2 +1,9 @@
 fastapi==0.146.0
 uvicorn==0.54.0
+numpy==2.5.4
+g2pkiwi==0.1.0
+# g2pkiwi 0.1.0 needs the skip-bigram model that kiwipiepy dropped after 0.21
+kiwipiepy==0.21.0
+kiwipiepy_model==0.21.0
+nltk==3.10.3
+jamo==0.4.1

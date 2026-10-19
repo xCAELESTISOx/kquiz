@@ -3,10 +3,10 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { serve } from "@hono/node-server";
 import { count } from "drizzle-orm";
-import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { openDb } from "./db/client.js";
 import { authCredentials } from "./db/schema.js";
+import { createServer } from "./server.js";
 
 const config = loadConfig();
 if (config.databasePath !== ":memory:") mkdirSync(dirname(config.databasePath), { recursive: true });
@@ -18,9 +18,15 @@ const needsSetup = (db.select({ n: count() }).from(authCredentials).get()?.n ?? 
 const setupCode = needsSetup ? (config.setupCode ?? randomBytes(18).toString("base64url")) : undefined;
 if (setupCode && !config.setupCode) console.log(`No passkey yet. One-time setup code: ${setupCode}`);
 
-const app = createApp({ db, config, setupCode });
+const server = createServer({
+  db,
+  config,
+  setupCode,
+  mcpRedirectUris: process.env.MCP_REDIRECT_URIS?.split(",").map((uri) => uri.trim()),
+});
+
 const port = Number(process.env.PORT ?? 8787);
 // Bound to localhost: only Caddy on the same host may reach the API.
-serve({ fetch: app.fetch, port, hostname: process.env.HOST ?? "127.0.0.1" }, (info) => {
+serve({ fetch: server.fetch, port, hostname: process.env.HOST ?? "127.0.0.1" }, (info) => {
   console.log(`api listening on http://${info.address}:${info.port}`);
 });

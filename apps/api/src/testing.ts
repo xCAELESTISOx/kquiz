@@ -1,6 +1,6 @@
 // Test helpers: an app over an in-memory database, a fake authenticator and a cookie jar.
 import type { WebAuthn } from "./auth/routes.js";
-import { createApp } from "./app.js";
+import { createServer } from "./server.js";
 import { loadConfig } from "./config.js";
 import { openDb } from "./db/client.js";
 
@@ -45,25 +45,30 @@ export function testApp(env: Record<string, string> = {}) {
   const config = loadConfig({ ORIGIN, NODE_ENV: "test", ...env });
   const db = openDb(":memory:");
   const clock = { now: new Date("2026-10-19T10:00:00Z") };
-  const app = createApp({ db, config, setupCode: SETUP_CODE, webauthn: fakeWebAuthn(), now: () => clock.now });
+  const app = createServer({ db, config, setupCode: SETUP_CODE, webauthn: fakeWebAuthn(), now: () => clock.now });
 
   let cookie = "";
   let csrfToken = "";
+  /** Paths are under /api unless they start with "//", which marks a path from the site root. */
   async function request(path: string, init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) {
     const headers: Record<string, string> = { origin: ORIGIN, ...init.headers };
     if (cookie) headers.cookie = cookie;
     if (csrfToken) headers["x-csrf-token"] ??= csrfToken;
     if (init.body !== undefined) headers["content-type"] = "application/json";
-    const res = await app.request(`/api${path}`, {
+    const res = await app.request(path.startsWith("//") ? path.slice(1) : `/api${path}`, {
       method: init.method ?? (init.body === undefined ? "GET" : "POST"),
       headers,
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
     });
     const set = res.headers.get("set-cookie");
     if (set) cookie = set.split(";")[0]!;
-    const json = (await res.json().catch(() => null)) as Record<string, any> | null;
+    const text = await res.text();
+    let json: Record<string, any> | null = null;
+    try {
+      json = JSON.parse(text);
+    } catch {}
     if (typeof json?.csrfToken === "string") csrfToken = json.csrfToken;
-    return { status: res.status, headers: res.headers, json: json ?? {} };
+    return { status: res.status, headers: res.headers, json: json ?? {}, text };
   }
 
   /** Binds the first passkey with the setup code, which also signs in. */
@@ -80,6 +85,9 @@ export function testApp(env: Record<string, string> = {}) {
     },
     get csrf() {
       return csrfToken;
+    },
+    get cookie() {
+      return cookie;
     },
   };
 
