@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Prints cloud-init user-data that turns a fresh Ubuntu 24.04 VPS into a running KQuiz:
-# clone the repo, run setup-server.sh, write deploy/.env, start the stack.
+# clone the repo, run setup-server.sh, write deploy/.env, start the stack (prebuilt images, or a local build).
 # Pass it as user-data when creating the server through the provider's API or panel.
 #
 # Required env: DOMAIN, ACME_EMAIL, ORIGIN_SECRET, SETUP_CODE,
@@ -41,5 +41,5 @@ runcmd:
   - [env, HOME=/root, git, clone, "$REPO", /opt/kquiz]
   - [env, "DOCKER_MIRROR=${DOCKER_MIRROR:-}", /opt/kquiz/deploy/setup-server.sh]
   - [mv, /root/kquiz.env, /opt/kquiz/deploy/.env]
-  - [sh, -c, "cd /opt/kquiz/deploy && docker compose up -d --build"]
+  - [/opt/kquiz/deploy/update.sh]
 YAML
