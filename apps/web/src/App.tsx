@@ -1,7 +1,9 @@
 import { useEffect } from "react";
 import { flushPendingReviews } from "./lib/api";
-import { useRoute } from "./lib/router";
+import { useLocation } from "./lib/router";
 import { AddScreen } from "./screens/Add";
+import { CardScreen } from "./screens/Card";
+import { CardsScreen } from "./screens/Cards";
 import { LoginScreen } from "./screens/Login";
 import { ReviewScreen } from "./screens/Review";
 import { SpeechScreen } from "./screens/Speech";
@@ -9,7 +11,7 @@ import { TodayScreen } from "./screens/Today";
 import { TabBar } from "./ui/TabBar";
 
 export function App() {
-  const route = useRoute();
+  const { route, param } = useLocation();
 
   useEffect(() => {
     if (location.pathname === "/login") return;
@@ -25,7 +27,15 @@ export function App() {
 
   return (
     <div className="shell">
-      {route === "add" ? <AddScreen /> : <TodayScreen />}
+      {route === "add" ? (
+        <AddScreen />
+      ) : route === "cards" ? (
+        <CardsScreen key="cards" filter={param === "queued" || param === "paused" ? param : undefined} />
+      ) : route === "card" ? (
+        <CardScreen key={param} id={Number(param)} />
+      ) : (
+        <TodayScreen />
+      )}
       <TabBar route={route} />
     </div>
   );

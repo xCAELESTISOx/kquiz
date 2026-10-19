@@ -3,7 +3,11 @@ import type {
   AddCardResult,
   AddCardsResult,
   Card,
+  CardFilter,
+  CardList,
+  CardPatch,
   CardSource,
+  CardSummary,
   NewCard,
   QueueItem,
   RatingName,
@@ -11,6 +15,7 @@ import type {
   ReviewMode,
   ReviewResult,
   ScoreResult,
+  Settings,
   Stats,
 } from "./types";
 
@@ -24,6 +29,7 @@ interface MockState {
   reps: Record<string, number>;
   reviewIds: string[];
   reviewedToday: { day: string; count: number };
+  newPerDay: number;
 }
 
 export interface KeyValueStorage {
@@ -31,7 +37,7 @@ export interface KeyValueStorage {
   setItem(key: string, value: string): void;
 }
 
-const KEY = "kquiz.mock.v2";
+const KEY = "kquiz.mock.v3";
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
 
@@ -44,7 +50,15 @@ const SEED: NewCard[] = [
   { korean: "감사합니다", meaning: "спасибо", pronunciation: "감사함니다", romanization: "gamsahamnida" },
   { korean: "물", meaning: "вода", romanization: "mul", examples: [{ ko: "물 좀 주세요.", ru: "Дайте, пожалуйста, воды." }] },
   { korean: "괜찮아요", meaning: "всё в порядке", pronunciation: "괜차나요", romanization: "gwaenchanayo" },
-  { korean: "맛있다", meaning: "вкусный", pronunciation: "마싣따", romanization: "masitda" },
+  { korean: "맛있다", meaning: "вкусный", pronunciation: "마싣따", romanization: "masitda", tags: ["еда"] },
+];
+
+// As if Claude had just added them: they wait in the new-card queue.
+const SEED_QUEUED: NewCard[] = [
+  { korean: "지하철", meaning: "метро", tags: ["город"] },
+  { korean: "편의점", meaning: "круглосуточный магазин", pronunciation: "펴니점", tags: ["город"] },
+  { korean: "영수증", meaning: "чек", tags: ["покупки"] },
+  { korean: "계산하다", meaning: "расплачиваться, считать", tags: ["покупки", "глаголы"] },
 ];
 
 /** Same rule as the server: duplicates ignore spaces and punctuation. */
@@ -62,8 +76,92 @@ export class MockApi {
     const saved = storage.getItem(KEY);
     this.state = saved
       ? (JSON.parse(saved) as MockState)
-      : { nextId: 1, cards: [], due: {}, reps: {}, reviewIds: [], reviewedToday: { day: "", count: 0 } };
-    if (!saved) for (const card of SEED) this.insert(card, "app");
+      : { nextId: 1, cards: [], due: {}, reps: {}, reviewIds: [], reviewedToday: { day: "", count: 0 }, newPerDay: 15 };
+    if (!saved) {
+      for (const card of SEED) this.insert(card, "app");
+      for (const card of SEED_QUEUED) this.insert(card, "claude");
+    }
+  }
+
+  cards(query: { q?: string; tag?: string; status?: CardFilter; before?: number; limit?: number }): CardList {
+    const limit = query.limit ?? 50;
+    const q = query.q?.toLocaleLowerCase();
+    const found = [...this.state.cards]
+      .reverse()
+      .filter(
+        (c) =>
+          (!q || c.korean.toLocaleLowerCase().includes(q) || c.meaning.toLocaleLowerCase().includes(q)) &&
+          (!query.tag || c.tags.includes(query.tag)) &&
+          (query.status !== "queued" || c.queued) &&
+          (query.status !== "paused" || c.suspended) &&
+          (!query.before || c.id < query.before),
+      );
+    const page = found.slice(0, limit);
+    return { cards: page, nextBefore: found.length > limit ? page.at(-1)!.id : null };
+  }
+
+  cardSummary(): CardSummary {
+    const tags = new Map<string, number>();
+    for (const card of this.state.cards) for (const tag of card.tags) tags.set(tag, (tags.get(tag) ?? 0) + 1);
+    return {
+      counts: {
+        all: this.state.cards.length,
+        queued: this.state.cards.filter((c) => c.queued).length,
+        paused: this.state.cards.filter((c) => c.suspended).length,
+      },
+      tags: [...tags].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag)),
+    };
+  }
+
+  card(id: number): Card {
+    const card = this.state.cards.find((c) => c.id === id);
+    if (!card) throw new Error("not_found");
+    return card;
+  }
+
+  updateCard(id: number, patch: CardPatch): Card {
+    const card = this.card(id);
+    const clear = (v: string | undefined, old: string | null) => (v === undefined ? old : v || null);
+    Object.assign(card, {
+      ...(patch.korean !== undefined && { korean: normalizeKorean(patch.korean), readyForSpeech: isKoreanOnly(patch.korean) }),
+      ...(patch.meaning !== undefined && { meaning: patch.meaning }),
+      pronunciation: clear(patch.pronunciation, card.pronunciation),
+      romanization: clear(patch.romanization, card.romanization),
+      notes: clear(patch.notes, card.notes),
+      ...(patch.examples && { examples: patch.examples }),
+      ...(patch.tags && { tags: patch.tags }),
+      ...(patch.suspended !== undefined && { suspended: patch.suspended }),
+      updatedAt: this.now().toISOString(),
+    });
+    if (patch.speakable !== undefined) card.speakable = patch.speakable && card.readyForSpeech;
+    this.save();
+    return card;
+  }
+
+  deleteCard(id: number): { ok: true } {
+    this.state.cards = this.state.cards.filter((c) => c.id !== id);
+    this.save();
+    return { ok: true };
+  }
+
+  introduce(id: number): Card {
+    const card = this.card(id);
+    card.queued = false;
+    const at = this.now().toISOString();
+    this.state.due[`${id}:meaning`] = at;
+    this.state.due[`${id}:speech`] = at;
+    this.save();
+    return card;
+  }
+
+  settings(): Settings {
+    return { newPerDay: this.state.newPerDay };
+  }
+
+  updateSettings(patch: Partial<Settings>): Settings {
+    if (patch.newPerDay !== undefined) this.state.newPerDay = patch.newPerDay;
+    this.save();
+    return this.settings();
   }
 
   addCard(input: NewCard): AddCardResult {
@@ -90,7 +188,7 @@ export class MockApi {
   queue(mode: ReviewMode, limit = 50): QueueItem[] {
     const now = this.now().getTime();
     return this.state.cards
-      .filter((c) => mode === "meaning" || c.speakable)
+      .filter((c) => !c.queued && !c.suspended && (mode === "meaning" || c.speakable))
       .map((card) => {
         const key = `${card.id}:${mode}`;
         const due = this.state.due[key]!;
@@ -128,6 +226,7 @@ export class MockApi {
       cards: this.state.cards.length,
       due: { meaning: this.queue("meaning", Infinity).length, speech: this.queue("speech", Infinity).length },
       reviewedToday: this.state.reviewedToday.day === day ? this.state.reviewedToday.count : 0,
+      newCards: { introduced: 0, limit: this.state.newPerDay, queued: this.state.cards.filter((c) => c.queued).length },
     };
   }
 
@@ -199,12 +298,16 @@ export class MockApi {
       speakable: readyForSpeech && syllables > 0 && syllables <= 12,
       readyForSpeech,
       source,
+      suspended: false,
+      queued: source === "claude",
       createdAt: at,
       updatedAt: at,
     };
     this.state.cards.push(card);
-    this.state.due[`${card.id}:meaning`] = at;
-    this.state.due[`${card.id}:speech`] = at;
+    if (!card.queued) {
+      this.state.due[`${card.id}:meaning`] = at;
+      this.state.due[`${card.id}:speech`] = at;
+    }
     return { status: "created", card };
   }
 

@@ -264,12 +264,17 @@ p {
     transform var(--dur-1) var(--ease-spring);
 }
 
-.icon-button:active,
-.icon-button:hover {
+.icon-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.icon-button:active:not(:disabled),
+.icon-button:hover:not(:disabled) {
   background: var(--surface-raised);
 }
 
-.icon-button:active {
+.icon-button:active:not(:disabled) {
   transform: scale(0.9);
   transition-duration: var(--dur-press);
 }
@@ -304,15 +309,15 @@ p {
 .tabbar-inner {
   position: relative;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  width: min(320px, 100%);
+  grid-template-columns: repeat(3, 1fr);
+  width: min(380px, 100%);
 }
 
 /* A column-wide track whose centered pill sits behind the active icon; it slides with the route. */
 .tab-indicator {
   position: absolute;
   inset: 0 auto 0 0;
-  width: 50%;
+  width: calc(100% / 3);
   pointer-events: none;
   transition: transform var(--dur-3) var(--ease-spring);
 }
@@ -330,8 +335,12 @@ p {
   box-shadow: inset 0 0 0 1px rgb(124 140 255 / 0.16);
 }
 
-.tabbar-inner[data-active="add"] .tab-indicator {
+.tabbar-inner[data-active="cards"] .tab-indicator {
   transform: translateX(100%);
+}
+
+.tabbar-inner[data-active="add"] .tab-indicator {
+  transform: translateX(200%);
 }
 
 .tab {
@@ -731,6 +740,460 @@ p {
 .preview-error {
   color: var(--wrong);
   font-size: 13px;
+}
+
+/* ---------- Today: new-card queue ---------- */
+
+.queue-link {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: var(--tap);
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  text-decoration: none;
+  animation: answer-in var(--dur-3) var(--ease-out) 380ms backwards;
+}
+
+.queue-link strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.queue-link .muted::after {
+  content: " ›";
+}
+
+/* ---------- Cards ---------- */
+
+.search {
+  position: relative;
+  display: block;
+}
+
+.search svg {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  margin-top: -10px;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+
+.search-input {
+  min-height: 48px;
+  padding-left: 44px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.search-input::-webkit-search-decoration {
+  -webkit-appearance: none;
+}
+
+/* One scrolling row: filters first, then tags. Bleeds to the screen edges like iOS. */
+.chips {
+  display: flex;
+  gap: 8px;
+  margin-inline: -16px;
+  padding: 2px 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chips::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    transform var(--dur-1) var(--ease-spring);
+}
+
+.chip:active {
+  transform: scale(0.95);
+  transition-duration: var(--dur-press);
+}
+
+.chip[aria-current="page"],
+.chip[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: rgb(124 140 255 / 0.4);
+  color: var(--accent-hi);
+}
+
+.chip-count {
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.chip[aria-current="page"] .chip-count {
+  color: inherit;
+  opacity: 0.75;
+}
+
+.chip-tag {
+  font-weight: 500;
+}
+
+.card-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+
+.card-list-skeleton {
+  height: 320px;
+}
+
+.card-row {
+  display: flex;
+  align-items: center;
+  border-top: 1px solid var(--border);
+  animation: answer-in var(--dur-2) var(--ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * 22ms);
+}
+
+.card-row:first-child {
+  border-top: 0;
+}
+
+.card-row-link {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  column-gap: 12px;
+  row-gap: 4px;
+  min-height: 56px;
+  padding: 12px 16px;
+  color: inherit;
+  text-decoration: none;
+  transition: background var(--dur-1) var(--ease);
+}
+
+.card-row-link:active {
+  background: var(--surface-raised);
+}
+
+@media (hover: hover) {
+  .card-row-link:hover {
+    background: var(--surface-raised);
+  }
+}
+
+.card-row-korean {
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.card-row-meaning {
+  min-width: 0;
+  color: var(--text-muted);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-row-badges {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-hi);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge-faint {
+  background: rgb(148 160 200 / 0.08);
+  color: var(--text-faint);
+}
+
+.row-action {
+  flex: none;
+  min-height: 36px;
+  margin-right: 12px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgb(124 140 255 / 0.4);
+  background: var(--accent-soft);
+  color: var(--accent-hi);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  transition: transform var(--dur-1) var(--ease-spring);
+}
+
+.row-action:active {
+  transform: scale(0.94);
+  transition-duration: var(--dur-press);
+}
+
+.empty {
+  padding: 32px 8px;
+  text-align: center;
+}
+
+.export-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: center;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.export-link svg {
+  width: 18px;
+  height: 18px;
+}
+
+.queue-panel {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: linear-gradient(to bottom, var(--surface-raised), var(--surface));
+  box-shadow: var(--shadow-1);
+  animation: notice-in var(--dur-2) var(--ease-spring);
+}
+
+.queue-panel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.queue-panel-title {
+  font-weight: 650;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.stepper .icon-button {
+  color: var(--accent-hi);
+}
+
+.stepper .icon-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.stepper-value {
+  min-width: 2.5ch;
+  text-align: center;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Card ---------- */
+
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  margin: -8px -10px -4px;
+}
+
+.queue-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px 12px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgb(124 140 255 / 0.3);
+  background: var(--accent-soft);
+  font-size: var(--fs-sm);
+}
+
+.queue-note .chip-button {
+  flex: none;
+}
+
+.field-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.examples-edit {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.examples-edit legend {
+  padding: 0;
+  margin-bottom: 6px;
+}
+
+/* A sentence and its translation read as one block. */
+.example-edit {
+  display: grid;
+}
+
+.example-edit .input:first-child {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.example-edit .input-sub {
+  min-height: 44px;
+  margin-top: -1px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.example-edit .input:focus {
+  position: relative;
+}
+
+.toggles {
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 64px;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+
+.toggle + .toggle {
+  border-top: 1px solid var(--border);
+}
+
+.toggle.is-disabled {
+  cursor: default;
+}
+
+.toggle.is-disabled .toggle-text > :first-child {
+  color: var(--text-faint);
+}
+
+.toggle-text {
+  display: grid;
+  gap: 2px;
+}
+
+/* iOS-style switch on a real checkbox, so it keeps keyboard and screen-reader behaviour. */
+.switch {
+  flex: none;
+  position: relative;
+  width: 51px;
+  height: 31px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--surface-hover);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: inherit;
+  transition: background var(--dur-2) var(--ease);
+}
+
+.switch::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #f4f5f8;
+  box-shadow: 0 2px 6px rgb(2 4 12 / 0.45);
+  transition: transform var(--dur-2) var(--ease-spring);
+}
+
+.switch:checked {
+  background: var(--accent);
+  box-shadow: none;
+}
+
+.switch:checked::before {
+  transform: translateX(20px);
+}
+
+.switch:disabled {
+  opacity: 0.4;
+}
+
+.danger-button {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--tap);
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--wrong);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  transition: background var(--dur-1) var(--ease);
+}
+
+.danger-button.is-armed {
+  background: rgb(248 113 113 / 0.12);
 }
 
 /* ---------- Review ---------- */
