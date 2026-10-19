@@ -121,6 +121,7 @@ export class SqliteCardStore implements CardStore {
       cards: stats.cards,
       dueMeaning: stats.due.meaning,
       dueSpeech: stats.due.speech,
+      dueListening: stats.due.listening,
       streakDays: streakDays(this.db, now),
       dueNext7Days,
       retention30d,

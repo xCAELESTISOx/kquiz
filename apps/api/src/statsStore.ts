@@ -1,6 +1,7 @@
 import { and, desc, gte, ne, sql } from "drizzle-orm";
 import type { Db } from "./db/client.js";
 import { attempts, cards, phoneStats, reviewLog, reviewStates } from "./db/schema.js";
+import { reviewable } from "./reviewStore.js";
 
 const DAY = 86_400_000;
 export const ACTIVITY_DAYS = 7 * 17;
@@ -80,8 +81,6 @@ export function statsOverview(db: Db, now = new Date(), tzOffsetMinutes = 0): St
     return { day: dateOf(day), reviews: perDay.get(day) ?? 0 };
   });
 
-  // Only speakable cards are ever reviewed for pronunciation.
-  const reviewable = sql`(${reviewStates.mode} = 'meaning' or ${cards.speakable} = 1)`;
   const dueDay = sql<number>`max(cast((${reviewStates.due} + ${shift}) / ${DAY} as integer), ${today})`;
   const forecast = Array.from({ length: FORECAST_DAYS }, (_, i) => ({ day: dateOf(today + i), due: {} as ByMode<number> }));
   const dueRows = db

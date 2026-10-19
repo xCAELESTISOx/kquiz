@@ -48,10 +48,10 @@ export type CreateResult = { created: CardDto[]; duplicates: Duplicate[] };
 const emptyToNull = (value: string | undefined) => (value ? value : null);
 const uniqueTags = (tags: string[]) => [...new Set(tags)];
 
-export const reviewModes: ReviewMode[] = ["meaning", "speech"];
+export const reviewModes: ReviewMode[] = ["meaning", "speech", "listening"];
 
 /**
- * Stores new cards with a fresh schedule in both modes. A card whose Korean already
+ * Stores new cards with a fresh schedule in every mode. A card whose Korean already
  * exists (or repeats earlier in the batch) is reported as a duplicate, not stored.
  */
 export function createCards(db: Db, inputs: NewCard[], source: CardSource, now = new Date()): CreateResult {

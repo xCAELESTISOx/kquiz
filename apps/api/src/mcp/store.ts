@@ -24,6 +24,8 @@ export interface Stats {
   cards: number;
   dueMeaning: number;
   dueSpeech: number;
+  /** Cards to recognise by ear; only those whose recording is made. */
+  dueListening: number;
   streakDays: number;
   /** Reviews coming due in the next 7 days (UTC), per mode, new cards left out. */
   dueNext7Days?: Record<string, number>;
@@ -119,6 +121,7 @@ export class MemoryCardStore implements CardStore {
       cards: all.length,
       dueMeaning: all.length,
       dueSpeech: all.filter((card) => card.speakable).length,
+      dueListening: 0,
       streakDays: 0,
     };
   }

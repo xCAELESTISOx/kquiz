@@ -49,6 +49,14 @@ export const CheckIcon = () => (
   </Icon>
 );
 
+export const HeadphonesIcon = () => (
+  <Icon>
+    <path d="M4 15v-3a8 8 0 0 1 16 0v3" />
+    <rect x="3" y="14" width="4.5" height="6.5" rx="2" />
+    <rect x="16.5" y="14" width="4.5" height="6.5" rx="2" />
+  </Icon>
+);
+
 export const MicIcon = () => (
   <Icon>
     <rect x="9" y="3" width="6" height="11" rx="3" />
