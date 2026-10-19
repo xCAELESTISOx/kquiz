@@ -36,9 +36,11 @@ describe("practice audio", () => {
     const t = await setup();
     const { speaker, calls } = fakeSpeaker();
     const worker = audioWorker(t.db, speaker, () => t.clock.now);
-    expect(await worker.runOnce()).toBe(7);
+    // Cards all at once, then one practice text per pass.
+    expect(await worker.runOnce()).toBe(3);
+    expect(calls).toEqual(["물", "밥", "불"]);
+    while ((await worker.runOnce()) > 0);
     expect(calls).toEqual(["물", "밥", "불", "풀", ...examples.map((e) => e.ko)]);
-    expect(await worker.runOnce()).toBe(0);
 
     const res = await t.request(`/practice/audio?text=${encodeURIComponent("물이 차가워요.")}`);
     expect(res.status).toBe(200);
@@ -54,10 +56,11 @@ describe("practice audio", () => {
     const t = await setup();
     const { speaker, calls } = fakeSpeaker();
     const worker = audioWorker(t.db, speaker, () => t.clock.now);
-    await worker.runOnce();
+    while ((await worker.runOnce()) > 0);
     const changed = [{ ko: "물을 많이 마셔요.", ru: "Пью много воды." }, ...examples.slice(1)];
     await t.request(`/cards/${t.id}`, { method: "PATCH", body: { examples: changed } });
     expect(await worker.runOnce()).toBe(1);
+    expect(await worker.runOnce()).toBe(0);
     expect(calls.at(-1)).toBe("물을 많이 마셔요.");
     expect((await t.request(`/practice/audio?text=${encodeURIComponent("물을 마셔요.")}`)).status).toBe(404);
   });
@@ -67,7 +70,8 @@ describe("shadowing", () => {
   it("offers only examples that have audio, one per card", async () => {
     const t = await setup();
     expect((await t.request("/practice/shadowing")).json.items).toEqual([]);
-    await audioWorker(t.db, fakeSpeaker().speaker, () => t.clock.now).runOnce();
+    const worker = audioWorker(t.db, fakeSpeaker().speaker, () => t.clock.now);
+    while ((await worker.runOnce()) > 0);
     const { items } = (await t.request("/practice/shadowing?limit=5")).json;
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ cardId: t.id, word: "물", meaning: "вода" });
@@ -82,7 +86,8 @@ describe("sound drills", () => {
     let { drills } = (await t.request("/practice/drills")).json;
     expect(drills.map((d: { ready: boolean }) => d.ready)).toEqual([false, false]);
 
-    await audioWorker(t.db, fakeSpeaker().speaker, () => t.clock.now).runOnce();
+    const worker = audioWorker(t.db, fakeSpeaker().speaker, () => t.clock.now);
+    while ((await worker.runOnce()) > 0);
     const [first, second] = (await t.request("/practice/drills")).json.drills;
     expect(first.ready && second.ready).toBe(true);
 

@@ -72,7 +72,7 @@ type Job = { key: string; text: string; save(mp3: Uint8Array): void };
 
 /**
  * Makes audio for every card that lacks it, one at a time, then for example sentences and drill
- * words (practice.ts). One pass stops at the first failure that isn't about the text (scorer down,
+ * words (practice.ts), one of those per pass. One pass stops at the first failure that isn't about the text (scorer down,
  * busy, slow) and waits for the next tick.
  */
 export function audioWorker(db: Db, speaker: Speaker, now: () => Date = () => new Date()) {
@@ -117,6 +117,9 @@ export function audioWorker(db: Db, speaker: Speaker, now: () => Date = () => ne
           made++;
           if (failing) console.log("tts: back to normal");
           failing = false;
+          // Examples and drill words are a long, low-priority backfill: one per tick, so new cards
+          // and pronunciation scoring get the CPU in between.
+          if (job.key.startsWith("text:")) break;
         } catch (error) {
           if (error instanceof BadTextError) {
             console.warn(`tts: ${job.key} refused: ${error.message}`);
