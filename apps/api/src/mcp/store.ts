@@ -6,6 +6,8 @@ export type CardSource = "app" | "claude" | "bulk";
 export interface StoredCard extends NewCard {
   id: string;
   speakable: boolean;
+  /** Waiting in the new-card queue, not yet in reviews. */
+  queued: boolean;
   source: CardSource;
   createdAt: string;
   updatedAt: string;
@@ -26,6 +28,9 @@ export interface Stats {
   dueSpeech: number;
   /** Cards to recognise by ear; only those whose recording is made. */
   dueListening: number;
+  /** Cards from Claude still waiting to enter reviews, and how many enter per day. */
+  queued: number;
+  newPerDay: number;
   streakDays: number;
 }
 
@@ -73,6 +78,7 @@ export class MemoryCardStore implements CardStore {
         korean,
         id: randomUUID(),
         speakable: isSpeakable(korean),
+        queued: source === "claude",
         source,
         createdAt: now,
         updatedAt: now,
@@ -111,13 +117,16 @@ export class MemoryCardStore implements CardStore {
   }
 
   async stats(): Promise<Stats> {
-    // New cards are due right away in both modes; speech only for speakable ones.
+    // Cards from the app are due right away in both modes (speech only when speakable); Claude's wait.
     const all = [...this.cards.values()];
+    const live = all.filter((card) => !card.queued);
     return {
       cards: all.length,
-      dueMeaning: all.length,
-      dueSpeech: all.filter((card) => card.speakable).length,
+      dueMeaning: live.length,
+      dueSpeech: live.filter((card) => card.speakable).length,
       dueListening: 0,
+      queued: all.length - live.length,
+      newPerDay: 15,
       streakDays: 0,
     };
   }

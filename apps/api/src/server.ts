@@ -10,7 +10,7 @@ export function createServer(deps: AppDeps & { mcpRedirectUris?: string[] }) {
   const mcp = createMcpApp({
     // One domain for the app, the API and the MCP endpoint (docs/PLAN.md §3).
     publicUrl: config.origin,
-    cards: new SqliteCardStore(db),
+    cards: new SqliteCardStore(db, config.timeZone),
     drills: new SqliteDrillStore(db),
     oauth: new SqliteOAuthStore(db),
     owner: ownerAuth(db, config, now),

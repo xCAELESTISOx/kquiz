@@ -20,11 +20,24 @@ export const cards = sqliteTable(
     speakable: integer("speakable", { mode: "boolean" }).notNull(),
     source: text("source", { enum: ["app", "claude", "bulk"] }).notNull(),
     language: text("language").notNull().default("ko"),
+    // Paused: kept with its schedule, but out of every review queue until resumed.
+    suspended: integer("suspended", { mode: "boolean" }).notNull().default(false),
+    // Null while the card waits in the new-card queue (cards from Claude, newCards.ts); it has no
+    // review states until then. `introduction` says how it left: added directly, the daily
+    // allowance, or pulled early by hand (which doesn't use up the allowance).
+    introducedAt: timestamp("introduced_at"),
+    introduction: text("introduction", { enum: ["direct", "daily", "early"] }),
     createdAt: timestamp("created_at").notNull(),
     updatedAt: timestamp("updated_at").notNull(),
   },
-  (t) => [uniqueIndex("cards_korean_key").on(t.koreanKey)],
+  (t) => [uniqueIndex("cards_korean_key").on(t.koreanKey), index("cards_introduced").on(t.introducedAt)],
 );
+
+// Owner's settings as key → JSON value (settings.ts).
+export const settings = sqliteTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value", { mode: "json" }).notNull(),
+});
 
 // Reference audio from services/scorer's /tts, one MP3 per card. `text` is the Korean it was
 // made from: when the card's Korean changes, the audio is stale and gets made again.

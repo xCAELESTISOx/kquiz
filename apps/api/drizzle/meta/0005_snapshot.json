@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "36cc01f5-8318-48f4-9448-540755ef51f4",
+  "id": "9979f06b-5a16-4551-98d3-676ae1539c7e",
   "prevId": "a0c7acb5-e151-4f8f-b53a-56989a5f7d6b",
   "tables": {
     "attempts": {
@@ -405,6 +405,28 @@
           "autoincrement": false,
           "default": "'ko'"
         },
+        "suspended": {
+          "name": "suspended",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "introduced_at": {
+          "name": "introduced_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "introduction": {
+          "name": "introduction",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -427,6 +449,13 @@
             "korean_key"
           ],
           "isUnique": true
+        },
+        "cards_introduced": {
+          "name": "cards_introduced",
+          "columns": [
+            "introduced_at"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {},
@@ -900,116 +929,19 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "sound_drills": {
-      "name": "sound_drills",
+    "settings": {
+      "name": "settings",
       "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "contrast": {
-          "name": "contrast",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "words": {
-          "name": "words",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "words_key": {
-          "name": "words_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "correct": {
-          "name": "correct",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "wrong": {
-          "name": "wrong",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "last_practiced_at": {
-          "name": "last_practiced_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "sound_drills_words": {
-          "name": "sound_drills_words",
-          "columns": [
-            "words_key"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "speech_audio": {
-      "name": "speech_audio",
-      "columns": {
-        "text": {
-          "name": "text",
+        "key": {
+          "name": "key",
           "type": "text",
           "primaryKey": true,
           "notNull": true,
           "autoincrement": false
         },
-        "mime": {
-          "name": "mime",
+        "value": {
+          "name": "value",
           "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "data": {
-          "name": "data",
-          "type": "blob",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
