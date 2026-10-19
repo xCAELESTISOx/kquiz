@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { api, pendingReviewCount } from "../lib/api";
 import { cardsWord } from "../lib/plural";
-import type { Card, Stats } from "../lib/types";
+import type { QueueItem, Stats } from "../lib/types";
 
 const PREVIEW = 14;
 
 export function TodayScreen() {
   const [stats, setStats] = useState<Stats>();
-  const [preview, setPreview] = useState<Card[]>([]);
+  const [preview, setPreview] = useState<QueueItem[]>([]);
   const [error, setError] = useState<string>();
 
   useEffect(() => {
@@ -15,7 +15,7 @@ export function TodayScreen() {
     Promise.all([api.stats(), api.queue("meaning", PREVIEW)]).then(
       ([s, q]) => {
         setStats(s);
-        setPreview(q.cards);
+        setPreview(q.items);
       },
       (e: Error) => setError(e.message),
     );
@@ -38,7 +38,7 @@ export function TodayScreen() {
       <section className="word-wall" aria-label="Слова к повторению" aria-busy={!stats && !error}>
         {stats && due > 0 && (
           <p className="word-wall-words" lang="ko">
-            {preview.map((card, i) => (
+            {preview.map(({ card }, i) => (
               <span key={card.id} style={{ opacity: Math.max(1 - i * 0.065, 0.22) }}>
                 {card.korean}
               </span>
@@ -68,8 +68,8 @@ export function TodayScreen() {
             <dd>{stats.due.speech}</dd>
           </div>
           <div>
-            <dt>Всего</dt>
-            <dd>{stats.total}</dd>
+            <dt>Повторено</dt>
+            <dd>{stats.reviewedToday}</dd>
           </div>
         </dl>
       )}

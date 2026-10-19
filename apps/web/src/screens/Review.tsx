@@ -26,9 +26,9 @@ export function ReviewScreen() {
   useEffect(() => {
     document.title = "Повторение · KQuiz";
     api.queue("meaning").then(
-      ({ cards }) => {
-        setQueue(cards);
-        setTotal(cards.length);
+      ({ items }) => {
+        setQueue(items.map((item) => item.card));
+        setTotal(items.length);
         shownAt.current = performance.now();
       },
       (e: Error) => setError(e.message),

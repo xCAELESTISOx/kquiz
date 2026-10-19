@@ -87,8 +87,8 @@ function SingleForm() {
     setBusy(true);
     setError(undefined);
     try {
-      const result = await api.addCards([card], "app");
-      if (result.created.length) {
+      const result = await api.addCard(card);
+      if (result.status === "created") {
         setAdded((list) => [card, ...list].slice(0, 5));
         setKorean("");
         setMeaning("");
@@ -96,10 +96,8 @@ function SingleForm() {
         setExampleMeaning("");
         setNotes("");
         koreanRef.current?.focus();
-      } else if (result.duplicates.length) {
-        setError(`«${card.korean}» уже есть в карточках`);
       } else {
-        setError(result.rejected[0]?.reason ?? "Карточку не приняли");
+        setError(`«${card.korean}» уже есть в карточках`);
       }
     } catch (e) {
       setError((e as Error).message);
@@ -254,7 +252,7 @@ function BulkForm() {
     setBusy(true);
     setError(undefined);
     try {
-      const res = await api.addCards(cards, "bulk");
+      const res = await api.addCards(cards);
       setResult(res);
       // Keep only the lines that need fixing in the box.
       setText(bad.map((l) => l.raw).join("\n"));

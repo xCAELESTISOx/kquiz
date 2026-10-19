@@ -822,3 +822,49 @@ p {
     animation: none !important;
   }
 }
+
+/* ---------- Login ---------- */
+
+.login {
+  min-height: 100dvh;
+  max-width: 420px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: calc(var(--safe-top) + 24px) 16px calc(var(--safe-bottom) + 24px);
+}
+
+.login-mark {
+  width: 88px;
+  height: 88px;
+  display: grid;
+  place-items: center;
+  border-radius: 24px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  color: var(--accent);
+  font-size: 48px;
+  font-weight: 800;
+}
+
+.login-title {
+  margin: 8px 0 0;
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.login-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 160px;
+  margin-top: 8px;
+}
+
+.login-body .button {
+  margin-top: 24px;
+}

@@ -1,14 +1,28 @@
-import { normalizeKorean, isKoreanOnly } from "./korean";
-import type { AddCardsResult, Card, CardSource, NewCard, RatingName, ReviewInput, ReviewMode, Stats } from "./types";
+import { isKoreanOnly, normalizeKorean } from "./korean";
+import type {
+  AddCardResult,
+  AddCardsResult,
+  Card,
+  CardSource,
+  NewCard,
+  QueueItem,
+  RatingName,
+  ReviewInput,
+  ReviewMode,
+  ReviewResult,
+  Stats,
+} from "./types";
 
-// Stand-in for apps/api while its endpoints are being built. Dev builds only (see api.ts).
+// Stand-in for apps/api when it isn't running. Dev builds only (see api.ts).
 // Scheduling here is a crude placeholder; the real one is ts-fsrs on the server.
 
 interface MockState {
+  nextId: number;
   cards: Card[];
   due: Record<string, string>; // `${cardId}:${mode}` → ISO date
   reps: Record<string, number>;
   reviewIds: string[];
+  reviewedToday: { day: string; count: number };
 }
 
 export interface KeyValueStorage {
@@ -16,7 +30,7 @@ export interface KeyValueStorage {
   setItem(key: string, value: string): void;
 }
 
-const KEY = "kquiz.mock.v1";
+const KEY = "kquiz.mock.v2";
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
 
@@ -28,6 +42,11 @@ const SEED: NewCard[] = [
   { korean: "맛있다", meaning: "вкусный", pronunciation: "마싣따", romanization: "masitda" },
 ];
 
+/** Same rule as the server: duplicates ignore spaces and punctuation. */
+function dedupeKey(korean: string): string {
+  return korean.normalize("NFC").replace(/[\s\p{P}]/gu, "");
+}
+
 export class MockApi {
   private state: MockState;
 
@@ -36,78 +55,104 @@ export class MockApi {
     private now: () => Date = () => new Date(),
   ) {
     const saved = storage.getItem(KEY);
-    this.state = saved ? (JSON.parse(saved) as MockState) : { cards: [], due: {}, reps: {}, reviewIds: [] };
-    if (!saved) this.insert(SEED, "app");
+    this.state = saved
+      ? (JSON.parse(saved) as MockState)
+      : { nextId: 1, cards: [], due: {}, reps: {}, reviewIds: [], reviewedToday: { day: "", count: 0 } };
+    if (!saved) for (const card of SEED) this.insert(card, "app");
   }
 
-  addCards(cards: NewCard[], source: CardSource): AddCardsResult {
-    const result = this.insert(cards, source);
+  addCard(input: NewCard): AddCardResult {
+    const result = this.insert(input, "app");
     this.save();
     return result;
   }
 
-  queue(mode: ReviewMode, limit = 50): Card[] {
+  addCards(cards: NewCard[]): AddCardsResult {
+    const result: AddCardsResult = { created: [], duplicates: [], rejected: [] };
+    for (const input of cards) {
+      if (!input.korean.trim() || !input.meaning.trim()) {
+        result.rejected.push({ input: input.korean, reason: "korean and meaning are required" });
+        continue;
+      }
+      const r = this.insert(input, "bulk");
+      if (r.status === "created") result.created.push(r.card);
+      else result.duplicates.push({ korean: normalizeKorean(input.korean), existingId: r.existingId });
+    }
+    this.save();
+    return result;
+  }
+
+  queue(mode: ReviewMode, limit = 50): QueueItem[] {
     const now = this.now().getTime();
     return this.state.cards
       .filter((c) => mode === "meaning" || c.speakable)
-      .map((c) => ({ card: c, due: Date.parse(this.state.due[`${c.id}:${mode}`] ?? "") }))
-      .filter((x) => x.due <= now)
-      .sort((a, b) => a.due - b.due)
-      .slice(0, limit)
-      .map((x) => x.card);
+      .map((card) => {
+        const key = `${card.id}:${mode}`;
+        const due = this.state.due[key]!;
+        const reps = this.state.reps[key] ?? 0;
+        return { card, mode, due, state: reps ? 2 : 0, reps, lapses: 0 };
+      })
+      .filter((item) => Date.parse(item.due) <= now)
+      .sort((a, b) => Date.parse(a.due) - Date.parse(b.due))
+      .slice(0, limit);
   }
 
-  review(input: ReviewInput): { ok: true; due: string } {
-    const key = `${input.cardId}:${input.mode}`;
-    if (!this.state.reviewIds.includes(input.id)) {
-      const reps = input.rating === "again" ? 0 : (this.state.reps[key] ?? 0) + 1;
-      this.state.reps[key] = reps;
-      this.state.due[key] = new Date(this.now().getTime() + interval(input.rating, reps)).toISOString();
-      this.state.reviewIds = [...this.state.reviewIds.slice(-499), input.id];
-      this.save();
-    }
-    return { ok: true, due: this.state.due[key]! };
+  review(reviews: ReviewInput[]): { results: ReviewResult[] } {
+    const results = [...reviews]
+      .sort((a, b) => a.reviewedAt.localeCompare(b.reviewedAt))
+      .map((input): ReviewResult => {
+        const key = `${input.cardId}:${input.mode}`;
+        if (this.state.reviewIds.includes(input.id)) return { id: input.id, status: "duplicate" };
+        if (!this.state.cards.some((c) => c.id === input.cardId)) return { id: input.id, status: "card_not_found" };
+        const reps = input.rating === "again" ? 0 : (this.state.reps[key] ?? 0) + 1;
+        this.state.reps[key] = reps;
+        this.state.due[key] = new Date(this.now().getTime() + interval(input.rating, reps)).toISOString();
+        this.state.reviewIds = [...this.state.reviewIds.slice(-499), input.id];
+        const day = this.now().toISOString().slice(0, 10);
+        this.state.reviewedToday =
+          this.state.reviewedToday.day === day ? { day, count: this.state.reviewedToday.count + 1 } : { day, count: 1 };
+        return { id: input.id, status: "applied", due: this.state.due[key] };
+      });
+    this.save();
+    return { results };
   }
 
   stats(): Stats {
+    const day = this.now().toISOString().slice(0, 10);
     return {
-      total: this.state.cards.length,
+      cards: this.state.cards.length,
       due: { meaning: this.queue("meaning", Infinity).length, speech: this.queue("speech", Infinity).length },
+      reviewedToday: this.state.reviewedToday.day === day ? this.state.reviewedToday.count : 0,
     };
   }
 
-  private insert(cards: NewCard[], source: CardSource): AddCardsResult {
-    const result: AddCardsResult = { created: [], duplicates: [], rejected: [] };
-    for (const input of cards) {
-      const korean = normalizeKorean(input.korean);
-      const meaning = input.meaning.trim();
-      if (!korean || !meaning) {
-        result.rejected.push({ input: input.korean, reason: "Нужны корейское слово и перевод" });
-        continue;
-      }
-      const existing = this.state.cards.find((c) => c.korean === korean);
-      if (existing) {
-        result.duplicates.push({ korean, existingId: existing.id });
-        continue;
-      }
-      const at = this.now().toISOString();
-      const syllables = (korean.match(/[가-힣]/g) ?? []).length;
-      const card: Card = {
-        ...input,
-        korean,
-        meaning,
-        id: crypto.randomUUID(),
-        speakable: isKoreanOnly(korean) && syllables > 0 && syllables <= 12,
-        source,
-        createdAt: at,
-        updatedAt: at,
-      };
-      this.state.cards.push(card);
-      this.state.due[`${card.id}:meaning`] = at;
-      this.state.due[`${card.id}:speech`] = at;
-      result.created.push(card);
-    }
-    return result;
+  private insert(input: NewCard, source: CardSource): AddCardResult {
+    const korean = normalizeKorean(input.korean);
+    const existing = this.state.cards.find((c) => dedupeKey(c.korean) === dedupeKey(korean));
+    if (existing) return { status: "duplicate", existingId: existing.id };
+    const at = this.now().toISOString();
+    const syllables = (korean.match(/[가-힣]/g) ?? []).length;
+    const readyForSpeech = isKoreanOnly(korean);
+    const card: Card = {
+      id: this.state.nextId++,
+      korean,
+      meaning: input.meaning.trim(),
+      pronunciation: input.pronunciation ?? null,
+      romanization: input.romanization ?? null,
+      exampleKo: input.exampleKo ?? null,
+      exampleMeaning: input.exampleMeaning ?? null,
+      notes: input.notes ?? null,
+      tags: input.tags ?? [],
+      speakable: readyForSpeech && syllables > 0 && syllables <= 12,
+      readyForSpeech,
+      source,
+      createdAt: at,
+      updatedAt: at,
+    };
+    this.state.cards.push(card);
+    this.state.due[`${card.id}:meaning`] = at;
+    this.state.due[`${card.id}:speech`] = at;
+    return { status: "created", card };
   }
 
   private save() {
