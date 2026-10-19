@@ -6,6 +6,9 @@
 	admin off
 	persist_config off
 	servers {
+		# No HTTP/3: Chrome's requests over resumed QUIC sessions got 403 from the API's origin
+		# check on /oauth/authorize, which h1/h2 requests never did. Off until that is understood.
+		protocols h1 h2
 		timeouts {
 			read_header 10s
 			read_body 30s
