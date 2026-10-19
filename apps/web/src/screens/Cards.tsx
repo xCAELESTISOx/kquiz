@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import { cardsCount } from "../lib/plural";
 import type { Card, CardFilter, CardSummary, Settings, Stats } from "../lib/types";
 import { DownloadIcon, MinusIcon, PlusIcon, SearchIcon } from "../ui/icons";
+import { EmptyState } from "../ui/EmptyState";
 import { Spinner } from "../ui/Spinner";
 
 const PAGE = 50;
@@ -134,15 +135,19 @@ export function CardsScreen({ filter }: { filter?: CardFilter }) {
       {!cards && !error && <div className="skeleton card-list-skeleton" aria-busy="true" />}
 
       {cards && cards.length === 0 && (
-        <p className="empty muted">
-          {query || tag
-            ? "Ничего не нашлось."
-            : filter === "queued"
-              ? "Очередь пуста: все новые карточки уже в повторении."
-              : filter === "paused"
-                ? "На паузе ничего нет."
-                : "Карточек пока нет."}
-        </p>
+        <EmptyState word={query || tag || filter === "paused" ? "없어요" : "비었어요"}>
+          {query || tag ? (
+            "Ничего не нашлось. Попробуй другое слово или сними фильтр."
+          ) : filter === "queued" ? (
+            "Очередь пуста: все новые карточки уже в повторении."
+          ) : filter === "paused" ? (
+            "На паузе ничего нет. Поставить карточку на паузу можно в её настройках."
+          ) : (
+            <>
+              Карточек пока нет. <a href="#/add">Добавь первые слова</a>.
+            </>
+          )}
+        </EmptyState>
       )}
 
       {cards && cards.length > 0 && (

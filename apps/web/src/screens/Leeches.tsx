@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { api } from "../lib/api";
 import type { Leech } from "../lib/types";
+import { EmptyState } from "../ui/EmptyState";
 
 // What to tell Claude in chat; the KQuiz connector's get_leeches tool does the rest.
 const ASK_CLAUDE = "Переделай мои трудные карточки в KQuiz";
@@ -44,8 +45,10 @@ export function LeechesScreen() {
   return (
     <main className="screen">
       <header className="screen-header">
-        <h1 className="title">Трудные</h1>
-        <p className="subtitle">Забываются чаще всего</p>
+        <h1 className="title" lang="ko">
+          약점
+        </h1>
+        <p className="subtitle">Трудные карточки</p>
       </header>
 
       <div aria-live="polite">{error && <p className="notice notice-error">{error}</p>}</div>
@@ -53,7 +56,9 @@ export function LeechesScreen() {
       {!items && !error && <div className="skeleton" aria-busy="true" />}
 
       {items && items.length === 0 && (
-        <p className="notice">Трудных карточек нет. Сюда попадает карточка, забытая в шесть разных дней после последней правки.</p>
+        <EmptyState word="좋아요">
+          Трудных карточек нет. Сюда попадает карточка, забытая в шесть разных дней после последней правки.
+        </EmptyState>
       )}
 
       {items && items.length > 0 && (

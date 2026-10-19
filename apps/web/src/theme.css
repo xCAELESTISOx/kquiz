@@ -879,7 +879,9 @@ p {
 }
 
 /* One scrolling row: filters first, then tags. Bleeds to the screen edges like iOS. */
+/* The row scrolls sideways under a fade, which shows there is more past the edge. */
 .chips {
+  mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 32px), transparent);
   display: flex;
   gap: 8px;
   margin-inline: -16px;
@@ -1049,12 +1051,34 @@ p {
   transition-duration: var(--dur-press);
 }
 
-.empty {
-  padding: 32px 8px;
-  text-align: center;
+.empty-state {
+  display: grid;
+  gap: 10px;
+  max-width: 34ch;
+  padding: 28px 0 8px;
 }
 
+.empty-state-word {
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: var(--text-faint);
+}
+
+.empty-state-text {
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.empty-state-text a {
+  color: var(--accent-hi);
+}
+
+/* Pinned to the foot of the screen, so an empty or short list doesn't leave it floating mid-page. */
 .export-link {
+  margin-top: auto;
+  padding-block: 12px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -2284,8 +2308,13 @@ p {
   animation-delay: calc(260ms + var(--i, 0) * 60ms);
 }
 
-.word-wall-empty > * {
+.word-wall-empty > *,
+.empty-state > * {
   animation: answer-in var(--dur-3) var(--ease-out) backwards;
+}
+
+.empty-state > :nth-child(2) {
+  animation-delay: 120ms;
 }
 
 .word-wall-empty > :nth-child(2) {
