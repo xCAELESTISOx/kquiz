@@ -1179,6 +1179,46 @@ p {
   font-variant-numeric: tabular-nums;
 }
 
+/* Reviewing just the cards the list shows. */
+.group-bar {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px 16px;
+  border-radius: var(--radius);
+  border: 1px solid rgb(124 140 255 / 0.28);
+  background: linear-gradient(to bottom, var(--accent-soft), var(--surface) 70%);
+  box-shadow: var(--shadow-1);
+  animation: notice-in var(--dur-2) var(--ease-spring);
+}
+
+.group-bar-title {
+  font-weight: 650;
+}
+
+.group-bar-count {
+  color: var(--accent-hi);
+  font-variant-numeric: tabular-nums;
+}
+
+.group-bar-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.group-bar-actions .button {
+  min-height: 48px;
+  padding-inline: 8px;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+.group-bar-actions .button svg {
+  width: 18px;
+  height: 18px;
+}
+
 /* ---------- Card ---------- */
 
 .card-top {
@@ -1377,6 +1417,10 @@ p {
   transition: transform var(--dur-3) var(--ease-spring);
 }
 
+.review-back {
+  margin: 0 -8px 0 -6px;
+}
+
 .review-count {
   min-width: 52px;
   text-align: right;
@@ -1520,6 +1564,16 @@ p {
   background: rgb(248 113 113 / 0.12);
 }
 
+.review-card[data-tone="back"] {
+  border-color: rgb(124 140 255 / 0.5);
+}
+
+.review-card[data-tone="back"] .swipe-badge {
+  left: 20px;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
 .review-korean {
   font-size: clamp(40px, 13vw, 64px);
   font-weight: 700;
@@ -1651,6 +1705,43 @@ p {
 
 .review-example .muted {
   font-size: 13px;
+}
+
+.example-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: -10px -14px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.example-ru {
+  color: var(--text-muted);
+  font-size: 13px;
+  filter: blur(5px);
+  opacity: 0.55;
+  transition:
+    filter var(--dur-2) var(--ease-out),
+    opacity var(--dur-2) var(--ease-out);
+}
+
+.example-toggle.is-open .example-ru {
+  filter: none;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .example-ru {
+    transition: none;
+  }
 }
 
 .review-notes {

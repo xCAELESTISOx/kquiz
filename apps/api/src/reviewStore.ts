@@ -1,8 +1,9 @@
-import { and, asc, count, eq, lte, sql } from "drizzle-orm";
-import { toCardDto, type CardDto } from "./cardStore.js";
+import { and, asc, count, eq, inArray, lte, sql } from "drizzle-orm";
+import { isKoreanOnly } from "./cards.js";
+import { cardConditions, toCardDto, type CardDto, type CardQuery } from "./cardStore.js";
 import type { Db } from "./db/client.js";
 import { cardAudio, cards, reviewLog, reviewStates } from "./db/schema.js";
-import { newCardsToday, startOfDay, type NewCardsToday } from "./newCards.js";
+import { introduce, newCardsToday, startOfDay, type NewCardsToday } from "./newCards.js";
 import { getFsrsSetup, schedulerFor } from "./fsrs.js";
 import { applyRating, fromStateRow, toStateRow, type RatingName, type ReviewMode } from "./review.js";
 
@@ -16,9 +17,9 @@ const hasCurrentAudio = sql`exists (select 1 from ${cardAudio} where ${cardAudio
 export const reviewable = sql`${cards.suspended} = 0 and (${reviewStates.mode} = 'meaning' or (${reviewStates.mode} = 'speech' and ${cards.speakable} = 1) or (${reviewStates.mode} = 'listening' and ${hasCurrentAudio}))`;
 
 /**
- * Cards due in a mode, most overdue first, with the never-reviewed ones spread among them at random
- * instead of in a block at the end. Only speakable cards enter the pronunciation queue, only cards
- * with their recording the listening one; paused ones enter none.
+ * Cards due in a mode: the most overdue `limit` of them, in random order, so cards added together
+ * don't always come up together and one word doesn't prompt the next. Only speakable cards enter
+ * the pronunciation queue, only cards with their recording the listening one; paused ones enter none.
  */
 export function dueQueue(db: Db, userId: number, mode: ReviewMode, now = new Date(), limit = 50, random = Math.random): QueueItem[] {
   const items = db
@@ -46,14 +47,71 @@ export function dueQueue(db: Db, userId: number, mode: ReviewMode, now = new Dat
       reps: state.reps,
       lapses: state.lapses,
     }));
-  return mixNew(items, random);
+  return shuffle(items, random);
 }
 
-/** Inserts each new card at a random spot among the reviews, keeping the reviews' order. */
-export function mixNew<T extends { reps: number }>(items: T[], random = Math.random): T[] {
-  const mixed = items.filter((item) => item.reps > 0);
-  for (const item of items.filter((item) => item.reps === 0)) {
-    mixed.splice(Math.floor(random() * (mixed.length + 1)), 0, item);
+export const GROUP_LIMIT = 200;
+
+export type GroupFilter = Pick<CardQuery, "q" | "tag" | "status" | "notReady">;
+
+/**
+ * A group the owner picked on the cards screen (a search, a tag), due or not, in random order.
+ * Ratings go into the usual schedule: FSRS takes an early review into account. Queued cards in the
+ * group are taken into reviews now, as "learn now" would; paused ones stay out.
+ */
+export function groupQueue(
+  db: Db,
+  userId: number,
+  mode: ReviewMode,
+  filter: GroupFilter,
+  now = new Date(),
+  random = Math.random,
+): { items: QueueItem[]; total: number } {
+  return db.transaction((tx) => {
+    const matched = tx
+      .select({ id: cards.id, korean: cards.korean, introducedAt: cards.introducedAt })
+      .from(cards)
+      .where(and(...cardConditions(userId, filter), eq(cards.suspended, false)))
+      .all()
+      .filter((row) => !filter.notReady || !isKoreanOnly(row.korean));
+    const picked = shuffle(matched, random).slice(0, GROUP_LIMIT);
+    introduce(tx, picked.filter((row) => !row.introducedAt).map((row) => row.id), "early", now);
+    if (!picked.length) return { items: [], total: 0 };
+
+    const rows = tx
+      .select({ card: cards, state: reviewStates })
+      .from(reviewStates)
+      .innerJoin(cards, eq(cards.id, reviewStates.cardId))
+      .where(
+        and(
+          eq(cards.userId, userId),
+          eq(reviewStates.mode, mode),
+          inArray(
+            cards.id,
+            picked.map((row) => row.id),
+          ),
+          mode === "speech" ? eq(cards.speakable, true) : undefined,
+          mode === "listening" ? hasCurrentAudio : undefined,
+        ),
+      )
+      .all();
+    const byId = new Map(rows.map((row) => [row.card.id, row]));
+    const items = picked.flatMap(({ id }) => {
+      const row = byId.get(id);
+      if (!row) return [];
+      const { card, state } = row;
+      return [{ card: toCardDto(card), mode, due: state.due.toISOString(), state: state.state, reps: state.reps, lapses: state.lapses }];
+    });
+    return { items, total: matched.length };
+  });
+}
+
+/** A shuffled copy (Fisher–Yates). */
+export function shuffle<T>(items: T[], random = Math.random): T[] {
+  const mixed = [...items];
+  for (let i = mixed.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [mixed[i], mixed[j]] = [mixed[j]!, mixed[i]!];
   }
   return mixed;
 }

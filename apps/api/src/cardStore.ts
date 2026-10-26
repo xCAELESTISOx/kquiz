@@ -124,17 +124,23 @@ export type CardQuery = {
   before?: number;
 };
 
-export function listCards(db: Db, userId: number, query: CardQuery = {}): { cards: CardDto[]; nextBefore: number | null } {
-  const limit = Math.min(Math.max(query.limit ?? 50, 1), 200);
+/** The SQL side of a card filter; `notReady` is left to the caller (see listCards). */
+export function cardConditions(userId: number, query: Omit<CardQuery, "limit" | "before" | "notReady">): SQL[] {
   const where: SQL[] = [eq(cards.userId, userId)];
   if (query.q) {
     const pattern = `%${query.q.toLocaleLowerCase().replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
     where.push(sql`(ulower(${cards.korean}) like ${pattern} escape '\\' or ulower(${cards.meaning}) like ${pattern} escape '\\')`);
   }
   if (query.tag) where.push(sql`exists (select 1 from json_each(${cards.tags}) where value = ${query.tag})`);
-  if (query.before) where.push(lt(cards.id, query.before));
   if (query.status === "queued") where.push(isNull(cards.introducedAt));
   if (query.status === "paused") where.push(eq(cards.suspended, true));
+  return where;
+}
+
+export function listCards(db: Db, userId: number, query: CardQuery = {}): { cards: CardDto[]; nextBefore: number | null } {
+  const limit = Math.min(Math.max(query.limit ?? 50, 1), 200);
+  const where = cardConditions(userId, query);
+  if (query.before) where.push(lt(cards.id, query.before));
 
   // Hangul-only is checked in JS (SQLite has no Unicode script classes), so this filter scans.
   const rows = db

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { flushPendingReviews } from "./lib/api";
+import { flushPendingReviews, releaseHeldReview } from "./lib/api";
 import { useLocation } from "./lib/router";
 import { hideSplash } from "./lib/splash";
 import { AccessScreen } from "./screens/Access";
@@ -19,7 +19,7 @@ import { TodayScreen } from "./screens/Today";
 import { TabBar } from "./ui/TabBar";
 
 export function App() {
-  const { route, param } = useLocation();
+  const { route, param, group } = useLocation();
 
   // Today lifts the splash itself once its numbers are in.
   useEffect(() => {
@@ -29,7 +29,8 @@ export function App() {
   useEffect(() => {
     // Nobody is signed in yet on these, and a stored review would send the browser to /login.
     if (location.pathname === "/login" || location.hash.startsWith("#/invite/")) return;
-    void flushPendingReviews();
+    // A rating held for going back that the closed app never sent.
+    void releaseHeldReview();
     const onOnline = () => void flushPendingReviews();
     addEventListener("online", onOnline);
     return () => removeEventListener("online", onOnline);
@@ -37,10 +38,12 @@ export function App() {
 
   if (route === "login") return <LoginScreen />;
   if (route === "invite") return <InviteScreen code={param!} />;
-  if (route === "review") return <ReviewScreen key="meaning" mode="meaning" />;
-  if (route === "listen") return <ReviewScreen key="listening" mode="listening" />;
-  if (route === "speech") return <SpeechScreen />;
-  if (route === "choose") return <ChoiceScreen />;
+  // A group gets a fresh screen per filter, so going from one tag to another starts over.
+  const groupKey = group && JSON.stringify(group);
+  if (route === "review") return <ReviewScreen key={`meaning${groupKey}`} mode="meaning" group={group} />;
+  if (route === "listen") return <ReviewScreen key={`listening${groupKey}`} mode="listening" group={group} />;
+  if (route === "speech") return <SpeechScreen key={`speech${groupKey}`} group={group} />;
+  if (route === "choose") return <ChoiceScreen key={`choose${groupKey}`} group={group} />;
   if (route === "shadow") return <ShadowingScreen />;
   if (route === "sounds") return <SoundsScreen />;
 

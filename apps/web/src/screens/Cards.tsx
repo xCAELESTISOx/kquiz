@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { api } from "../lib/api";
-import { cardsCount } from "../lib/plural";
-import type { Card, CardFilter, CardSummary, Settings, Stats } from "../lib/types";
-import { DownloadIcon, MinusIcon, PlusIcon, SearchIcon } from "../ui/icons";
+import { api, remembered } from "../lib/api";
+import { cardsCount, cardsWord } from "../lib/plural";
+import { groupHash } from "../lib/router";
+import type { Card, CardFilter, CardSummary, GroupFilter, Settings, Stats } from "../lib/types";
+import { DownloadIcon, HeadphonesIcon, MicIcon, MinusIcon, PlusIcon, SearchIcon } from "../ui/icons";
 import { EmptyState } from "../ui/EmptyState";
 import { Spinner } from "../ui/Spinner";
 
@@ -11,12 +12,21 @@ const PAGE = 50;
 /** Where "back" from a card goes: the list as it was left, filter included. */
 export let lastCardsHash = "#/cards";
 
+const listQuery = (query: string, tag: string | undefined, filter: CardFilter | undefined) => ({
+  q: query.trim(),
+  tag,
+  status: filter,
+  limit: PAGE,
+});
+
 export function CardsScreen({ filter }: { filter?: CardFilter }) {
   const [query, setQuery] = useState("");
   const [tag, setTag] = useState<string>();
-  const [cards, setCards] = useState<Card[]>();
-  const [nextBefore, setNextBefore] = useState<number | null>(null);
-  const [summary, setSummary] = useState<CardSummary>();
+  // The list as last seen comes up at once; the fresh one replaces it when it arrives.
+  const [saved] = useState(() => remembered.cards(listQuery("", undefined, filter)));
+  const [cards, setCards] = useState<Card[] | undefined>(saved?.cards);
+  const [nextBefore, setNextBefore] = useState<number | null>(saved?.nextBefore ?? null);
+  const [summary, setSummary] = useState<CardSummary | undefined>(remembered.cardSummary);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string>();
   // Answers can arrive out of order while typing; only the latest one is shown.
@@ -32,9 +42,14 @@ export function CardsScreen({ filter }: { filter?: CardFilter }) {
 
   useEffect(() => {
     const id = ++requestId.current;
+    const seen = remembered.cards(listQuery(query, tag, filter));
+    if (seen) {
+      setCards(seen.cards);
+      setNextBefore(seen.nextBefore);
+    }
     const timer = setTimeout(
       () => {
-        api.cards({ q: query.trim(), tag, status: filter, limit: PAGE }).then(
+        api.cards(listQuery(query, tag, filter)).then(
           (res) => {
             if (id !== requestId.current) return;
             setCards(res.cards);
@@ -53,7 +68,7 @@ export function CardsScreen({ filter }: { filter?: CardFilter }) {
     if (nextBefore === null || loadingMore) return;
     setLoadingMore(true);
     try {
-      const res = await api.cards({ q: query.trim(), tag, status: filter, limit: PAGE, before: nextBefore });
+      const res = await api.cards({ ...listQuery(query, tag, filter), before: nextBefore });
       setCards((list) => [...(list ?? []), ...res.cards]);
       setNextBefore(res.nextBefore);
     } catch (e) {
@@ -130,6 +145,14 @@ export function CardsScreen({ filter }: { filter?: CardFilter }) {
 
       {filter === "queued" && <QueuePanel onChange={refreshSummary} />}
 
+      {cards && (query.trim() || tag || filter === "queued") && filter !== "paused" && (
+        <GroupBar
+          group={{ q: query.trim() || undefined, tag, status: filter === "queued" ? "queued" : undefined }}
+          cards={cards}
+          more={nextBefore !== null}
+        />
+      )}
+
       <div aria-live="polite">{error && <p className="notice notice-error">{error}</p>}</div>
 
       {!cards && !error && <div className="skeleton card-list-skeleton" aria-busy="true" />}
@@ -192,10 +215,42 @@ export function CardsScreen({ filter }: { filter?: CardFilter }) {
   );
 }
 
+/**
+ * Reviews just what the list shows: a search, a tag, the queue. All of it, due or not, in random
+ * order; the ratings go into the usual schedule.
+ */
+function GroupBar({ group, cards, more }: { group: GroupFilter; cards: Card[]; more: boolean }) {
+  const active = cards.filter((c) => !c.suspended);
+  if (!active.length) return null;
+  const queued = active.some((c) => c.queued);
+  const count = more ? `${active.length}+` : String(active.length);
+  return (
+    <section className="group-bar" aria-label="Учить выбранные">
+      <p className="group-bar-title">
+        Учить эти <span className="group-bar-count">{count}</span> {more ? "карточек" : cardsWord(active.length)}
+      </p>
+      <div className="group-bar-actions">
+        <a className="button primary" href={groupHash("review", group)}>
+          Перевод
+        </a>
+        <a className="button" href={groupHash("speech", group)}>
+          <MicIcon />
+          Вслух
+        </a>
+        <a className="button" href={groupHash("listen", group)}>
+          <HeadphonesIcon />
+          На слух
+        </a>
+      </div>
+      {queued && <p className="muted small">Карточки из очереди войдут в повторение сразу, вне дневного лимита.</p>}
+    </section>
+  );
+}
+
 /** The daily allowance of the new-card queue, set right where the queue is seen. */
 function QueuePanel({ onChange }: { onChange: () => void }) {
-  const [settings, setSettings] = useState<Settings>();
-  const [stats, setStats] = useState<Stats>();
+  const [settings, setSettings] = useState<Settings | undefined>(remembered.settings);
+  const [stats, setStats] = useState<Stats | undefined>(remembered.stats);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {

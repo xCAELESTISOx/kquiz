@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { api, auth, lastToday, pendingReviewCount, rememberToday } from "../lib/api";
+import { api, auth, lastToday, pendingReviewCount, remembered, rememberToday } from "../lib/api";
 import { cardsWord } from "../lib/plural";
 import { hideSplash } from "../lib/splash";
 import type { QueueItem, Stats } from "../lib/types";
@@ -15,8 +15,8 @@ export function TodayScreen() {
   const [stats, setStats] = useState<Stats | undefined>(saved?.stats);
   const [preview, setPreview] = useState<QueueItem[]>(saved?.preview ?? []);
   const [error, setError] = useState<string>();
-  const [leeches, setLeeches] = useState(0);
-  const [owner, setOwner] = useState(false);
+  const [leeches, setLeeches] = useState(() => remembered.leeches()?.items.length ?? 0);
+  const [owner, setOwner] = useState(() => remembered.authStatus()?.user?.role === "owner");
 
   useEffect(() => {
     document.title = "KQuiz";

@@ -8,7 +8,7 @@ import { introduceDailyCards } from "../newCards.js";
 import { RETENTION_RANGE, setDesiredRetention } from "../fsrs.js";
 import { fsrsStatus } from "../fsrsOptimizer.js";
 import { ratings } from "../review.js";
-import { applyReviews, dueQueue, getStats } from "../reviewStore.js";
+import { applyReviews, dueQueue, getStats, groupQueue } from "../reviewStore.js";
 
 export const MAX_REVIEWS_PER_REQUEST = 200;
 
@@ -48,6 +48,22 @@ export function reviewRoutes(db: Db, now: () => Date, timeZone: string) {
       .safeParse(c.req.query());
     if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
     return c.json({ options: distractors(db, c.get("user").id, query.data.cardIds) });
+  });
+
+  // A group picked on the cards screen. POST because queued cards in it are taken into reviews.
+  app.post("/group", async (c) => {
+    const body = z
+      .object({
+        mode,
+        q: z.string().trim().max(200).optional(),
+        tag: z.string().trim().max(50).optional(),
+        status: z.literal("queued").optional(),
+        notReady: z.boolean().optional(),
+      })
+      .safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "invalid_request", issues: body.error.issues }, 400);
+    const { mode: groupMode, ...filter } = body.data;
+    return c.json(groupQueue(db, c.get("user").id, groupMode, filter, now()));
   });
 
   // Accepts a batch so the offline queue can flush in one request.

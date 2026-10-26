@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { api } from "../lib/api";
+import { api, remembered } from "../lib/api";
 import { isKoreanOnly } from "../lib/korean";
 import { canSpeak, speak } from "../lib/speech";
 import type { Card, CardPatch, Example } from "../lib/types";
@@ -59,8 +59,10 @@ function back() {
 }
 
 export function CardScreen({ id }: { id: number }) {
-  const [card, setCard] = useState<Card>();
-  const [draft, setDraft] = useState<Draft>();
+  // The card as seen in the list shows at once; the server's copy follows.
+  const [seen] = useState(() => remembered.card(id));
+  const [card, setCard] = useState<Card | undefined>(seen);
+  const [draft, setDraft] = useState<Draft | undefined>(() => seen && toDraft(seen));
   const [busy, setBusy] = useState<"save" | "delete" | "introduce">();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string>();
@@ -70,7 +72,8 @@ export function CardScreen({ id }: { id: number }) {
     api.card(id).then(
       ({ card }) => {
         setCard(card);
-        setDraft(toDraft(card));
+        // Edits already begun on the early copy are kept.
+        setDraft((d) => (d && seen && Object.keys(diff(seen, d)).length > 0 ? d : toDraft(card)));
         document.title = `${card.korean} · KQuiz`;
       },
       (e: Error) => setError(e.message === "not_found" ? "Такой карточки нет. Может, её уже удалили." : e.message),

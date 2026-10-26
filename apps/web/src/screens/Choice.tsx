@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { api, submitReview } from "../lib/api";
 import { useLeechIds } from "../lib/leeches";
-import { navigate } from "../lib/router";
+import { groupHash, navigate } from "../lib/router";
 import { choiceRating, shuffled } from "../lib/choice";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
-import type { ChoiceOption, QueueItem, RatingName } from "../lib/types";
+import type { ChoiceOption, GroupFilter, QueueItem, RatingName } from "../lib/types";
 import { CloseIcon, SpeakerIcon } from "../ui/icons";
 import { LeechBadge } from "../ui/LeechBadge";
 import "../ui/practice.css";
@@ -12,9 +12,10 @@ import "../ui/practice.css";
 /**
  * The quiet alternative to saying the word aloud: the Russian is shown, pick the Korean among a few
  * of your own look-alike words. It reviews the same "speech" schedule, so on the subway the day's
- * words can be done here and at home out loud. The rating follows from the pick.
+ * words can be done here and at home out loud. The rating follows from the pick. With a group, the
+ * cards picked on the cards screen come instead of the day's queue.
  */
-export function ChoiceScreen() {
+export function ChoiceScreen({ group }: { group?: GroupFilter }) {
   const [queue, setQueue] = useState<QueueItem[]>();
   const [options, setOptions] = useState<Record<number, ChoiceOption[]>>({});
   const [total, setTotal] = useState(0);
@@ -27,8 +28,7 @@ export function ChoiceScreen() {
 
   useEffect(() => {
     document.title = "Выбор слова · KQuiz";
-    api
-      .queue("speech")
+    (group ? api.group("speech", group) : api.queue("speech"))
       .then(async ({ items }) => {
         const { options } = items.length ? await api.choices(items.map((i) => i.card.id)) : { options: {} };
         setOptions(options);
@@ -180,7 +180,7 @@ export function ChoiceScreen() {
               </>
             ) : (
               <p className="review-tip muted small">
-                Можно и вслух: <a href="#/speech">записать голосом</a>
+                Можно и вслух: <a href={group ? groupHash("speech", group) : "#/speech"}>записать голосом</a>
               </p>
             )}
           </footer>

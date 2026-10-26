@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
-import { api, submitReview } from "../lib/api";
+import { api, holdReview, releaseHeldReview, takeBackReview } from "../lib/api";
 import { clozeFor } from "../lib/cloze";
 import { useLeechIds } from "../lib/leeches";
 import { navigate } from "../lib/router";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
-import type { Card, QueueItem, RatingName, ReviewMode } from "../lib/types";
-import { CloseIcon, SpeakerIcon } from "../ui/icons";
+import type { Card, GroupFilter, QueueItem, RatingName, ReviewMode } from "../lib/types";
+import { CloseIcon, SpeakerIcon, UndoIcon } from "../ui/icons";
 import { LeechBadge } from "../ui/LeechBadge";
 import { useGlide } from "../ui/motion";
 
@@ -18,11 +18,14 @@ const RATINGS: { name: RatingName; label: string; key: string }[] = [
 
 const SWIPE_THRESHOLD = 90;
 
+type Swipe = RatingName | "back";
+
 /**
  * Meaning: the Hangul is shown, recall the translation. Listening: only the card's recording plays,
- * the text appears with the answer. Each mode has its own schedule on the server.
+ * the text appears with the answer. Each mode has its own schedule on the server. With a group, the
+ * cards picked on the cards screen come instead of the day's queue, and are graded the same way.
  */
-export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "listening"> }) {
+export function ReviewScreen({ mode, group }: { mode: Extract<ReviewMode, "meaning" | "listening">; group?: GroupFilter }) {
   const listening = mode === "listening";
   const [queue, setQueue] = useState<QueueItem[]>();
   const [total, setTotal] = useState(0);
@@ -32,11 +35,13 @@ export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "
   const [error, setError] = useState<string>();
   // The card just graded, drawn once more on its way out. Purely decorative: the next card is live at once.
   const [exit, setExit] = useState<{ step: number; rating: RatingName; card: Card }>();
+  // The last rating and the session as it was before it, for going back to that card.
+  const [last, setLast] = useState<{ reviewId: string; queue: QueueItem[]; done: number }>();
   const shownAt = useRef(performance.now());
 
   useEffect(() => {
     document.title = listening ? "На слух · KQuiz" : "Повторение · KQuiz";
-    api.queue(mode).then(
+    (group ? api.group(mode, group) : api.queue(mode)).then(
       ({ items }) => {
         setQueue(items);
         setTotal(items.length);
@@ -46,6 +51,7 @@ export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "
       },
       (e: Error) => setError(e.message),
     );
+    // A new group is a new screen (App keys it), so `group` never changes here.
   }, [mode, listening]);
 
   const item = queue?.[0];
@@ -53,6 +59,9 @@ export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "
   // Listening shows no text before the answer, so only meaning reviews ask through an example.
   const cloze = useMemo(() => (item && !listening ? clozeFor(item) : undefined), [item, listening]);
   const leeches = useLeechIds(mode);
+
+  // Leaving the screen ends the chance to go back, so the held rating goes out.
+  useEffect(() => () => void releaseHeldReview(), []);
 
   // The next few too, so their audio is ready by the time they come up (listening plays the next
   // card straight from the grading tap).
@@ -66,17 +75,19 @@ export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "
 
   const rate = useCallback(
     (rating: RatingName, swiped = false) => {
-      if (!card || !revealed) return;
+      if (!card || !revealed || !queue) return;
       // A swiped card has already flown off under the finger.
       setExit(swiped ? undefined : { step, rating, card });
-      void submitReview({
-        id: crypto.randomUUID(),
+      const reviewId = crypto.randomUUID();
+      void holdReview({
+        id: reviewId,
         cardId: card.id,
         mode,
         rating,
         reviewedAt: new Date().toISOString(),
         elapsedMs: Math.round(performance.now() - shownAt.current),
       }).catch((e: Error) => setError(e.message));
+      setLast({ reviewId, queue, done });
       // A forgotten card comes back at the end of this session, like Anki's relearning step.
       const next = queue ? (rating === "again" ? [...queue.slice(1), queue[0]!] : queue.slice(1)) : queue;
       setQueue(next);
@@ -87,13 +98,28 @@ export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "
       setStep((n) => n + 1);
       shownAt.current = performance.now();
     },
-    [card, revealed, step, queue, mode, listening],
+    [card, revealed, step, queue, done, mode, listening],
   );
+
+  /** Brings the last card back with its answer open, so it can be graded again. */
+  const back = useCallback(() => {
+    if (!last) return;
+    setLast(undefined);
+    // Already sent (the screen was left and reopened): that rating stays.
+    if (!takeBackReview(last.reviewId)) return;
+    setQueue(last.queue);
+    setDone(last.done);
+    setExit(undefined);
+    setRevealed(true);
+    setStep((n) => n + 1);
+    shownAt.current = performance.now();
+  }, [last]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === "Escape") navigate("today");
+      else if (e.key === "Backspace" || e.key === "z" || e.key === "я") back();
       else if (listening && card && (e.key === "r" || e.key === "к")) speak(card);
       else if (!revealed && (e.key === " " || e.key === "Enter")) {
         e.preventDefault();
@@ -105,7 +131,7 @@ export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "
     }
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [revealed, reveal, rate, listening, card]);
+  }, [revealed, reveal, rate, back, listening, card]);
 
   const progress = total ? Math.min(done / total, 1) : 0;
 
@@ -121,6 +147,16 @@ export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "
         <span className="review-count">
           {Math.min(done, total)} / {total}
         </span>
+        <button
+          type="button"
+          className="icon-button review-back"
+          aria-label="Вернуть предыдущую карточку"
+          title="Вернуть предыдущую карточку"
+          disabled={!last}
+          onClick={back}
+        >
+          <UndoIcon />
+        </button>
       </header>
 
       <div aria-live="polite">{error && <p className="notice notice-error">{error}</p>}</div>
@@ -135,7 +171,8 @@ export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "
             key={step}
             enabled={revealed}
             onTap={reveal}
-            onSwipe={(r) => rate(r, true)}
+            onSwipe={(r) => (r === "back" ? back() : rate(r, true))}
+            canGoBack={!!last}
             deck={queue.length > 1}
             behind={
               exit && (
@@ -200,10 +237,7 @@ export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "
                 {card.examples.length > 0 && (
                   <ul className="review-examples">
                     {card.examples.map((example, i) => (
-                      <li key={i} className="review-example">
-                        <p lang="ko">{example.ko}</p>
-                        {example.ru && <p className="muted">{example.ru}</p>}
-                      </li>
+                      <Example key={i} ko={example.ko} ru={example.ru} />
                     ))}
                   </ul>
                 )}
@@ -244,11 +278,44 @@ export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "
                 Показать ответ
               </button>
             )}
-            <p className="review-tip muted small">{revealed && "Свайп вправо: «Хорошо», влево: «Снова»"}</p>
+            <p className="review-tip muted small">
+              {revealed ? "Свайп вправо: «Хорошо», влево: «Снова»" : last && "Свайп вправо: вернуть предыдущую"}
+            </p>
           </footer>
         </>
       )}
     </main>
+  );
+}
+
+/** The translation stays blurred until the sentence is tapped, so the Korean gets read first. */
+function Example({ ko, ru }: { ko: string; ru: string }) {
+  const [open, setOpen] = useState(false);
+  if (!ru) {
+    return (
+      <li className="review-example">
+        <p lang="ko">{ko}</p>
+      </li>
+    );
+  }
+  return (
+    <li className="review-example">
+      <button
+        type="button"
+        className={`example-toggle${open ? " is-open" : ""}`}
+        aria-expanded={open}
+        onClick={(e) => {
+          // Not a tap on the card itself.
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+      >
+        <span lang="ko">{ko}</span>
+        <span className="example-ru" aria-hidden={!open}>
+          {ru}
+        </span>
+      </button>
+    </li>
   );
 }
 
@@ -265,22 +332,27 @@ function GlideText({ className, on, children }: { className: string; on: boolean
 
 function SwipeCard({
   enabled,
+  canGoBack,
   onTap,
   onSwipe,
   deck,
   behind,
   children,
 }: {
+  /** The answer is open, so swiping grades. */
   enabled: boolean;
+  /** Before the answer, a swipe to the right brings back the previous card. */
+  canGoBack?: boolean;
   onTap: () => void;
-  onSwipe: (rating: RatingName) => void;
+  onSwipe: (swipe: Swipe) => void;
   /** More cards wait under this one. */
   deck?: boolean;
   behind?: ReactNode;
   children: ReactNode;
 }) {
   const [dx, setDx] = useState(0);
-  const [leaving, setLeaving] = useState<RatingName>();
+  const [leaving, setLeaving] = useState<Swipe>();
+  const draggable = enabled || !!canGoBack;
   const start = useRef<{ x: number; y: number; id: number }>(undefined);
 
   function onPointerDown(e: PointerEvent<HTMLDivElement>) {
@@ -288,8 +360,9 @@ function SwipeCard({
   }
 
   function onPointerMove(e: PointerEvent<HTMLDivElement>) {
-    if (!enabled || !start.current || start.current.id !== e.pointerId) return;
-    const moveX = e.clientX - start.current.x;
+    if (!draggable || !start.current || start.current.id !== e.pointerId) return;
+    // Going back only goes one way; the other just resists.
+    const moveX = enabled ? e.clientX - start.current.x : Math.max(e.clientX - start.current.x, 0);
     if (Math.abs(moveX) > 8 && Math.abs(moveX) > Math.abs(e.clientY - start.current.y)) {
       e.currentTarget.setPointerCapture(e.pointerId);
       setDx(moveX);
@@ -305,18 +378,18 @@ function SwipeCard({
       onTap();
       return;
     }
-    if (enabled && Math.abs(dx) >= SWIPE_THRESHOLD) {
-      const rating: RatingName = dx > 0 ? "good" : "again";
-      setLeaving(rating);
-      setTimeout(() => onSwipe(rating), 180);
+    if (draggable && Math.abs(dx) >= SWIPE_THRESHOLD) {
+      const swipe: Swipe = !enabled ? "back" : dx > 0 ? "good" : "again";
+      setLeaving(swipe);
+      setTimeout(() => onSwipe(swipe), 180);
     } else {
       setDx(0);
     }
   }
 
   const strength = Math.min(Math.abs(dx) / SWIPE_THRESHOLD, 1);
-  const offset = leaving ? (leaving === "good" ? 1 : -1) * 600 : dx;
-  const tone = dx > 0 || leaving === "good" ? "good" : "again";
+  const offset = leaving ? (leaving === "again" ? -1 : 1) * 600 : dx;
+  const tone: Swipe = leaving ?? (!enabled ? "back" : dx > 0 ? "good" : "again");
 
   return (
     <div className={`review-stage${deck ? " has-deck" : ""}`}>
@@ -334,7 +407,7 @@ function SwipeCard({
         }}
       >
         <span className="swipe-badge" style={{ opacity: leaving ? 1 : strength }} aria-hidden="true">
-          {tone === "good" ? "Хорошо" : "Снова"}
+          {tone === "good" ? "Хорошо" : tone === "again" ? "Снова" : "Назад"}
         </span>
         {children}
       </div>
