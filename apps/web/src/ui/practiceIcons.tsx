@@ -38,3 +38,13 @@ export const ChevronIcon = () => (
     <path d="m9.5 6 6 6-6 6" />
   </svg>
 );
+
+/** Four options, one of them right: picking from options. */
+export const ChoiceIcon = () => (
+  <svg {...props}>
+    <rect x="4" y="4" width="7" height="7" rx="2" />
+    <rect x="13" y="4" width="7" height="7" rx="2" />
+    <rect x="4" y="13" width="7" height="7" rx="2" />
+    <path d="m14 16.5 2 2 3.5-4" />
+  </svg>
+);
