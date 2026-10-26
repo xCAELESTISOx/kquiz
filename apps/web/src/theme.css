@@ -2352,6 +2352,12 @@ p {
   font-variant-numeric: tabular-nums;
 }
 
+/* "Не знаю": a quiet way out that counts as forgotten. */
+.review-actions > .dont-know {
+  align-self: center;
+  color: var(--text-muted);
+}
+
 .speech-again {
   display: flex;
   justify-content: center;

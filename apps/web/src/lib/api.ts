@@ -301,14 +301,16 @@ export const api = {
   /** A JSON file with every card, its schedule and the review history; opened as a download. */
   exportUrl: "/api/export",
 
-  queue: (mode: QueueMode, limit = 50) => {
+  /** `modes` narrows a mixed queue to some of the modes. */
+  queue: (mode: QueueMode, limit = 50, modes?: ReviewMode[]) => {
     // The Today screen asks for the queue, and the review screen opened from it gets the same answer
     // instead of another round trip.
-    const key = `${mode}:${limit}`;
+    const only = modes ? `&modes=${modes.join(",")}` : "";
+    const key = `${mode}:${limit}${only}`;
     const hit = recentQueues.get(key);
     if (hit && performance.now() - hit.at < QUEUE_TTL) return hit.promise;
-    const promise = request<{ items: QueueItem[] }>("GET", `/reviews/queue?mode=${mode}&limit=${limit}`, {
-      fallback: (m) => ({ items: m.queue(mode, limit) }),
+    const promise = request<{ items: QueueItem[] }>("GET", `/reviews/queue?mode=${mode}&limit=${limit}${only}`, {
+      fallback: (m) => ({ items: m.queue(mode, limit, false, modes) }),
     });
     recentQueues.set(key, { at: performance.now(), promise });
     promise.catch(() => recentQueues.get(key)?.promise === promise && recentQueues.delete(key));
@@ -322,10 +324,10 @@ export const api = {
     }),
 
   /** Every card of a group, due or not, in random order. Queued cards in it are taken into reviews. */
-  group: (mode: QueueMode, filter: GroupFilter) =>
+  group: (mode: QueueMode, filter: GroupFilter, modes?: ReviewMode[]) =>
     request<{ items: QueueItem[]; total: number }>("POST", "/reviews/group", {
-      body: { mode, ...filter },
-      fallback: (m) => m.group(mode, filter),
+      body: { mode, modes, ...filter },
+      fallback: (m) => m.group(mode, filter, modes),
     }),
 
   review: (reviews: ReviewInput[]) =>

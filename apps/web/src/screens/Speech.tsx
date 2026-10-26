@@ -152,6 +152,8 @@ export function SpeechCard({
   const [seconds, setSeconds] = useState(0);
   const [take, setTake] = useState<string>();
   const [takeWav, setTakeWav] = useState<Uint8Array>();
+  // "Не знаю": the word is shown and the card counts as forgotten.
+  const [skipped, setSkipped] = useState(false);
   const shownAt = useRef(performance.now());
   const startedAt = useRef(0);
 
@@ -233,9 +235,33 @@ export function SpeechCard({
     [card, phase, onRated, practice],
   );
 
+  const skip = useCallback(() => {
+    setSkipped(true);
+    setRevealed(true);
+    if (canSpeak()) speak(card);
+  }, [card]);
+
+  const skipNext = useCallback(() => {
+    if (!practice)
+      void submitReview({
+        id: crypto.randomUUID(),
+        cardId: card.id,
+        mode: "speech",
+        rating: "again",
+        reviewedAt: new Date().toISOString(),
+        elapsedMs: Math.round(performance.now() - shownAt.current),
+      }).catch(() => undefined);
+    onRated("again");
+  }, [card, onRated, practice]);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === " " && !e.repeat) {
+      if (skipped) {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          skipNext();
+        }
+      } else if (e.key === " " && !e.repeat) {
         e.preventDefault();
         void record();
       } else if (phase === "result") {
@@ -245,7 +271,7 @@ export function SpeechCard({
     }
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [phase, record, rate]);
+  }, [phase, record, rate, skipped, skipNext]);
 
   const suggested = result?.suggestedRating;
   const recordable = canRecord();
@@ -310,7 +336,14 @@ export function SpeechCard({
       <div aria-live="polite">{error && <p className="notice notice-error speech-notice">{error}</p>}</div>
 
       <footer className="review-actions">
-        {phase === "result" ? (
+        {skipped ? (
+          <>
+            <button type="button" className="button primary" onClick={skipNext}>
+              Дальше
+            </button>
+            <p className="review-tip muted small">Засчитано как «Снова»: слово вернётся в конце</p>
+          </>
+        ) : phase === "result" ? (
           <>
             <div className="speech-again">
               <button type="button" className="chip-button" onClick={() => void record()}>
@@ -348,6 +381,11 @@ export function SpeechCard({
               disabled={!recordable}
               onPress={() => void record()}
             />
+            {phase === "prompt" && (
+              <button type="button" className="chip-button dont-know" onClick={skip}>
+                Не знаю
+              </button>
+            )}
             {quiet && phase === "prompt" && <p className="review-tip muted small">Нельзя говорить? {quiet}</p>}
           </>
         )}

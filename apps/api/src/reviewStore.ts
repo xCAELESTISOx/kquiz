@@ -16,10 +16,16 @@ const hasCurrentAudio = sql`exists (select 1 from ${cardAudio} where ${cardAudio
 /** Review states a mode can actually show, for queries over `review_states` joined with `cards`; paused cards never. */
 export const reviewable = sql`${cards.suspended} = 0 and (${reviewStates.mode} = 'meaning' or (${reviewStates.mode} = 'speech' and ${cards.speakable} = 1) or (${reviewStates.mode} = 'listening' and ${hasCurrentAudio}))`;
 
-/** A single mode, or all of them mixed in one session. */
-export type QueueMode = ReviewMode | "mixed";
+/** A single mode, or all of them mixed in one session, or the given ones mixed. */
+export type QueueMode = ReviewMode | "mixed" | readonly ReviewMode[];
 
-const modeCondition = (mode: QueueMode) => (mode === "mixed" ? reviewable : and(eq(reviewStates.mode, mode), reviewable));
+const modeCondition = (mode: QueueMode) =>
+  mode === "mixed"
+    ? reviewable
+    : typeof mode === "string"
+      ? and(eq(reviewStates.mode, mode), reviewable)
+      : and(inArray(reviewStates.mode, [...mode]), reviewable);
+const isMixed = (mode: QueueMode) => typeof mode !== "string" || mode === "mixed";
 
 function toQueueItem({ card, state }: { card: typeof cards.$inferSelect; state: typeof reviewStates.$inferSelect }): QueueItem {
   return {
@@ -48,7 +54,7 @@ export function dueQueue(db: Db, userId: number, mode: QueueMode, now = new Date
     .limit(Math.min(Math.max(limit, 1), 200))
     .all()
     .map(toQueueItem);
-  return mode === "mixed" ? spreadCards(items, random) : shuffle(items, random);
+  return isMixed(mode) ? spreadCards(items, random) : shuffle(items, random);
 }
 
 export const GROUP_LIMIT = 200;
@@ -98,7 +104,7 @@ export function groupQueue(
     const byId = new Map<number, typeof rows>();
     for (const row of rows) byId.set(row.card.id, [...(byId.get(row.card.id) ?? []), row]);
     const items = picked.flatMap(({ id }) => (byId.get(id) ?? []).map(toQueueItem));
-    return { items: mode === "mixed" ? spreadCards(items, random) : items, total: matched.length };
+    return { items: isMixed(mode) ? spreadCards(items, random) : items, total: matched.length };
   });
 }
 

@@ -79,6 +79,18 @@ describe("mixed sessions", () => {
     expect((await t.request("/reviews/queue?mode=mixed")).json.items).toHaveLength(3);
   });
 
+  it("mixes only the modes asked for", async () => {
+    const t = await signedIn();
+    const { json } = await t.request("/cards/bulk", { body: { cards: [{ korean: "물", meaning: "вода", tags: ["еда"] }] } });
+    saveCardAudio(t.db, json.created[0].id, "물", new Uint8Array([1]), t.clock.now);
+    const modes = async (path: string) => ((await t.request(path)).json.items as QueueItem[]).map((i) => i.mode).sort();
+    expect(await modes("/reviews/queue?mode=mixed&modes=meaning,listening")).toEqual(["listening", "meaning"]);
+    expect(await modes("/reviews/queue?mode=mixed&modes=speech")).toEqual(["speech"]);
+    expect((await t.request("/reviews/queue?mode=mixed&modes=nope")).status).toBe(400);
+    const res = await group(t, { mode: "mixed", modes: ["speech", "listening"], tag: "еда" });
+    expect(res.json.items.map((i: any) => i.mode).sort()).toEqual(["listening", "speech"]);
+  });
+
   it("mixes the modes of a group", async () => {
     const t = await signedIn();
     await t.request("/cards/bulk", {

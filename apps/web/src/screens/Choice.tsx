@@ -96,6 +96,9 @@ export function ChoiceScreen({ group }: { group?: GroupFilter }) {
  * made; "Дальше" tells the session. A fresh one (keyed) per showing, so the order is shuffled anew.
  * `aloud` offers saying it instead.
  */
+/** Picked when the word isn't known at all: counts as a wrong pick and shows the right one. */
+const DONT_KNOW = -1;
+
 export function ChoiceCard({
   item,
   options,
@@ -221,7 +224,12 @@ export function ChoiceCard({
             <p className="review-tip muted small">Нажимай на слова, чтобы послушать</p>
           </>
         ) : (
-          aloud && <p className="review-tip muted small">Можно и вслух: {aloud}</p>
+          <>
+            <button type="button" className="chip-button dont-know" onClick={() => pick(DONT_KNOW)}>
+              Не знаю
+            </button>
+            {aloud && <p className="review-tip muted small">Можно и вслух: {aloud}</p>}
+          </>
         )}
       </footer>
     </>

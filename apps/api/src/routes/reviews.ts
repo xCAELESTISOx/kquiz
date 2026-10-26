@@ -15,6 +15,11 @@ export const MAX_REVIEWS_PER_REQUEST = 200;
 const mode = z.enum(["meaning", "speech", "listening"]);
 /** A queue can also mix every mode in one session; each rating still names its own mode. */
 const queueMode = z.enum([...mode.options, "mixed"]);
+/** Which modes a mixed session takes; all of them when left out. */
+const mixedModes = z.array(mode).min(1).max(3);
+
+const queueModeOf = (queue: z.infer<typeof queueMode>, modes?: z.infer<typeof mixedModes>) =>
+  queue === "mixed" && modes ? [...new Set(modes)] : queue;
 
 const reviewSchema = z.object({
   id: z.uuid(),
@@ -30,12 +35,20 @@ export function reviewRoutes(db: Db, now: () => Date, timeZone: string) {
 
   app.get("/queue", (c) => {
     const query = z
-      .object({ mode: queueMode, limit: z.coerce.number().int().min(1).max(200).optional() })
+      .object({
+        mode: queueMode,
+        modes: z
+          .string()
+          .transform((s) => s.split(","))
+          .pipe(mixedModes)
+          .optional(),
+        limit: z.coerce.number().int().min(1).max(200).optional(),
+      })
       .safeParse(c.req.query());
     if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
     const userId = c.get("user").id;
     introduceDailyCards(db, userId, now(), timeZone);
-    return c.json({ items: dueQueue(db, userId, query.data.mode, now(), query.data.limit) });
+    return c.json({ items: dueQueue(db, userId, queueModeOf(query.data.mode, query.data.modes), now(), query.data.limit) });
   });
 
   // Wrong options for the "pick the Korean word" screen, for the cards of a queue it already has.
@@ -57,6 +70,7 @@ export function reviewRoutes(db: Db, now: () => Date, timeZone: string) {
     const body = z
       .object({
         mode: queueMode,
+        modes: mixedModes.optional(),
         q: z.string().trim().max(200).optional(),
         tag: z.string().trim().max(50).optional(),
         root: z.string().trim().max(4).optional(),
@@ -65,8 +79,8 @@ export function reviewRoutes(db: Db, now: () => Date, timeZone: string) {
       })
       .safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: "invalid_request", issues: body.error.issues }, 400);
-    const { mode: groupMode, ...filter } = body.data;
-    return c.json(groupQueue(db, c.get("user").id, groupMode, filter, now()));
+    const { mode: groupMode, modes, ...filter } = body.data;
+    return c.json(groupQueue(db, c.get("user").id, queueModeOf(groupMode, modes), filter, now()));
   });
 
   // Accepts a batch so the offline queue can flush in one request.

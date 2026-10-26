@@ -216,9 +216,9 @@ export class MockApi {
     return result;
   }
 
-  queue(mode: QueueMode, limit = 50, anyDue = false): QueueItem[] {
+  queue(mode: QueueMode, limit = 50, anyDue = false, modes: ReviewMode[] = ["meaning", "speech", "listening"]): QueueItem[] {
     if (mode === "mixed") {
-      return (["meaning", "speech", "listening"] as const)
+      return modes
         .flatMap((m) => this.queue(m, limit, anyDue))
         .sort((a, b) => Date.parse(a.due) - Date.parse(b.due))
         .slice(0, limit)
@@ -255,11 +255,11 @@ export class MockApi {
     );
   }
 
-  group(mode: QueueMode, filter: GroupFilter): { items: QueueItem[]; total: number } {
+  group(mode: QueueMode, filter: GroupFilter, modes?: ReviewMode[]): { items: QueueItem[]; total: number } {
     const ids = new Set(this.cards({ ...filter, limit: Infinity }).cards.filter((c) => !c.suspended).map((c) => c.id));
     for (const card of this.state.cards) if (ids.has(card.id) && card.queued) card.queued = false;
     this.save();
-    const items = this.queue(mode, Infinity, true)
+    const items = this.queue(mode, Infinity, true, modes)
       .filter((item) => ids.has(item.card.id))
       .sort(() => Math.random() - 0.5);
     return { items, total: ids.size };
