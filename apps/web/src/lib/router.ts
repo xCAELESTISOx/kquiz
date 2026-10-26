@@ -9,6 +9,7 @@ export type Route =
   | "stats"
   | "review"
   | "speech"
+  | "choose"
   | "listen"
   | "mix"
   | "cards"
@@ -28,7 +29,7 @@ export interface Location {
   group?: GroupFilter;
 }
 
-type GroupRoute = "review" | "speech" | "listen" | "mix";
+type GroupRoute = "review" | "speech" | "choose" | "listen" | "mix";
 
 export function groupHash(route: GroupRoute, filter: GroupFilter): string {
   const params = new URLSearchParams();
@@ -54,7 +55,7 @@ function parseGroup(search: string | undefined): GroupFilter | undefined {
 export function parseHash(hash: string): Location {
   const [path, search] = hash.replace(/^#\/?/, "").split("?");
   const [head, param] = path!.split("/");
-  if (head === "review" || head === "speech" || head === "listen" || head === "mix") {
+  if (head === "review" || head === "speech" || head === "choose" || head === "listen" || head === "mix") {
     const group = parseGroup(search);
     return group ? { route: head, group } : { route: head };
   }

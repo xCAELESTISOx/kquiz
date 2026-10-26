@@ -184,6 +184,11 @@ export function TodayScreen() {
             )}
           </div>
         )}
+        {speechDue > 0 && (
+          <a className="alt-link" href="#/choose">
+            Нельзя вслух? Выбрать слово из вариантов
+          </a>
+        )}
         {due === 0 && restDue === 0 && (
           <a className="button" href="#/add">
             Добавить слова

@@ -5,10 +5,11 @@ import { useLeechIds } from "../lib/leeches";
 import { navigate } from "../lib/router";
 import { canRecord, type Recorder } from "../lib/recorder";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
-import type { Card, GroupFilter, QueueItem, QueueMode, RatingName } from "../lib/types";
+import type { Card, ChoiceOption, GroupFilter, QueueItem, QueueMode, RatingName } from "../lib/types";
 import { CloseIcon, SpeakerIcon, UndoIcon } from "../ui/icons";
 import { LeechBadge } from "../ui/LeechBadge";
 import { useGlide } from "../ui/motion";
+import { ChoiceCard } from "./Choice";
 import { SpeechCard } from "./Speech";
 
 const RATINGS: { name: RatingName; label: string; key: string }[] = [
@@ -27,7 +28,7 @@ type Swipe = RatingName | "back";
  * the text appears with the answer. Each mode has its own schedule on the server. With a group, the
  * cards picked on the cards screen come instead of the day's queue, and are graded the same way.
  * Mixed puts every mode in one session, saying aloud included: each card is shown and graded in its
- * item's own mode.
+ * item's own mode, and the speech schedule is gone through partly aloud, partly by picking from options.
  */
 export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meaning" | "listening" | "mixed">; group?: GroupFilter }) {
   const [queue, setQueue] = useState<QueueItem[]>();
@@ -43,13 +44,25 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
   const shownAt = useRef(performance.now());
   // Mixed sessions say some cards aloud; the microphone is asked for once per session.
   const recorder = useRef<Recorder>(undefined);
+  // Look-alike words for the speech items, and the ones picked from them instead of said aloud.
+  const [options, setOptions] = useState<Record<number, ChoiceOption[]>>({});
+  const [quiet, setQuiet] = useState<ReadonlySet<QueueItem>>(new Set());
 
   useEffect(() => {
     document.title = mode === "mixed" ? "Вперемешку · KQuiz" : mode === "listening" ? "На слух · KQuiz" : "Повторение · KQuiz";
     (group ? api.group(mode, group) : api.queue(mode, mode === "mixed" ? 200 : undefined)).then(
-      ({ items: all }) => {
-        // Where nothing can record, saying aloud waits for a device that can.
-        const items = canRecord() ? all : all.filter((i) => i.mode !== "speech");
+      async ({ items: all }) => {
+        const spoken = all.filter((i) => i.mode === "speech");
+        const { options } = spoken.length
+          ? await api.choices(spoken.map((i) => i.card.id)).catch(() => ({ options: {} as Record<number, ChoiceOption[]> }))
+          : { options: {} };
+        const pickable = (i: QueueItem) => (options[i.card.id]?.length ?? 0) > 0;
+        const recordable = canRecord();
+        // About half are picked from options, all of them where nothing can record; a card with no
+        // look-alikes and no microphone waits for a better day.
+        const items = all.filter((i) => i.mode !== "speech" || recordable || pickable(i));
+        setOptions(options);
+        setQuiet(new Set(spoken.filter((i) => pickable(i) && (!recordable || Math.random() < 0.5))));
         setQueue(items);
         setTotal(items.length);
         shownAt.current = performance.now();
@@ -196,7 +209,31 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
 
       {queue && !card && <Finished count={done} />}
 
-      {queue && item && speaking && <SpeechCard key={step} item={item} recorder={recorder} onRated={spoken} />}
+      {queue && item && speaking && (quiet.has(item) ? (
+        <ChoiceCard
+          key={step}
+          item={item}
+          options={options[item.card.id] ?? []}
+          onDone={spoken}
+          aloud={canRecord() && (
+            <button type="button" className="link-button inline" onClick={() => setQuiet((s) => toggled(s, item))}>
+              записать голосом
+            </button>
+          )}
+        />
+      ) : (
+        <SpeechCard
+          key={step}
+          item={item}
+          recorder={recorder}
+          onRated={spoken}
+          quiet={(options[item.card.id]?.length ?? 0) > 0 && (
+            <button type="button" className="link-button inline" onClick={() => setQuiet((s) => toggled(s, item))}>
+              Выбрать из вариантов
+            </button>
+          )}
+        />
+      ))}
 
       {queue && card && !speaking && (
         <>
@@ -319,6 +356,12 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
       )}
     </main>
   );
+}
+
+function toggled<T>(set: ReadonlySet<T>, value: T): ReadonlySet<T> {
+  const next = new Set(set);
+  if (!next.delete(value)) next.add(value);
+  return next;
 }
 
 /** The translation stays blurred until the sentence is tapped, so the Korean gets read first. */

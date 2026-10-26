@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { api, ApiError, submitReview } from "../lib/api";
 import { clozeFor } from "../lib/cloze";
 import { useLeechIds } from "../lib/leeches";
 import { describeErrors, segments, verdict } from "../lib/pronunciation";
 import { canRecord, MAX_SECONDS, Recorder, RecorderFailure, type RecorderError } from "../lib/recorder";
-import { navigate } from "../lib/router";
+import { groupHash, navigate } from "../lib/router";
 import { cardAudioUrl, useIntonation } from "../lib/practice";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
 import type { Card, GroupFilter, QueueItem, RatingName, ScoreResult } from "../lib/types";
@@ -109,7 +109,15 @@ export function SpeechScreen({ group }: { group?: GroupFilter }) {
 
       {queue && !item && <Finished count={done} />}
 
-      {item && <SpeechCard key={step} item={item} recorder={recorder} onRated={rated} />}
+      {item && (
+        <SpeechCard
+          key={step}
+          item={item}
+          recorder={recorder}
+          onRated={rated}
+          quiet={<a href={group ? groupHash("choose", group) : "#/choose"}>Выбрать из вариантов</a>}
+        />
+      )}
     </main>
   );
 }
@@ -117,16 +125,18 @@ export function SpeechScreen({ group }: { group?: GroupFilter }) {
 /**
  * One card said aloud: record, see the scorer's verdict, grade it. Sends its own rating to the speech
  * schedule, then tells the session. A fresh one (keyed) per showing; the microphone is the session's,
- * so it is asked for once.
+ * so it is asked for once. `quiet` offers the way through without speaking (picking from options).
  */
 export function SpeechCard({
   item,
   recorder,
   onRated,
+  quiet,
 }: {
   item: QueueItem;
   recorder: RefObject<Recorder | undefined>;
   onRated: (rating: RatingName) => void;
+  quiet?: ReactNode;
 }) {
   const { card } = item;
   const [phase, setPhase] = useState<Phase>("prompt");
@@ -323,13 +333,16 @@ export function SpeechCard({
             <p className="review-tip muted small">{suggested ? "Подсвечена оценка по записи, решаешь ты" : "Оцени себя сам"}</p>
           </>
         ) : (
-          <RecordButton
-            phase={phase}
-            level={level}
-            seconds={seconds}
-            disabled={!recordable}
-            onPress={() => void record()}
-          />
+          <>
+            <RecordButton
+              phase={phase}
+              level={level}
+              seconds={seconds}
+              disabled={!recordable}
+              onPress={() => void record()}
+            />
+            {quiet && phase === "prompt" && <p className="review-tip muted small">Нельзя говорить? {quiet}</p>}
+          </>
         )}
       </footer>
     </>
