@@ -16,9 +16,9 @@ const hasCurrentAudio = sql`exists (select 1 from ${cardAudio} where ${cardAudio
 export const reviewable = sql`${cards.suspended} = 0 and (${reviewStates.mode} = 'meaning' or (${reviewStates.mode} = 'speech' and ${cards.speakable} = 1) or (${reviewStates.mode} = 'listening' and ${hasCurrentAudio}))`;
 
 /**
- * Cards due in a mode, most overdue first, with the never-reviewed ones spread among them at random
- * instead of in a block at the end. Only speakable cards enter the pronunciation queue, only cards
- * with their recording the listening one; paused ones enter none.
+ * Cards due in a mode: the most overdue `limit` of them, in random order, so cards added together
+ * don't always come up together and one word doesn't prompt the next. Only speakable cards enter
+ * the pronunciation queue, only cards with their recording the listening one; paused ones enter none.
  */
 export function dueQueue(db: Db, userId: number, mode: ReviewMode, now = new Date(), limit = 50, random = Math.random): QueueItem[] {
   const items = db
@@ -46,14 +46,15 @@ export function dueQueue(db: Db, userId: number, mode: ReviewMode, now = new Dat
       reps: state.reps,
       lapses: state.lapses,
     }));
-  return mixNew(items, random);
+  return shuffle(items, random);
 }
 
-/** Inserts each new card at a random spot among the reviews, keeping the reviews' order. */
-export function mixNew<T extends { reps: number }>(items: T[], random = Math.random): T[] {
-  const mixed = items.filter((item) => item.reps > 0);
-  for (const item of items.filter((item) => item.reps === 0)) {
-    mixed.splice(Math.floor(random() * (mixed.length + 1)), 0, item);
+/** A shuffled copy (Fisher–Yates). */
+export function shuffle<T>(items: T[], random = Math.random): T[] {
+  const mixed = [...items];
+  for (let i = mixed.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [mixed[i], mixed[j]] = [mixed[j]!, mixed[i]!];
   }
   return mixed;
 }
