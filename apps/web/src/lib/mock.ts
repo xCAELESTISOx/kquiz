@@ -14,6 +14,7 @@ import type {
   GroupFilter,
   NewCard,
   QueueItem,
+  QueueMode,
   RatingName,
   ReviewInput,
   ReviewMode,
@@ -215,7 +216,14 @@ export class MockApi {
     return result;
   }
 
-  queue(mode: ReviewMode, limit = 50, anyDue = false): QueueItem[] {
+  queue(mode: QueueMode, limit = 50, anyDue = false): QueueItem[] {
+    if (mode === "mixed") {
+      return (["meaning", "speech", "listening"] as const)
+        .flatMap((m) => this.queue(m, limit, anyDue))
+        .sort((a, b) => Date.parse(a.due) - Date.parse(b.due))
+        .slice(0, limit)
+        .sort(() => Math.random() - 0.5);
+    }
     const now = this.now().getTime();
     return this.state.cards
       // No recordings in the mock: listening falls back to the phone's voice for every Hangul card.
@@ -247,7 +255,7 @@ export class MockApi {
     );
   }
 
-  group(mode: ReviewMode, filter: GroupFilter): { items: QueueItem[]; total: number } {
+  group(mode: QueueMode, filter: GroupFilter): { items: QueueItem[]; total: number } {
     const ids = new Set(this.cards({ ...filter, limit: Infinity }).cards.filter((c) => !c.suspended).map((c) => c.id));
     for (const card of this.state.cards) if (ids.has(card.id) && card.queued) card.queued = false;
     this.save();

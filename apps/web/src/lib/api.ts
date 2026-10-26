@@ -17,6 +17,7 @@ import type {
   Leech,
   NewCard,
   QueueItem,
+  QueueMode,
   ReviewInput,
   ReviewMode,
   ReviewResult,
@@ -300,7 +301,7 @@ export const api = {
   /** A JSON file with every card, its schedule and the review history; opened as a download. */
   exportUrl: "/api/export",
 
-  queue: (mode: ReviewMode, limit = 50) => {
+  queue: (mode: QueueMode, limit = 50) => {
     // The Today screen asks for the queue, and the review screen opened from it gets the same answer
     // instead of another round trip.
     const key = `${mode}:${limit}`;
@@ -321,7 +322,7 @@ export const api = {
     }),
 
   /** Every card of a group, due or not, in random order. Queued cards in it are taken into reviews. */
-  group: (mode: ReviewMode, filter: GroupFilter) =>
+  group: (mode: QueueMode, filter: GroupFilter) =>
     request<{ items: QueueItem[]; total: number }>("POST", "/reviews/group", {
       body: { mode, ...filter },
       fallback: (m) => m.group(mode, filter),

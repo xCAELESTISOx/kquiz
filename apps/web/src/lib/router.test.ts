@@ -38,6 +38,8 @@ describe("parseHash", () => {
     expect(parseHash(hash)).toEqual({ route: "speech", group: { q: "물 병", tag: "еда" } });
     expect(parseHash("#/listen?status=queued&status2=x")).toEqual({ route: "listen", group: { status: "queued" } });
     expect(parseHash("#/review?")).toEqual({ route: "review", group: {} });
+    expect(parseHash(groupHash("mix", { tag: "еда" }))).toEqual({ route: "mix", group: { tag: "еда" } });
+    expect(parseHash("#/mix")).toEqual({ route: "mix" });
     expect(parseHash("#/cards/queued?x=1")).toEqual({ route: "cards", param: "queued" });
   });
 });

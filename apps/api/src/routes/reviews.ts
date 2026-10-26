@@ -13,6 +13,8 @@ import { applyReviews, dueQueue, getStats, groupQueue } from "../reviewStore.js"
 export const MAX_REVIEWS_PER_REQUEST = 200;
 
 const mode = z.enum(["meaning", "speech", "listening"]);
+/** A queue can also mix every mode in one session; each rating still names its own mode. */
+const queueMode = z.enum([...mode.options, "mixed"]);
 
 const reviewSchema = z.object({
   id: z.uuid(),
@@ -28,7 +30,7 @@ export function reviewRoutes(db: Db, now: () => Date, timeZone: string) {
 
   app.get("/queue", (c) => {
     const query = z
-      .object({ mode, limit: z.coerce.number().int().min(1).max(200).optional() })
+      .object({ mode: queueMode, limit: z.coerce.number().int().min(1).max(200).optional() })
       .safeParse(c.req.query());
     if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
     const userId = c.get("user").id;
@@ -54,7 +56,7 @@ export function reviewRoutes(db: Db, now: () => Date, timeZone: string) {
   app.post("/group", async (c) => {
     const body = z
       .object({
-        mode,
+        mode: queueMode,
         q: z.string().trim().max(200).optional(),
         tag: z.string().trim().max(50).optional(),
         root: z.string().trim().max(4).optional(),

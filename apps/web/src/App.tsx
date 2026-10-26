@@ -42,6 +42,7 @@ export function App() {
   const groupKey = group && JSON.stringify(group);
   if (route === "review") return <ReviewScreen key={`meaning${groupKey}`} mode="meaning" group={group} />;
   if (route === "listen") return <ReviewScreen key={`listening${groupKey}`} mode="listening" group={group} />;
+  if (route === "mix") return <ReviewScreen key={`mixed${groupKey}`} mode="mixed" group={group} />;
   if (route === "speech") return <SpeechScreen key={`speech${groupKey}`} group={group} />;
   if (route === "choose") return <ChoiceScreen key={`choose${groupKey}`} group={group} />;
   if (route === "shadow") return <ShadowingScreen />;
