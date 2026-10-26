@@ -1,0 +1,118 @@
+/* Word family (WordFamily.tsx): a card's Sino-Korean roots and the other words built on them. */
+.family {
+  width: 100%;
+  text-align: left;
+}
+
+.family-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.family-root {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+/* The root as a seal: syllable over its hanja, a door to the whole family. */
+.family-key {
+  flex: none;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 1px;
+  width: 48px;
+  min-height: var(--tap);
+  padding: 5px 0 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--accent-soft), transparent 140%), var(--surface-raised);
+  color: var(--text);
+  text-decoration: none;
+  transition:
+    border-color var(--dur-1) var(--ease),
+    transform var(--dur-1) var(--ease-spring);
+}
+
+.family-key:hover {
+  border-color: var(--border-strong);
+}
+
+.family-key:active {
+  transform: scale(0.94);
+  transition-duration: var(--dur-press);
+}
+
+.family-syllable {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.family-hanja {
+  font-size: var(--fs-xs);
+  color: var(--accent-hi);
+  line-height: 1.1;
+}
+
+.family-body {
+  min-width: 0;
+  padding-top: 3px;
+}
+
+.family-gloss {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.family-words {
+  margin: 2px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.family-word {
+  white-space: nowrap;
+}
+
+.family-word-meaning,
+.family-more {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+.family-sep {
+  margin: 0 6px;
+  color: var(--text-faint);
+}
+
+.family-more {
+  margin-left: 8px;
+  white-space: nowrap;
+}
+
+/* Cards screen narrowed to one root (Cards.tsx RootBanner). */
+.root-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.root-banner-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.root-banner-text .small {
+  margin: 0;
+}

@@ -26,6 +26,8 @@ export interface Location {
   param?: string;
   /** A group picked on the cards screen, reviewed instead of the day's queue: `#/review?tag=еда`. */
   group?: GroupFilter;
+  /** On "cards": the hanja whose word family is shown, `#/cards?root=學`. */
+  root?: string;
 }
 
 type GroupRoute = "review" | "speech" | "choose" | "listen";
@@ -34,6 +36,7 @@ export function groupHash(route: GroupRoute, filter: GroupFilter): string {
   const params = new URLSearchParams();
   if (filter.q) params.set("q", filter.q);
   if (filter.tag) params.set("tag", filter.tag);
+  if (filter.root) params.set("root", filter.root);
   if (filter.status) params.set("status", filter.status);
   return `#/${route}?${params}`;
 }
@@ -46,6 +49,8 @@ function parseGroup(search: string | undefined): GroupFilter | undefined {
   const tag = params.get("tag")?.trim();
   if (q) group.q = q;
   if (tag) group.tag = tag;
+  const root = params.get("root")?.trim();
+  if (root) group.root = root;
   if (params.get("status") === "queued") group.status = "queued";
   return group;
 }
@@ -72,7 +77,8 @@ export function parseHash(hash: string): Location {
   if (head === "invite" && param) return { route: "invite", param };
   if (head === "cards") {
     if (param && /^\d+$/.test(param)) return { route: "card", param };
-    return { route: "cards", param: param || undefined };
+    const root = new URLSearchParams(search ?? "").get("root")?.trim();
+    return { route: "cards", param: param || undefined, ...(root && { root }) };
   }
   return { route: "today" };
 }

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import type { Example } from "../cards.js";
+import type { Example, Root } from "../cards.js";
 import { blob, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 const timestamp = (name: string) => integer(name, { mode: "timestamp_ms" });
@@ -49,6 +49,8 @@ export const cards = sqliteTable(
     examples: text("examples", { mode: "json" }).$type<Example[]>().notNull().default(sql`'[]'`),
     notes: text("notes"),
     tags: text("tags", { mode: "json" }).$type<string[]>().notNull().default(sql`'[]'`),
+    // Sino-Korean roots (cards.ts rootSchema). Null: not filled in yet; []: a native word, no roots.
+    roots: text("roots", { mode: "json" }).$type<Root[]>(),
     speakable: integer("speakable", { mode: "boolean" }).notNull(),
     source: text("source", { enum: ["app", "claude", "bulk"] }).notNull(),
     language: text("language").notNull().default("ko"),

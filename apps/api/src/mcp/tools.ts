@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { EXAMPLES_PER_CARD, newCardSchema, normalizeKorean, type NewCard } from "../cards.js";
+import { EXAMPLES_PER_CARD, MAX_ROOTS, newCardSchema, normalizeKorean, rootSchema, type NewCard, type Root } from "../cards.js";
 import { MAX_DRILLS_PER_CALL, newDrillSchema } from "../practice.js";
 import type { CardStore, DrillStore, NewDrill } from "./store.js";
 
@@ -14,9 +14,11 @@ const instructions = `KQuiz is the user's personal Korean flashcard deck; each p
 - examples (required, exactly ${EXAMPLES_PER_CARD}): short natural Korean sentences that use the word, each with its Russian translation, as {"ko", "ru"}. Vary the forms and situations, keep them at the user's level. Every add_cards card and every update_card call must carry all ${EXAMPLES_PER_CARD}; when editing, send the card's current examples again if they stay as they are.
 - notes (optional): grammar, usage or anything else worth remembering.
 - tags: lowercase topics such as "еда" or "глаголы".
+- roots: the Sino-Korean roots of the word, one per syllable that comes from hanja, as {"ko", "hanja", "meaning"}: the syllable, its character and a short Russian gloss of the character, e.g. 학교 → [{"ko":"학","hanja":"學","meaning":"учёба"},{"ko":"교","hanja":"校","meaning":"школа"}]. Use the traditional character the word is really written with, and the same gloss for the same character across cards, so the app can link a word to others with that root (its word family). A native Korean word (사랑, 먹다) or a loanword gets []. For a mixed word list only the hanja syllables (공부하다 → 공 工, 부 夫). Give roots for every card you add.
 Cards added here don't enter reviews at once: they wait in a new-card queue and come in a few a day, mixed at random (the user sets how many and can pull cards in early). So adding many words at once is fine.
 Call find_cards before adding words the user may already have; add_cards also reports duplicates. To fix a card, use update_card instead of adding a new one: any field can be changed, and an empty string clears pronunciation, romanization or notes. Cards cannot be deleted from here.
 When the user asks to fix hard cards, call get_leeches and rework each with update_card: a clearer meaning, a mnemonic or the confusing neighbour in notes, ${EXAMPLES_PER_CARD} fresh examples. A card that mixes two senses can be split: narrow it with update_card and add the other sense with add_cards. If a card should go, tell the user; only they can delete it in the app.
+Older cards may have no roots yet: when the user asks to fill them in, page through find_cards with without_roots and send them with set_roots, 50 at a time, until none are left.
 When the user asks for practice on sounds they confuse (ㄱ/ㅋ/ㄲ, ㅓ/ㅗ…), add listening drills with add_sound_drills.`;
 
 const cardInput = z.object({
@@ -26,6 +28,17 @@ const cardInput = z.object({
   romanization: z.string().optional(),
   notes: z.string().optional(),
   tags: z.array(z.string()).optional(),
+  roots: z
+    .array(
+      z.object({
+        ko: z.string().describe("One Hangul syllable of the word"),
+        hanja: z.string().describe("Its hanja character"),
+        meaning: z.string().describe("Short Russian gloss of the character"),
+      }),
+    )
+    .max(MAX_ROOTS)
+    .optional()
+    .describe("Sino-Korean roots; [] for a native word or loanword"),
 });
 
 // Claude has to write examples for every card it adds or edits, so a word is never learned out of context.
@@ -95,11 +108,42 @@ export function createMcpServer(store: CardStore, drills?: DrillStore): McpServe
       inputSchema: {
         query: z.string().trim().max(200).optional().describe("Substring of korean, meaning, pronunciation or romanization"),
         tag: z.string().trim().max(50).optional(),
+        root: z.string().trim().max(4).optional().describe("A hanja character: cards with this root, i.e. its word family"),
+        without_roots: z.boolean().optional().describe("Only cards whose roots were never filled in"),
         limit: z.number().int().min(1).max(100).default(20),
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ query, tag, limit }) => json({ cards: await store.find({ text: query || undefined, tag: tag || undefined, limit }) }),
+    async ({ query, tag, root, without_roots, limit }) =>
+      json({
+        cards: await store.find({ text: query || undefined, tag: tag || undefined, root: root || undefined, withoutRoots: without_roots, limit }),
+      }),
+  );
+
+  server.registerTool(
+    "set_roots",
+    {
+      title: "Set roots",
+      description: `Sets the Sino-Korean roots of up to ${MAX_CARDS_PER_CALL} cards at once, without touching anything else on them (for filling in older cards; see find_cards without_roots). [] marks a native word or loanword. Returns the ids saved, and the ids not found or rejected with the reason.`,
+      inputSchema: {
+        cards: z
+          .array(z.object({ id: z.string().min(1), roots: cardInput.shape.roots.unwrap() }))
+          .min(1)
+          .max(MAX_CARDS_PER_CALL),
+      },
+      annotations: { destructiveHint: false, idempotentHint: true },
+    },
+    async ({ cards }) => {
+      const rejected: { id: string; reason: string }[] = [];
+      const valid: { id: string; roots: Root[] }[] = [];
+      for (const input of cards) {
+        const parsed = z.array(rootSchema).safeParse(input.roots);
+        if (parsed.success) valid.push({ id: input.id, roots: parsed.data });
+        else rejected.push({ id: input.id, reason: z.prettifyError(parsed.error) });
+      }
+      const { saved, notFound } = await store.setRoots(valid);
+      return json({ saved, notFound, rejected });
+    },
   );
 
   server.registerTool(

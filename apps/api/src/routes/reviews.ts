@@ -57,6 +57,7 @@ export function reviewRoutes(db: Db, now: () => Date, timeZone: string) {
         mode,
         q: z.string().trim().max(200).optional(),
         tag: z.string().trim().max(50).optional(),
+        root: z.string().trim().max(4).optional(),
         status: z.literal("queued").optional(),
         notReady: z.boolean().optional(),
       })

@@ -35,6 +35,19 @@ describe("SqliteCardStore", () => {
     await expect(store.update(b!.id, { korean: "물" })).rejects.toThrow();
   });
 
+  it("sets roots without counting it as an edit, and finds cards that still have none", async () => {
+    const store = new SqliteCardStore(openDb(":memory:"), OWNER_ID);
+    const [school, love] = await store.insert([card("학교", "школа"), card("사랑", "любовь"), card("책", "книга")], "claude");
+    const 學 = { ko: "학", hanja: "學", meaning: "учёба" };
+    expect(await store.setRoots([{ id: school!.id, roots: [學] }, { id: love!.id, roots: [] }, { id: "999", roots: [] }])).toEqual({
+      saved: [school!.id, love!.id],
+      notFound: ["999"],
+    });
+    const [found] = await store.find({ root: "學", limit: 10 });
+    expect(found).toMatchObject({ korean: "학교", roots: [學], updatedAt: school!.updatedAt });
+    expect((await store.find({ withoutRoots: true, limit: 10 })).map((c) => c.korean)).toEqual(["책"]);
+  });
+
   it("counts due cards, streak and weak sounds", async () => {
     const db = openDb(":memory:");
     const store = new SqliteCardStore(db, OWNER_ID);

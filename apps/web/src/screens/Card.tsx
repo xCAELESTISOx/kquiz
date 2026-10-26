@@ -5,6 +5,7 @@ import { canSpeak, speak } from "../lib/speech";
 import type { Card, CardPatch, Example } from "../lib/types";
 import { BackIcon, SpeakerIcon } from "../ui/icons";
 import { Spinner } from "../ui/Spinner";
+import { useFamily, WordFamily } from "../ui/WordFamily";
 import { lastCardsHash } from "./Cards";
 
 const EXAMPLES = 3;
@@ -67,6 +68,7 @@ export function CardScreen({ id }: { id: number }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string>();
   const [saved, setSaved] = useState(false);
+  const families = useFamily(card);
 
   useEffect(() => {
     api.card(id).then(
@@ -180,6 +182,13 @@ export function CardScreen({ id }: { id: number }) {
                 {busy === "introduce" && <Spinner />}
                 Учить сейчас
               </button>
+            </div>
+          )}
+
+          {card.roots && card.roots.length > 0 && (
+            <div className="field">
+              <span className="field-label">Корни</span>
+              <WordFamily card={card} families={families} />
             </div>
           )}
 

@@ -52,7 +52,7 @@ export function dueQueue(db: Db, userId: number, mode: ReviewMode, now = new Dat
 
 export const GROUP_LIMIT = 200;
 
-export type GroupFilter = Pick<CardQuery, "q" | "tag" | "status" | "notReady">;
+export type GroupFilter = Pick<CardQuery, "q" | "tag" | "root" | "status" | "notReady">;
 
 /**
  * A group the owner picked on the cards screen (a search, a tag), due or not, in random order.

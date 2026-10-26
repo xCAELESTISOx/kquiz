@@ -16,6 +16,21 @@ export const exampleSchema = z.object({
 
 export type Example = z.infer<typeof exampleSchema>;
 
+/**
+ * A Sino-Korean root of the word: one syllable, its hanja and a short Russian gloss, e.g.
+ * 학 學 «учёба». Cards that share a hanja are one word family; the hanja is the key, because
+ * one syllable has many unrelated roots (수 水 «вода», 수 數 «число»).
+ */
+export const rootSchema = z.object({
+  ko: z.string().trim().regex(/^[가-힣]$/, "must be one Hangul syllable"),
+  hanja: z.string().trim().regex(/^\p{Script=Han}$/u, "must be one hanja character"),
+  meaning: z.string().trim().min(1).max(60),
+});
+
+export type Root = z.infer<typeof rootSchema>;
+
+export const MAX_ROOTS = 8;
+
 export const newCardSchema = z.object({
   korean: z.string().trim().min(1).max(200),
   meaning: z.string().trim().min(1).max(500),
@@ -24,6 +39,8 @@ export const newCardSchema = z.object({
   examples: z.array(exampleSchema).max(EXAMPLES_PER_CARD).optional(),
   notes: z.string().trim().max(2000).optional(),
   tags: z.array(z.string().trim().min(1).max(50)).max(20).default([]),
+  // Empty for a native Korean word; left out while nobody has looked.
+  roots: z.array(rootSchema).max(MAX_ROOTS).optional(),
   // Defaults to isSpeakable(korean); true is accepted only for Hangul-only text.
   speakable: z.boolean().optional(),
 });

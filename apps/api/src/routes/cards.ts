@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { AuthVariables } from "../auth/sessions.js";
 import { getCardAudio } from "../cardAudio.js";
-import { cardCounts, createCards, deleteCard, getCard, listCards, listTags, updateCard } from "../cardStore.js";
+import { cardCounts, cardFamily, createCards, deleteCard, getCard, listCards, listTags, updateCard } from "../cardStore.js";
 import { newCardSchema, parseBulk } from "../cards.js";
 import type { Db } from "../db/client.js";
 import { introduceEarly } from "../newCards.js";
@@ -14,6 +14,7 @@ const idParam = z.coerce.number().int().positive();
 const listQuery = z.object({
   q: z.string().trim().max(200).optional(),
   tag: z.string().trim().max(50).optional(),
+  root: z.string().trim().max(4).optional(),
   notReady: z
     .enum(["1", "true"])
     .optional()
@@ -91,6 +92,13 @@ export function cardRoutes(db: Db, now: () => Date) {
     const id = idParam.safeParse(c.req.param("id"));
     const card = id.success ? getCard(db, c.get("user").id, id.data) : undefined;
     return card ? c.json({ card }) : c.json({ error: "not_found" }, 404);
+  });
+
+  // Other cards that share a root with this one, per root (cardStore.ts cardFamily).
+  app.get("/:id/family", (c) => {
+    const id = idParam.safeParse(c.req.param("id"));
+    const families = id.success ? cardFamily(db, c.get("user").id, id.data) : undefined;
+    return families ? c.json({ families }) : c.json({ error: "not_found" }, 404);
   });
 
   // Reference audio (cardAudio.ts). 404 until the worker has made it; the app then uses the phone's voice.

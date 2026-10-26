@@ -247,6 +247,7 @@ describe("mcp tools", () => {
       "get_stats",
       "get_weak_sounds",
       "list_sound_drills",
+      "set_roots",
       "update_card",
     ]);
     expect(client.getInstructions()).toContain("Hangul");
@@ -333,6 +334,30 @@ describe("mcp tools", () => {
 
     const missing = await client.callTool({ name: "update_card", arguments: { id: "nope", changes: { meaning: "x", examples } } });
     expect(missing.isError).toBe(true);
+  });
+
+  it("fills in roots in a batch and reports bad ones", async () => {
+    const client = await mcpClient((await connect()).access_token);
+    const added = parse(await client.callTool({ name: "add_cards", arguments: { cards: [{ korean: "학교", meaning: "школа", examples }] } }));
+    const id = added.created[0].id;
+    expect(parse(await client.callTool({ name: "find_cards", arguments: { without_roots: true } })).cards).toHaveLength(1);
+    const result = parse(
+      await client.callTool({
+        name: "set_roots",
+        arguments: {
+          cards: [
+            { id, roots: [{ ko: "학", hanja: "學", meaning: "учёба" }] },
+            { id: "nope", roots: [] },
+            { id, roots: [{ ko: "학교", hanja: "學", meaning: "учёба" }] },
+          ],
+        },
+      }),
+    );
+    expect(result.saved).toEqual([id]);
+    expect(result.notFound).toEqual(["nope"]);
+    expect(result.rejected).toHaveLength(1);
+    expect(parse(await client.callTool({ name: "find_cards", arguments: { without_roots: true } })).cards).toHaveLength(0);
+    expect(parse(await client.callTool({ name: "find_cards", arguments: { root: "學" } })).cards[0].roots).toHaveLength(1);
   });
 
   it("caps a batch at 50 cards", async () => {
