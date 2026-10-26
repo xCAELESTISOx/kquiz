@@ -8,6 +8,7 @@ import type {
   CardPatch,
   CardSource,
   CardSummary,
+  ChoiceOption,
   FsrsStatus,
   GroupFilter,
   NewCard,
@@ -204,6 +205,21 @@ export class MockApi {
       .filter((item) => anyDue || Date.parse(item.due) <= now)
       .sort((a, b) => Date.parse(a.due) - Date.parse(b.due))
       .slice(0, limit);
+  }
+
+  /** Any three other cards; the server picks look-alike ones. */
+  choices(cardIds: number[]): Record<number, ChoiceOption[]> {
+    const pool = this.state.cards.filter((c) => !c.queued);
+    return Object.fromEntries(
+      cardIds.map((id) => [
+        id,
+        pool
+          .filter((c) => c.id !== id)
+          .sort(() => Math.random() - 0.5)
+          .slice(0, 3)
+          .map(({ id, korean, meaning }) => ({ id, korean, meaning })),
+      ]),
+    );
   }
 
   group(mode: ReviewMode, filter: GroupFilter): { items: QueueItem[]; total: number } {
