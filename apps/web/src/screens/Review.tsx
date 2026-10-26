@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { api, holdReview, releaseHeldReview, takeBackReview } from "../lib/api";
 import { clozeFor } from "../lib/cloze";
+import { learnRound } from "../lib/learn";
 import { useLeechIds } from "../lib/leeches";
-import { navigate } from "../lib/router";
 import { canRecord, type Recorder } from "../lib/recorder";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
 import type { Card, ChoiceOption, GroupFilter, MixKind, QueueItem, QueueMode, RatingName, ReviewMode } from "../lib/types";
@@ -32,8 +32,18 @@ type Swipe = RatingName | "back";
  * Mixed puts every mode in one session, saying aloud included: each card is shown and graded in its
  * item's own mode, and the speech schedule is gone through partly aloud, partly by picking from options.
  * What goes into the mix is picked first (MixSetup).
+ * With `learn` (a card id, "Учить" in its menu) the session is that one word in every mode, round after
+ * round; nothing is sent, so its schedule and the stats stay as they were.
  */
-export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meaning" | "listening" | "mixed">; group?: GroupFilter }) {
+export function ReviewScreen({
+  mode,
+  group,
+  learn,
+}: {
+  mode: Extract<QueueMode, "meaning" | "listening" | "mixed">;
+  group?: GroupFilter;
+  learn?: number;
+}) {
   const [queue, setQueue] = useState<QueueItem[]>();
   const [total, setTotal] = useState(0);
   const [done, setDone] = useState(0);
@@ -50,10 +60,45 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
   // Look-alike words for the speech items, and the ones picked from them instead of said aloud.
   const [options, setOptions] = useState<Record<number, ChoiceOption[]>>({});
   const [quiet, setQuiet] = useState<ReadonlySet<QueueItem>>(new Set());
+  // Learning one word: the card and the round it is on.
+  const [learning, setLearning] = useState<{ card: Card; round: number }>();
+  const home = learn ? `#/cards/${learn}` : "#/";
+
+  const startRound = useCallback((card: Card, round: number, options: Record<number, ChoiceOption[]>) => {
+    const steps = learnRound(card, round, {
+      hear: canSpeak(),
+      say: canRecord() && card.speakable && card.readyForSpeech,
+      pick: (options[card.id]?.length ?? 0) > 0,
+    });
+    const items = steps.map((s) => s.item);
+    setLearning({ card, round });
+    setQuiet(new Set(steps.filter((s) => s.pick).map((s) => s.item)));
+    setQueue(items);
+    setTotal(items.length);
+    setDone(0);
+    setLast(undefined);
+    setRevealed(false);
+    setStep((n) => n + 1);
+    shownAt.current = performance.now();
+  }, []);
   // A mixed session starts once its kinds are picked.
   const [kinds, setKinds] = useState<ReadonlySet<MixKind>>();
+  const setup = mode === "mixed" && !kinds && !learn;
 
   useEffect(() => {
+    if (!learn) return;
+    document.title = "Учить · KQuiz";
+    Promise.all([api.card(learn), api.choices([learn]).catch(() => ({ options: {} as Record<number, ChoiceOption[]> }))]).then(
+      ([{ card }, { options }]) => {
+        setOptions(options);
+        startRound(card, 1, options);
+      },
+      (e: Error) => setError(e.message === "not_found" ? "Такой карточки нет. Может, её уже удалили." : e.message),
+    );
+  }, [learn, startRound]);
+
+  useEffect(() => {
+    if (learn) return;
     document.title = mode === "mixed" ? "Вперемешку · KQuiz" : mode === "listening" ? "На слух · KQuiz" : "Повторение · KQuiz";
     if (mode === "mixed" && !kinds) return;
     const aloud = !!kinds?.has("aloud") && canRecord();
@@ -111,14 +156,15 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
       // A swiped card has already flown off under the finger.
       setExit(swiped ? undefined : { step, rating, card });
       const reviewId = crypto.randomUUID();
-      void holdReview({
-        id: reviewId,
-        cardId: card.id,
-        mode: item.mode,
-        rating,
-        reviewedAt: new Date().toISOString(),
-        elapsedMs: Math.round(performance.now() - shownAt.current),
-      }).catch((e: Error) => setError(e.message));
+      if (!learn)
+        void holdReview({
+          id: reviewId,
+          cardId: card.id,
+          mode: item.mode,
+          rating,
+          reviewedAt: new Date().toISOString(),
+          elapsedMs: Math.round(performance.now() - shownAt.current),
+        }).catch((e: Error) => setError(e.message));
       setLast({ reviewId, queue, done });
       // A forgotten card comes back at the end of this session, like Anki's relearning step.
       const next = queue ? (rating === "again" ? [...queue.slice(1), queue[0]!] : queue.slice(1)) : queue;
@@ -130,7 +176,7 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
       setStep((n) => n + 1);
       shownAt.current = performance.now();
     },
-    [item, card, revealed, step, queue, done, speaking],
+    [item, card, revealed, step, queue, done, speaking, learn],
   );
 
   /** A card said aloud has sent its own rating; the session moves on. */
@@ -156,20 +202,20 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
   const back = useCallback(() => {
     if (!last) return;
     setLast(undefined);
-    // Already sent (the screen was left and reopened): that rating stays.
-    if (!takeBackReview(last.reviewId)) return;
+    // Already sent (the screen was left and reopened): that rating stays. Learning sends nothing.
+    if (!learn && !takeBackReview(last.reviewId)) return;
     setQueue(last.queue);
     setDone(last.done);
     setExit(undefined);
     setRevealed(true);
     setStep((n) => n + 1);
     shownAt.current = performance.now();
-  }, [last]);
+  }, [last, learn]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.key === "Escape") navigate("today");
+      if (e.key === "Escape") location.hash = home.slice(1);
       else if (e.key === "Backspace" || e.key === "z" || e.key === "я") back();
       // The card said aloud takes its own keys.
       else if (speaking) return;
@@ -184,20 +230,24 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
     }
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [revealed, reveal, rate, back, listening, speaking, card]);
+  }, [revealed, reveal, rate, back, listening, speaking, card, home]);
 
   const progress = total ? Math.min(done / total, 1) : 0;
 
   return (
     <main className="review">
       <header className="review-top">
-        <a className="icon-button" href="#/" aria-label={mode === "listening" ? "Закончить тренировку на слух" : "Закончить повторение"}>
+        <a
+          className="icon-button"
+          href={home}
+          aria-label={learn ? "Вернуться к карточке" : mode === "listening" ? "Закончить тренировку на слух" : "Закончить повторение"}
+        >
           <CloseIcon />
         </a>
         <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
           <div className="progress-fill" style={{ transform: `scaleX(${progress})` }} />
         </div>
-        <span className="review-count">{mode !== "mixed" || kinds ? `${Math.min(done, total)} / ${total}` : ""}</span>
+        <span className="review-count">{!setup ? `${Math.min(done, total)} / ${total}` : ""}</span>
         <button
           type="button"
           className="icon-button review-back"
@@ -212,11 +262,18 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
 
       <div aria-live="polite">{error && <p className="notice notice-error">{error}</p>}</div>
 
-      {mode === "mixed" && !kinds && <MixSetup counted={!group} onStart={setKinds} />}
+      {setup && <MixSetup counted={!group} onStart={setKinds} />}
 
-      {!queue && !error && (mode !== "mixed" || kinds) && <div className="review-stage" aria-busy="true" />}
+      {!queue && !error && !setup && <div className="review-stage" aria-busy="true" />}
 
-      {queue && !card && <Finished count={done} />}
+      {queue && !card && learning && (
+        <LearnFinished
+          card={learning.card}
+          round={learning.round}
+          onAgain={() => startRound(learning.card, learning.round + 1, options)}
+        />
+      )}
+      {queue && !card && !learning && <Finished count={done} />}
 
       {queue && item && speaking && (quiet.has(item) ? (
         <ChoiceCard
@@ -224,7 +281,8 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
           item={item}
           options={options[item.card.id] ?? []}
           onDone={spoken}
-          aloud={canRecord() && (
+          practice={!!learn}
+          aloud={!learn && canRecord() && (
             <button type="button" className="link-button inline" onClick={() => setQuiet((s) => toggled(s, item))}>
               записать голосом
             </button>
@@ -236,7 +294,8 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
           item={item}
           recorder={recorder}
           onRated={spoken}
-          quiet={(options[item.card.id]?.length ?? 0) > 0 && (
+          practice={!!learn}
+          quiet={!learn && (options[item.card.id]?.length ?? 0) > 0 && (
             <button type="button" className="link-button inline" onClick={() => setQuiet((s) => toggled(s, item))}>
               Выбрать из вариантов
             </button>
@@ -522,6 +581,29 @@ function Finished({ count }: { count: number }) {
         </p>
         <a className="button primary" href="#/">
           На главную
+        </a>
+      </div>
+    </div>
+  );
+}
+
+/** A round of one word is over: another one, or back to the card. Nothing was graded. */
+function LearnFinished({ card, round, onAgain }: { card: Card; round: number; onAgain: () => void }) {
+  return (
+    <div className="review-stage">
+      <div className="finished">
+        <p className="finished-mark" lang="ko">
+          {card.korean}
+        </p>
+        <p className="finished-text">
+          {round === 1 ? "Круг пройден" : `Кругов пройдено: ${round}`}. Расписание и статистика не изменились: слово придёт
+          в повторение как обычно.
+        </p>
+        <button type="button" className="button primary" onClick={onAgain}>
+          Ещё круг
+        </button>
+        <a className="button" href={`#/cards/${card.id}`}>
+          К карточке
         </a>
       </div>
     </div>

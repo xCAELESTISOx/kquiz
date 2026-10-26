@@ -349,9 +349,12 @@ export const api = {
       fallback: (m) => m.setRetention(mode, desiredRetention),
     }),
 
-  /** Scores a recording against the card. It is not a review: the rating is sent separately. */
-  score: (cardId: number, wav: Uint8Array<ArrayBuffer>) =>
-    request<ScoreResult>("POST", `/score?cardId=${cardId}`, {
+  /**
+   * Scores a recording against the card. It is not a review: the rating is sent separately. A practice
+   * take (learning one word) is not kept, so it stays out of the pronunciation stats.
+   */
+  score: (cardId: number, wav: Uint8Array<ArrayBuffer>, practice = false) =>
+    request<ScoreResult>("POST", `/score?cardId=${cardId}${practice ? "&practice=1" : ""}`, {
       body: wav,
       contentType: "audio/wav",
       fallback: (m) => m.score(cardId),

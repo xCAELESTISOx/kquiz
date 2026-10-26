@@ -133,3 +133,19 @@ export const ShuffleIcon = () => (
     <path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
   </Icon>
 );
+
+export const MoreIcon = () => (
+  <Icon>
+    <circle cx="5" cy="12" r="1" fill="currentColor" />
+    <circle cx="12" cy="12" r="1" fill="currentColor" />
+    <circle cx="19" cy="12" r="1" fill="currentColor" />
+  </Icon>
+);
+
+/** An open book: learning one word on its own. */
+export const LearnIcon = () => (
+  <Icon>
+    <path d="M12 6.5C10.5 5 8 4.5 4 4.5v13c4 0 6.5.5 8 2 1.5-1.5 4-2 8-2v-13c-4 0-6.5.5-8 2z" />
+    <path d="M12 6.5v13" />
+  </Icon>
+);

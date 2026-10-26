@@ -1227,6 +1227,65 @@ p {
   margin: -8px -10px -4px;
 }
 
+/* "⋯" on a card: a small list of actions under the button. */
+.menu {
+  position: relative;
+}
+
+.menu-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 236px;
+  display: grid;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-2);
+  transform-origin: top right;
+  animation: menu-in var(--dur-1) var(--ease-out);
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(-4px);
+  }
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--tap);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.menu-item svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.menu-item-text {
+  display: grid;
+  gap: 2px;
+}
+
+.menu-item:hover,
+.menu-item:focus-visible {
+  background: rgb(148 160 200 / 0.08);
+  outline: none;
+}
+
+.card-top-actions {
+  display: flex;
+}
+
 .queue-note {
   display: flex;
   align-items: center;

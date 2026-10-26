@@ -19,12 +19,17 @@ const STATUS: Record<ScorerFailure, 422 | 503 | 504> = {
   unavailable: 503,
 };
 
-/** POST /api/score?cardId=: the body is the recording as WAV; the result is not a review, the user rates it next. */
+/**
+ * POST /api/score?cardId=: the body is the recording as WAV; the result is not a review, the user rates it next.
+ * `practice=1` (learning one word from its card) scores without keeping the attempt, so it stays out of the stats.
+ */
 export function scoreRoutes(db: Db, scorer: Scorer, now: () => Date) {
   const app = new Hono<{ Variables: AuthVariables }>();
 
   app.post("/", rateLimit({ ...limits.score, key: (c) => clientIp(c), now: () => now().getTime() }), async (c) => {
-    const query = z.object({ cardId: z.coerce.number().int().positive() }).safeParse(c.req.query());
+    const query = z
+      .object({ cardId: z.coerce.number().int().positive(), practice: z.literal("1").optional() })
+      .safeParse(c.req.query());
     if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
     const userId = c.get("user").id;
     const card = getCard(db, userId, query.data.cardId);
@@ -49,7 +54,7 @@ export function scoreRoutes(db: Db, scorer: Scorer, now: () => Date) {
       return c.json({ error: error.reason, detail: error.message }, STATUS[error.reason]);
     }
 
-    const attemptId = recordAttempt(db, userId, card.id, result, now());
+    const attemptId = query.data.practice ? null : recordAttempt(db, userId, card.id, result, now());
     return c.json({
       attemptId,
       cardId: card.id,

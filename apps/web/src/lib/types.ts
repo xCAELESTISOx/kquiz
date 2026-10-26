@@ -221,7 +221,8 @@ export interface Sound {
 
 /** POST /api/score, fields as services/scorer returns them. */
 export interface ScoreResult {
-  attemptId: number;
+  /** Null for a practice take, which is not kept. */
+  attemptId: number | null;
   cardId: number;
   score: number;
   /** How the word is actually said, in Hangul (국물 → 궁물). */
