@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { api } from "../lib/api";
-import { cardsCount } from "../lib/plural";
-import type { Card, CardFilter, CardSummary, Settings, Stats } from "../lib/types";
-import { DownloadIcon, MinusIcon, PlusIcon, SearchIcon } from "../ui/icons";
+import { cardsCount, cardsWord } from "../lib/plural";
+import { groupHash } from "../lib/router";
+import type { Card, CardFilter, CardSummary, GroupFilter, Settings, Stats } from "../lib/types";
+import { DownloadIcon, HeadphonesIcon, MicIcon, MinusIcon, PlusIcon, SearchIcon } from "../ui/icons";
 import { EmptyState } from "../ui/EmptyState";
 import { Spinner } from "../ui/Spinner";
 
@@ -130,6 +131,14 @@ export function CardsScreen({ filter }: { filter?: CardFilter }) {
 
       {filter === "queued" && <QueuePanel onChange={refreshSummary} />}
 
+      {cards && (query.trim() || tag || filter === "queued") && filter !== "paused" && (
+        <GroupBar
+          group={{ q: query.trim() || undefined, tag, status: filter === "queued" ? "queued" : undefined }}
+          cards={cards}
+          more={nextBefore !== null}
+        />
+      )}
+
       <div aria-live="polite">{error && <p className="notice notice-error">{error}</p>}</div>
 
       {!cards && !error && <div className="skeleton card-list-skeleton" aria-busy="true" />}
@@ -189,6 +198,38 @@ export function CardsScreen({ filter }: { filter?: CardFilter }) {
         Выгрузить всё в JSON
       </a>
     </main>
+  );
+}
+
+/**
+ * Reviews just what the list shows: a search, a tag, the queue. All of it, due or not, in random
+ * order; the ratings go into the usual schedule.
+ */
+function GroupBar({ group, cards, more }: { group: GroupFilter; cards: Card[]; more: boolean }) {
+  const active = cards.filter((c) => !c.suspended);
+  if (!active.length) return null;
+  const queued = active.some((c) => c.queued);
+  const count = more ? `${active.length}+` : String(active.length);
+  return (
+    <section className="group-bar" aria-label="Учить выбранные">
+      <p className="group-bar-title">
+        Учить эти <span className="group-bar-count">{count}</span> {more ? "карточек" : cardsWord(active.length)}
+      </p>
+      <div className="group-bar-actions">
+        <a className="button primary" href={groupHash("review", group)}>
+          Перевод
+        </a>
+        <a className="button" href={groupHash("speech", group)}>
+          <MicIcon />
+          Вслух
+        </a>
+        <a className="button" href={groupHash("listen", group)}>
+          <HeadphonesIcon />
+          На слух
+        </a>
+      </div>
+      {queued && <p className="muted small">Карточки из очереди войдут в повторение сразу, вне дневного лимита.</p>}
+    </section>
   );
 }
 

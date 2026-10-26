@@ -1167,6 +1167,46 @@ p {
   font-variant-numeric: tabular-nums;
 }
 
+/* Reviewing just the cards the list shows. */
+.group-bar {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px 16px;
+  border-radius: var(--radius);
+  border: 1px solid rgb(124 140 255 / 0.28);
+  background: linear-gradient(to bottom, var(--accent-soft), var(--surface) 70%);
+  box-shadow: var(--shadow-1);
+  animation: notice-in var(--dur-2) var(--ease-spring);
+}
+
+.group-bar-title {
+  font-weight: 650;
+}
+
+.group-bar-count {
+  color: var(--accent-hi);
+  font-variant-numeric: tabular-nums;
+}
+
+.group-bar-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.group-bar-actions .button {
+  min-height: 48px;
+  padding-inline: 8px;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+.group-bar-actions .button svg {
+  width: 18px;
+  height: 18px;
+}
+
 /* ---------- Card ---------- */
 
 .card-top {

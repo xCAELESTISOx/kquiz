@@ -18,7 +18,7 @@ import { TodayScreen } from "./screens/Today";
 import { TabBar } from "./ui/TabBar";
 
 export function App() {
-  const { route, param } = useLocation();
+  const { route, param, group } = useLocation();
 
   // Today lifts the splash itself once its numbers are in.
   useEffect(() => {
@@ -36,9 +36,11 @@ export function App() {
 
   if (route === "login") return <LoginScreen />;
   if (route === "invite") return <InviteScreen code={param!} />;
-  if (route === "review") return <ReviewScreen key="meaning" mode="meaning" />;
-  if (route === "listen") return <ReviewScreen key="listening" mode="listening" />;
-  if (route === "speech") return <SpeechScreen />;
+  // A group gets a fresh screen per filter, so going from one tag to another starts over.
+  const groupKey = group && JSON.stringify(group);
+  if (route === "review") return <ReviewScreen key={`meaning${groupKey}`} mode="meaning" group={group} />;
+  if (route === "listen") return <ReviewScreen key={`listening${groupKey}`} mode="listening" group={group} />;
+  if (route === "speech") return <SpeechScreen key={`speech${groupKey}`} group={group} />;
   if (route === "shadow") return <ShadowingScreen />;
   if (route === "sounds") return <SoundsScreen />;
 

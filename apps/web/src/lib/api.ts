@@ -10,6 +10,7 @@ import type {
   CardPatch,
   CardSummary,
   FsrsStatus,
+  GroupFilter,
   InviteStatus,
   Leech,
   NewCard,
@@ -217,6 +218,13 @@ export const api = {
     promise.catch(() => recentQueues.get(key)?.promise === promise && recentQueues.delete(key));
     return promise;
   },
+
+  /** Every card of a group, due or not, in random order. Queued cards in it are taken into reviews. */
+  group: (mode: ReviewMode, filter: GroupFilter) =>
+    request<{ items: QueueItem[]; total: number }>("POST", "/reviews/group", {
+      body: { mode, ...filter },
+      fallback: (m) => m.group(mode, filter),
+    }),
 
   review: (reviews: ReviewInput[]) =>
     request<{ results: ReviewResult[] }>("POST", "/reviews", { body: { reviews }, fallback: (m) => m.review(reviews) }),
