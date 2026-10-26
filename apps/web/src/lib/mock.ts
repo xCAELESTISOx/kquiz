@@ -9,6 +9,7 @@ import type {
   CardSource,
   CardSummary,
   ChoiceOption,
+  Family,
   FsrsStatus,
   GroupFilter,
   NewCard,
@@ -42,9 +43,13 @@ export interface KeyValueStorage {
   setItem(key: string, value: string): void;
 }
 
-const KEY = "kquiz.mock.v3";
+const KEY = "kquiz.mock.v4";
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
+
+function root(ko: string, hanja: string, meaning: string) {
+  return { ko, hanja, meaning };
+}
 
 const SEED: NewCard[] = [
   { korean: "안녕하세요", meaning: "здравствуйте", pronunciation: "안녕하세요", romanization: "annyeonghaseyo", examples: [
@@ -55,12 +60,20 @@ const SEED: NewCard[] = [
   { korean: "감사합니다", meaning: "спасибо", pronunciation: "감사함니다", romanization: "gamsahamnida" },
   { korean: "물", meaning: "вода", romanization: "mul", examples: [{ ko: "물 좀 주세요.", ru: "Дайте, пожалуйста, воды." }] },
   { korean: "괜찮아요", meaning: "всё в порядке", pronunciation: "괜차나요", romanization: "gwaenchanayo" },
-  { korean: "맛있다", meaning: "вкусный", pronunciation: "마싣따", romanization: "masitda", tags: ["еда"] },
+  { korean: "맛있다", meaning: "вкусный", pronunciation: "마싣따", romanization: "masitda", tags: ["еда"], roots: [] },
+  { korean: "학교", meaning: "школа", pronunciation: "학꾜", tags: ["учёба"], roots: [root("학", "學", "учёба"), root("교", "校", "школа")], examples: [
+      { ko: "학교에 가요.", ru: "Иду в школу." },
+      { ko: "우리 학교는 커요.", ru: "Наша школа большая." },
+      { ko: "학교 앞에서 만나요.", ru: "Встретимся перед школой." },
+    ] },
+  { korean: "학생", meaning: "студент, ученик", pronunciation: "학쌩", tags: ["учёба"], roots: [root("학", "學", "учёба"), root("생", "生", "жизнь, рождение")] },
+  { korean: "대학교", meaning: "университет", pronunciation: "대학꾜", tags: ["учёба"], roots: [root("대", "大", "большой"), root("학", "學", "учёба"), root("교", "校", "школа")] },
+  { korean: "선생님", meaning: "учитель", tags: ["учёба"], roots: [root("선", "先", "прежде"), root("생", "生", "жизнь, рождение")] },
 ];
 
 // As if Claude had just added them: they wait in the new-card queue.
 const SEED_QUEUED: NewCard[] = [
-  { korean: "지하철", meaning: "метро", tags: ["город"] },
+  { korean: "지하철", meaning: "метро", tags: ["город"], roots: [root("지", "地", "земля"), root("하", "下", "низ"), root("철", "鐵", "железо")] },
   { korean: "편의점", meaning: "круглосуточный магазин", pronunciation: "펴니점", tags: ["город"] },
   { korean: "영수증", meaning: "чек", tags: ["покупки"] },
   { korean: "계산하다", meaning: "расплачиваться, считать", tags: ["покупки", "глаголы"] },
@@ -88,7 +101,7 @@ export class MockApi {
     }
   }
 
-  cards(query: { q?: string; tag?: string; status?: CardFilter; before?: number; limit?: number }): CardList {
+  cards(query: { q?: string; tag?: string; root?: string; status?: CardFilter; before?: number; limit?: number }): CardList {
     const limit = query.limit ?? 50;
     const q = query.q?.toLocaleLowerCase();
     const found = [...this.state.cards]
@@ -97,6 +110,7 @@ export class MockApi {
         (c) =>
           (!q || c.korean.toLocaleLowerCase().includes(q) || c.meaning.toLocaleLowerCase().includes(q)) &&
           (!query.tag || c.tags.includes(query.tag)) &&
+          (!query.root || !!c.roots?.some((r) => r.hanja === query.root)) &&
           (query.status !== "queued" || c.queued) &&
           (query.status !== "paused" || c.suspended) &&
           (!query.before || c.id < query.before),
@@ -116,6 +130,17 @@ export class MockApi {
       },
       tags: [...tags].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag)),
     };
+  }
+
+  family(id: number): Family[] {
+    const card = this.card(id);
+    const seen = new Set<string>();
+    return (card.roots ?? []).flatMap((root) => {
+      if (seen.has(root.hanja)) return [];
+      seen.add(root.hanja);
+      const others = this.cards({ root: root.hanja, limit: Infinity }).cards.filter((c) => c.id !== id);
+      return [{ ...root, cards: others.slice(0, 5).map(({ id, korean, meaning }) => ({ id, korean, meaning })), total: others.length }];
+    });
   }
 
   card(id: number): Card {
@@ -416,6 +441,7 @@ export class MockApi {
       examples: input.examples ?? [],
       notes: input.notes ?? null,
       tags: input.tags ?? [],
+      roots: input.roots ?? null,
       speakable: readyForSpeech && syllables > 0 && syllables <= 12,
       readyForSpeech,
       source,

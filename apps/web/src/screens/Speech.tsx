@@ -12,6 +12,7 @@ import { LeechBadge } from "../ui/LeechBadge";
 import { CloseIcon, MicIcon, PlayIcon, RetryIcon, SpeakerIcon, StopIcon } from "../ui/icons";
 import { IntonationChart } from "../ui/IntonationChart";
 import { useCountUp } from "../ui/motion";
+import { useFamily, WordFamily } from "../ui/WordFamily";
 import { Spinner } from "../ui/Spinner";
 
 const RATINGS: { name: RatingName; label: string; key: string }[] = [
@@ -165,6 +166,7 @@ export function SpeechCard({
   useEffect(() => () => void (recorder.current?.recording && recorder.current.stop()), [recorder]);
 
   const cloze = useMemo(() => clozeFor(item), [item]);
+  const families = useFamily(card);
   const leeches = useLeechIds("speech");
   const intonation = useIntonation(cardAudioUrl(card.id), takeWav);
 
@@ -290,6 +292,7 @@ export function SpeechCard({
 
           {phase === "result" && <ResultDetails result={result} failed={scoreFailed} />}
           {phase === "result" && <IntonationChart state={intonation} compact />}
+          {phase === "result" && <WordFamily card={card} families={families} />}
           </div>
 
           {canSpeak() && (

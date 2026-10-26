@@ -98,6 +98,55 @@ describe("cards", () => {
   });
 });
 
+describe("word families", () => {
+  const 學 = { ko: "학", hanja: "學", meaning: "учёба" };
+  const 校 = { ko: "교", hanja: "校", meaning: "школа" };
+  const 生 = { ko: "생", hanja: "生", meaning: "жизнь" };
+  const 數 = { ko: "수", hanja: "數", meaning: "число" };
+  const 水 = { ko: "수", hanja: "水", meaning: "вода" };
+
+  it("links cards that share a hanja, not just a syllable", async () => {
+    const t = await signedIn();
+    const { json } = await t.request("/cards/bulk", {
+      body: {
+        cards: [
+          { korean: "학교", meaning: "школа", roots: [學, 校] },
+          { korean: "학생", meaning: "студент", roots: [學, 生] },
+          { korean: "수학", meaning: "математика", roots: [數, 學] },
+          { korean: "수영", meaning: "плавание", roots: [水, { ko: "영", hanja: "泳", meaning: "плавать" }] },
+          { korean: "사랑", meaning: "любовь", roots: [] },
+          { korean: "책", meaning: "книга" },
+        ],
+      },
+    });
+    const [school, , math] = json.created;
+    expect(school.roots).toEqual([學, 校]);
+    expect(json.created[5].roots).toBeNull();
+
+    const family = await t.request(`/cards/${school.id}/family`);
+    expect(family.json.families.map((f: any) => [f.hanja, f.total, f.cards.map((c: any) => c.korean)])).toEqual([
+      ["學", 2, ["수학", "학생"]],
+      ["校", 0, []],
+    ]);
+    // 수 數 in 수학 and 수 水 in 수영 are different roots.
+    expect((await t.request(`/cards/${math.id}/family`)).json.families[0]).toMatchObject({ hanja: "數", total: 0 });
+    expect((await t.request("/cards/999/family")).status).toBe(404);
+
+    expect((await t.request("/cards?root=" + encodeURIComponent("學"))).json.cards).toHaveLength(3);
+    const group = await t.request("/reviews/group", { body: { mode: "meaning", root: "學" } });
+    expect(group.json.total).toBe(3);
+  });
+
+  it("keeps roots on other edits and rejects malformed ones", async () => {
+    const t = await signedIn();
+    const { json } = await t.request("/cards", { body: { korean: "학교", meaning: "школа", roots: [學, 校] } });
+    const patched = await t.request(`/cards/${json.card.id}`, { method: "PATCH", body: { meaning: "школа!" } });
+    expect(patched.json.card.roots).toEqual([學, 校]);
+    const bad = await t.request("/cards", { body: { korean: "학생", meaning: "студент", roots: [{ ko: "학", hanja: "x", meaning: "учёба" }] } });
+    expect(bad.status).toBe(400);
+  });
+});
+
 describe("reviews", () => {
   it("schedules each mode separately and applies a review once", async () => {
     const t = await signedIn();

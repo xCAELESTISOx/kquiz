@@ -64,6 +64,13 @@
       "when": 1792419070830,
       "tag": "0008_users",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1793021632760,
+      "tag": "0009_card_roots",
+      "breakpoints": true
     }
   ]
 }

@@ -48,7 +48,8 @@ All JSON. Everything except health and `/auth/status|login|register` needs the s
 - `DELETE /:id` deletes a disabled member and everything of theirs (`409 disable_first` otherwise)
 
 **Cards** (`/api/cards`)
-- `GET /?q=&tag=&notReady=1&status=queued|paused&limit=50&before=<id>` → `{ cards, nextBefore }`, newest first
+- `GET /?q=&tag=&root=<hanja>&notReady=1&status=queued|paused&limit=50&before=<id>` → `{ cards, nextBefore }`, newest first; `root` keeps the cards with that root (a word family)
+- `GET /:id/family` → `{ families: [{ ko, hanja, meaning, cards: [{ id, korean, meaning }] (newest 5), total }] }`: for each root of the card, the other cards that share its hanja
 - `GET /summary` → `{ counts: { all, queued, paused }, tags: [{ tag, count }] }`
 - `POST /` card → `201 { card }`, `409 { error: "duplicate", existingId }`
 - `POST /bulk` `{ text }` (lines `한국어 — перевод`) or `{ cards: [...] }`, ≤ 50 → `{ created, duplicates, rejected }`
@@ -56,7 +57,7 @@ All JSON. Everything except health and `/auth/status|login|register` needs the s
 - `GET /:id`, `PATCH /:id` (partial; `""` clears an optional field; `suspended` pauses), `DELETE /:id`
 - `POST /:id/introduce` → `{ card }`: takes a queued card into reviews now, outside the daily allowance; `409 not_queued`
 
-Card: `{ id, korean, meaning, pronunciation, romanization, examples, notes, tags, speakable, readyForSpeech, source, suspended, queued, createdAt, updatedAt }`, where `examples` is up to 3 `{ ko, ru }` sentences (Claude must always send exactly 3 through MCP). Duplicates are detected ignoring spaces and punctuation. `readyForSpeech` is false when `korean` has non-Hangul text; such cards never become `speakable`.
+Card: `{ id, korean, meaning, pronunciation, romanization, examples, notes, tags, roots, speakable, readyForSpeech, source, suspended, queued, createdAt, updatedAt }`, where `examples` is up to 3 `{ ko, ru }` sentences (Claude must always send exactly 3 through MCP). `roots` are the Sino-Korean roots `[{ ko, hanja, meaning }]` (학 學 «учёба»): `null` until filled in (Claude does it; MCP `set_roots` for older cards, which is not an edit and keeps a hard card on its list), `[]` for a native word. Cards sharing a hanja are one word family; the hanja is the key, since one syllable has unrelated roots. Duplicates are detected ignoring spaces and punctuation. `readyForSpeech` is false when `korean` has non-Hangul text; such cards never become `speakable`.
 
 **New-card queue** (`src/newCards.ts`). Cards Claude adds through MCP don't enter reviews at once: they are `queued` and come in `newPerDay` a day (default 15), picked at random, the first time the queue or stats are read that day (`TIME_ZONE` midnight). Cards added in the app, one or in bulk, skip the queue. A paused (`suspended`) card is in no review queue and isn't picked from the new-card queue.
 

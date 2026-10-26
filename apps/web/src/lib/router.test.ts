@@ -27,6 +27,12 @@ describe("parseHash", () => {
     expect(parseHash("#/invite")).toEqual({ route: "today" });
   });
 
+  it("reads a word family on the cards screen and in a group", () => {
+    expect(parseHash("#/cards?root=" + encodeURIComponent("學"))).toEqual({ route: "cards", param: undefined, root: "學" });
+    expect(parseHash("#/cards/queued?root=學")).toEqual({ route: "cards", param: "queued", root: "學" });
+    expect(parseHash(groupHash("review", { root: "學" }))).toEqual({ route: "review", group: { root: "學" } });
+  });
+
   it("reads a chosen group of cards to review", () => {
     const hash = groupHash("speech", { q: "물 병", tag: "еда" });
     expect(parseHash(hash)).toEqual({ route: "speech", group: { q: "물 병", tag: "еда" } });

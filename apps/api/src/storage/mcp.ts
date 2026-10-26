@@ -2,15 +2,15 @@
 import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import type { Context } from "hono";
 import { readSession } from "../auth/sessions.js";
-import { createCards, toCardDto, updateCard, type CardDto, type CardSource } from "../cardStore.js";
-import { koreanKey, normalizeKorean, type CardPatch, type NewCard } from "../cards.js";
+import { cardConditions, createCards, toCardDto, updateCard, type CardDto, type CardSource } from "../cardStore.js";
+import { koreanKey, normalizeKorean, type CardPatch, type NewCard, type Root } from "../cards.js";
 import type { Config } from "../config.js";
 import type { Db } from "../db/client.js";
 import { cards, oauthClients, oauthCodes, oauthGrants, phoneStats, reviewLog } from "../db/schema.js";
 import { activeUser } from "../users.js";
 import type { OwnerAuth, UserStores } from "../mcp/app.js";
 import type { OAuthStore } from "../mcp/oauth-store.js";
-import type { CardStore, DrillStore, NewDrill } from "../mcp/store.js";
+import type { CardQuery, CardStore, DrillStore, NewDrill } from "../mcp/store.js";
 import { findLeeches } from "../leeches.js";
 import { introduceDailyCards } from "../newCards.js";
 import { addDrills, listDrills } from "../practice.js";
@@ -38,6 +38,7 @@ function toStoredCard(card: CardDto): StoredCard {
     examples: card.examples,
     notes: optional(card.notes),
     tags: card.tags,
+    ...(card.roots ? { roots: card.roots } : {}),
     speakable: card.speakable,
     queued: card.queued,
     source: card.source,
@@ -94,8 +95,8 @@ export class SqliteCardStore implements CardStore {
     return createCards(this.db, this.userId, input, source).created.map(toStoredCard);
   }
 
-  async find({ text, tag, limit }: { text?: string; tag?: string; limit: number }): Promise<StoredCard[]> {
-    const conditions = [sql`${cards.userId} = ${this.userId}`];
+  async find({ text, tag, root, withoutRoots, limit }: CardQuery): Promise<StoredCard[]> {
+    const conditions = cardConditions(this.userId, { tag, root, rootsUnset: withoutRoots });
     if (text) {
       const pattern = `%${text.toLocaleLowerCase().replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
       conditions.push(
@@ -104,7 +105,6 @@ export class SqliteCardStore implements CardStore {
           or ulower(coalesce(${cards.romanization}, '')) like ${pattern} escape '\\')`,
       );
     }
-    if (tag) conditions.push(sql`exists (select 1 from json_each(${cards.tags}) where value = ${tag})`);
     const where = sql.join(conditions, sql` and `);
     return this.db
       .select()
@@ -123,6 +123,26 @@ export class SqliteCardStore implements CardStore {
     if ("card" in result) return toStoredCard(result.card);
     if (result.error === "duplicate") throw new Error(`Card ${result.existingId} already has this Korean text`);
     return null;
+  }
+
+  async setRoots(items: { id: string; roots: Root[] }[]) {
+    const saved: string[] = [];
+    const notFound: string[] = [];
+    this.db.transaction((tx) => {
+      for (const { id, roots } of items) {
+        const numericId = Number(id);
+        const changed =
+          Number.isSafeInteger(numericId) &&
+          numericId > 0 &&
+          tx
+            .update(cards)
+            .set({ roots })
+            .where(and(eq(cards.id, numericId), eq(cards.userId, this.userId)))
+            .run().changes > 0;
+        (changed ? saved : notFound).push(id);
+      }
+    });
+    return { saved, notFound };
   }
 
   async stats(now: Date) {

@@ -3,27 +3,30 @@ import { api, remembered } from "../lib/api";
 import { cardsCount, cardsWord } from "../lib/plural";
 import { groupHash } from "../lib/router";
 import type { Card, CardFilter, CardSummary, GroupFilter, Settings, Stats } from "../lib/types";
-import { DownloadIcon, HeadphonesIcon, MicIcon, MinusIcon, PlusIcon, SearchIcon, ShuffleIcon } from "../ui/icons";
+import { CloseIcon, DownloadIcon, HeadphonesIcon, MicIcon, MinusIcon, PlusIcon, SearchIcon, ShuffleIcon } from "../ui/icons";
 import { EmptyState } from "../ui/EmptyState";
 import { Spinner } from "../ui/Spinner";
+import "../ui/family.css";
 
 const PAGE = 50;
 
 /** Where "back" from a card goes: the list as it was left, filter included. */
 export let lastCardsHash = "#/cards";
 
-const listQuery = (query: string, tag: string | undefined, filter: CardFilter | undefined) => ({
+const listQuery = (query: string, tag: string | undefined, filter: CardFilter | undefined, root?: string) => ({
   q: query.trim(),
   tag,
+  root,
   status: filter,
   limit: PAGE,
 });
 
-export function CardsScreen({ filter }: { filter?: CardFilter }) {
+/** `root` (a hanja) narrows the list to one word family, as opened from a card's roots. */
+export function CardsScreen({ filter, root }: { filter?: CardFilter; root?: string }) {
   const [query, setQuery] = useState("");
   const [tag, setTag] = useState<string>();
   // The list as last seen comes up at once; the fresh one replaces it when it arrives.
-  const [saved] = useState(() => remembered.cards(listQuery("", undefined, filter)));
+  const [saved] = useState(() => remembered.cards(listQuery("", undefined, filter, root)));
   const [cards, setCards] = useState<Card[] | undefined>(saved?.cards);
   const [nextBefore, setNextBefore] = useState<number | null>(saved?.nextBefore ?? null);
   const [summary, setSummary] = useState<CardSummary | undefined>(remembered.cardSummary);
@@ -34,22 +37,22 @@ export function CardsScreen({ filter }: { filter?: CardFilter }) {
 
   useEffect(() => {
     document.title = "Карточки · KQuiz";
-    lastCardsHash = filter ? `#/cards/${filter}` : "#/cards";
-  }, [filter]);
+    lastCardsHash = (filter ? `#/cards/${filter}` : "#/cards") + (root ? `?root=${encodeURIComponent(root)}` : "");
+  }, [filter, root]);
 
   const refreshSummary = () => api.cardSummary().then(setSummary, () => undefined);
   useEffect(() => void refreshSummary(), []);
 
   useEffect(() => {
     const id = ++requestId.current;
-    const seen = remembered.cards(listQuery(query, tag, filter));
+    const seen = remembered.cards(listQuery(query, tag, filter, root));
     if (seen) {
       setCards(seen.cards);
       setNextBefore(seen.nextBefore);
     }
     const timer = setTimeout(
       () => {
-        api.cards(listQuery(query, tag, filter)).then(
+        api.cards(listQuery(query, tag, filter, root)).then(
           (res) => {
             if (id !== requestId.current) return;
             setCards(res.cards);
@@ -62,13 +65,13 @@ export function CardsScreen({ filter }: { filter?: CardFilter }) {
       query ? 220 : 0,
     );
     return () => clearTimeout(timer);
-  }, [query, tag, filter]);
+  }, [query, tag, filter, root]);
 
   async function loadMore() {
     if (nextBefore === null || loadingMore) return;
     setLoadingMore(true);
     try {
-      const res = await api.cards({ ...listQuery(query, tag, filter), before: nextBefore });
+      const res = await api.cards({ ...listQuery(query, tag, filter, root), before: nextBefore });
       setCards((list) => [...(list ?? []), ...res.cards]);
       setNextBefore(res.nextBefore);
     } catch (e) {
@@ -127,7 +130,7 @@ export function CardsScreen({ filter }: { filter?: CardFilter }) {
           <a
             key={f.label}
             className="chip"
-            href={f.id ? `#/cards/${f.id}` : "#/cards"}
+            href={(f.id ? `#/cards/${f.id}` : "#/cards") + (root ? `?root=${encodeURIComponent(root)}` : "")}
             aria-current={filter === f.id ? "page" : undefined}
             // A filter that would show nothing stays out of the way, unless it is the open one.
             hidden={f.id !== undefined && f.count === 0 && filter !== f.id}
@@ -143,11 +146,13 @@ export function CardsScreen({ filter }: { filter?: CardFilter }) {
         ))}
       </div>
 
+      {root && <RootBanner root={root} cards={cards} filter={filter} />}
+
       {filter === "queued" && <QueuePanel onChange={refreshSummary} />}
 
-      {cards && (query.trim() || tag || filter === "queued") && filter !== "paused" && (
+      {cards && (query.trim() || tag || root || filter === "queued") && filter !== "paused" && (
         <GroupBar
-          group={{ q: query.trim() || undefined, tag, status: filter === "queued" ? "queued" : undefined }}
+          group={{ q: query.trim() || undefined, tag, root, status: filter === "queued" ? "queued" : undefined }}
           cards={cards}
           more={nextBefore !== null}
         />
@@ -158,8 +163,8 @@ export function CardsScreen({ filter }: { filter?: CardFilter }) {
       {!cards && !error && <div className="skeleton card-list-skeleton" aria-busy="true" />}
 
       {cards && cards.length === 0 && (
-        <EmptyState word={query || tag || filter === "paused" ? "없어요" : "비었어요"}>
-          {query || tag ? (
+        <EmptyState word={query || tag || root || filter === "paused" ? "없어요" : "비었어요"}>
+          {query || tag || root ? (
             "Ничего не нашлось. Попробуй другое слово или сними фильтр."
           ) : filter === "queued" ? (
             "Очередь пуста: все новые карточки уже в повторении."
@@ -212,6 +217,30 @@ export function CardsScreen({ filter }: { filter?: CardFilter }) {
         Выгрузить всё в JSON
       </a>
     </main>
+  );
+}
+
+/** Says which word family the list is narrowed to, and takes the narrowing off. */
+function RootBanner({ root, cards, filter }: { root: string; cards: Card[] | undefined; filter?: CardFilter }) {
+  const known = cards?.flatMap((c) => c.roots ?? []).find((r) => r.hanja === root);
+  return (
+    <section className="root-banner" aria-label="Семья слова">
+      <span className="family-key root-banner-key" aria-hidden="true">
+        <span className="family-syllable" lang="ko">
+          {known?.ko ?? "·"}
+        </span>
+        <span className="family-hanja" lang="zh-Hant">
+          {root}
+        </span>
+      </span>
+      <div className="root-banner-text">
+        <p className="family-gloss">{known ? `Корень «${known.meaning}»` : "Корень"}</p>
+        <p className="muted small">Все твои слова с этим корнем</p>
+      </div>
+      <a className="icon-button" href={filter ? `#/cards/${filter}` : "#/cards"} aria-label="Показать все карточки">
+        <CloseIcon />
+      </a>
+    </section>
   );
 }
 

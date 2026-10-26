@@ -9,6 +9,7 @@ import type { Card, ChoiceOption, GroupFilter, QueueItem, QueueMode, RatingName 
 import { CloseIcon, SpeakerIcon, UndoIcon } from "../ui/icons";
 import { LeechBadge } from "../ui/LeechBadge";
 import { useGlide } from "../ui/motion";
+import { useFamily, WordFamily } from "../ui/WordFamily";
 import { ChoiceCard } from "./Choice";
 import { SpeechCard } from "./Speech";
 
@@ -80,6 +81,7 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
   const speaking = item?.mode === "speech";
   // Listening shows no text before the answer, so only meaning reviews ask through an example.
   const cloze = useMemo(() => (item?.mode === "meaning" ? clozeFor(item) : undefined), [item]);
+  const families = useFamily(card);
   const leeches = useLeechIds(item?.mode ?? (mode === "listening" ? "listening" : "meaning"));
 
   // Leaving the screen ends the chance to go back, so the held rating goes out.
@@ -311,6 +313,7 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
                     ))}
                   </ul>
                 )}
+                <WordFamily card={card} families={families} />
                 {card.notes && <p className="review-notes muted">{card.notes}</p>}
               </div>
             ) : (
