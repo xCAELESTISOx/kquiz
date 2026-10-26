@@ -293,13 +293,20 @@ export function SpeechScreen() {
                 <p className="review-tip muted small">{suggested ? "Подсвечена оценка по записи, решаешь ты" : "Оцени себя сам"}</p>
               </>
             ) : (
-              <RecordButton
-                phase={phase}
-                level={level}
-                seconds={seconds}
-                disabled={!recordable}
-                onPress={() => void record()}
-              />
+              <>
+                <RecordButton
+                  phase={phase}
+                  level={level}
+                  seconds={seconds}
+                  disabled={!recordable}
+                  onPress={() => void record()}
+                />
+                {phase === "prompt" && (
+                  <p className="review-tip muted small">
+                    Нельзя говорить? <a href="#/choose">Выбрать из вариантов</a>
+                  </p>
+                )}
+              </>
             )}
           </footer>
         </>

@@ -9,6 +9,7 @@ import type {
   CardList,
   CardPatch,
   CardSummary,
+  ChoiceOption,
   FsrsStatus,
   InviteStatus,
   Leech,
@@ -217,6 +218,12 @@ export const api = {
     promise.catch(() => recentQueues.get(key)?.promise === promise && recentQueues.delete(key));
     return promise;
   },
+
+  /** Wrong options for the "pick the Korean word" screen, by card id. */
+  choices: (cardIds: number[]) =>
+    request<{ options: Record<number, ChoiceOption[]> }>("GET", `/reviews/choices?cardIds=${cardIds.join(",")}`, {
+      fallback: (m) => ({ options: m.choices(cardIds) }),
+    }),
 
   review: (reviews: ReviewInput[]) =>
     request<{ results: ReviewResult[] }>("POST", "/reviews", { body: { reviews }, fallback: (m) => m.review(reviews) }),

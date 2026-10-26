@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AuthVariables } from "../auth/sessions.js";
+import { distractors } from "../choices.js";
 import type { Db } from "../db/client.js";
 import { findLeeches } from "../leeches.js";
 import { introduceDailyCards } from "../newCards.js";
@@ -33,6 +34,20 @@ export function reviewRoutes(db: Db, now: () => Date, timeZone: string) {
     const userId = c.get("user").id;
     introduceDailyCards(db, userId, now(), timeZone);
     return c.json({ items: dueQueue(db, userId, query.data.mode, now(), query.data.limit) });
+  });
+
+  // Wrong options for the "pick the Korean word" screen, for the cards of a queue it already has.
+  app.get("/choices", (c) => {
+    const query = z
+      .object({
+        cardIds: z
+          .string()
+          .regex(/^\d+(,\d+){0,199}$/)
+          .transform((s) => s.split(",").map(Number)),
+      })
+      .safeParse(c.req.query());
+    if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
+    return c.json({ options: distractors(db, c.get("user").id, query.data.cardIds) });
   });
 
   // Accepts a batch so the offline queue can flush in one request.

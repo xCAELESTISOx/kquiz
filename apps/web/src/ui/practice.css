@@ -469,3 +469,42 @@
     animation: none;
   }
 }
+
+/* ---------- Pick the Korean word (screens/Choice.tsx) ---------- */
+
+.choice-card {
+  gap: 12px;
+  touch-action: auto;
+}
+
+.choice-card .speech-meaning {
+  font-size: var(--fs-2xl);
+  text-align: center;
+}
+
+/* Two by two whatever the count, so the grid stays put as the deck grows. */
+.choice-options,
+.choice-options[data-count="3"] {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.choice-options .sounds-option {
+  min-height: 96px;
+  justify-content: center;
+  padding-inline: 10px;
+}
+
+.choice-options .sounds-option-word {
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.choice-options .sounds-option-meaning {
+  text-align: center;
+  text-wrap: balance;
+  animation: answer-in var(--dur-2) var(--ease-out);
+}
+
+.review-tip a {
+  color: var(--accent);
+}

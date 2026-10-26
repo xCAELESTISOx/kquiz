@@ -222,6 +222,18 @@ p {
   grid-column: 1 / -1;
 }
 
+/* The quiet way through the "aloud" queue, under its button. */
+.alt-link {
+  justify-self: center;
+  margin-top: -4px;
+  padding: 4px 8px;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  text-decoration: underline;
+  text-decoration-color: var(--border);
+  text-underline-offset: 3px;
+}
+
 .button-count {
   min-width: 26px;
   padding: 2px 8px;

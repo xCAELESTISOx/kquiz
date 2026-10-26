@@ -8,6 +8,7 @@ import { InviteScreen } from "./screens/Invite";
 import { LeechesScreen } from "./screens/Leeches";
 import { CardScreen } from "./screens/Card";
 import { CardsScreen } from "./screens/Cards";
+import { ChoiceScreen } from "./screens/Choice";
 import { LoginScreen } from "./screens/Login";
 import { ReviewScreen } from "./screens/Review";
 import { ShadowingScreen } from "./screens/Shadowing";
@@ -39,6 +40,7 @@ export function App() {
   if (route === "review") return <ReviewScreen key="meaning" mode="meaning" />;
   if (route === "listen") return <ReviewScreen key="listening" mode="listening" />;
   if (route === "speech") return <SpeechScreen />;
+  if (route === "choose") return <ChoiceScreen />;
   if (route === "shadow") return <ShadowingScreen />;
   if (route === "sounds") return <SoundsScreen />;
 
