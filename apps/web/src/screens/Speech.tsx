@@ -4,7 +4,7 @@ import { clozeFor } from "../lib/cloze";
 import { useLeechIds } from "../lib/leeches";
 import { describeErrors, segments, verdict } from "../lib/pronunciation";
 import { canRecord, MAX_SECONDS, Recorder, RecorderFailure, type RecorderError } from "../lib/recorder";
-import { navigate } from "../lib/router";
+import { groupHash, navigate } from "../lib/router";
 import { cardAudioUrl, useIntonation } from "../lib/practice";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
 import type { Card, GroupFilter, QueueItem, RatingName, ScoreResult } from "../lib/types";
@@ -297,13 +297,20 @@ export function SpeechScreen({ group }: { group?: GroupFilter }) {
                 <p className="review-tip muted small">{suggested ? "Подсвечена оценка по записи, решаешь ты" : "Оцени себя сам"}</p>
               </>
             ) : (
-              <RecordButton
-                phase={phase}
-                level={level}
-                seconds={seconds}
-                disabled={!recordable}
-                onPress={() => void record()}
-              />
+              <>
+                <RecordButton
+                  phase={phase}
+                  level={level}
+                  seconds={seconds}
+                  disabled={!recordable}
+                  onPress={() => void record()}
+                />
+                {phase === "prompt" && (
+                  <p className="review-tip muted small">
+                    Нельзя говорить? <a href={group ? groupHash("choose", group) : "#/choose"}>Выбрать из вариантов</a>
+                  </p>
+                )}
+              </>
             )}
           </footer>
         </>

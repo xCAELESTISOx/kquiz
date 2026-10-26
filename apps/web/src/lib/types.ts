@@ -68,6 +68,13 @@ export interface QueueItem {
   lapses: number;
 }
 
+/** A wrong option on the "pick the Korean word" screen: another of the user's words. */
+export interface ChoiceOption {
+  id: number;
+  korean: string;
+  meaning: string;
+}
+
 /** A card forgotten on many different days since its last edit (GET /api/reviews/leeches). */
 export interface Leech {
   card: Card;
