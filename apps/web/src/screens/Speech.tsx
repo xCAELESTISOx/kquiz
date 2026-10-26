@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { api, ApiError, submitReview } from "../lib/api";
 import { clozeFor } from "../lib/cloze";
 import { useLeechIds } from "../lib/leeches";
@@ -51,6 +51,84 @@ export function SpeechScreen({ group }: { group?: GroupFilter }) {
   const [total, setTotal] = useState(0);
   const [done, setDone] = useState(0);
   const [step, setStep] = useState(0);
+  const [error, setError] = useState<string>();
+  const recorder = useRef<Recorder>(undefined);
+
+  useEffect(() => {
+    document.title = "Произношение · KQuiz";
+    (group ? api.group("speech", group) : api.queue("speech")).then(
+      ({ items }) => {
+        setQueue(items);
+        setTotal(items.length);
+      },
+      (e: Error) => setError(e.message),
+    );
+    return () => recorder.current?.close();
+  }, []);
+
+  const item = queue?.[0];
+
+  // The next few too, so their audio is ready by the time they come up.
+  useEffect(() => {
+    if (queue) preloadSpeech(...queue.slice(0, 3).map((i) => i.card));
+  }, [queue]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") navigate("today");
+    }
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, []);
+
+  const rated = useCallback((rating: RatingName) => {
+    setQueue((q) => (q ? (rating === "again" ? [...q.slice(1), q[0]!] : q.slice(1)) : q));
+    if (rating !== "again") setDone((n) => n + 1);
+    setStep((n) => n + 1);
+  }, []);
+
+  const progress = total ? Math.min(done / total, 1) : 0;
+
+  return (
+    <main className="review speech">
+      <header className="review-top">
+        <a className="icon-button" href="#/" aria-label="Закончить тренировку">
+          <CloseIcon />
+        </a>
+        <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
+          <div className="progress-fill" style={{ transform: `scaleX(${progress})` }} />
+        </div>
+        <span className="review-count">
+          {Math.min(done, total)} / {total}
+        </span>
+      </header>
+
+      <div aria-live="polite">{error && <p className="notice notice-error">{error}</p>}</div>
+
+      {!queue && !error && <div className="review-stage" aria-busy="true" />}
+
+      {queue && !item && <Finished count={done} />}
+
+      {item && <SpeechCard key={step} item={item} recorder={recorder} onRated={rated} />}
+    </main>
+  );
+}
+
+/**
+ * One card said aloud: record, see the scorer's verdict, grade it. Sends its own rating to the speech
+ * schedule, then tells the session. A fresh one (keyed) per showing; the microphone is the session's,
+ * so it is asked for once.
+ */
+export function SpeechCard({
+  item,
+  recorder,
+  onRated,
+}: {
+  item: QueueItem;
+  recorder: RefObject<Recorder | undefined>;
+  onRated: (rating: RatingName) => void;
+}) {
+  const { card } = item;
   const [phase, setPhase] = useState<Phase>("prompt");
   const [revealed, setRevealed] = useState(false);
   const [result, setResult] = useState<ScoreResult>();
@@ -60,24 +138,10 @@ export function SpeechScreen({ group }: { group?: GroupFilter }) {
   const [seconds, setSeconds] = useState(0);
   const [take, setTake] = useState<string>();
   const [takeWav, setTakeWav] = useState<Uint8Array>();
-  const recorder = useRef<Recorder>(undefined);
   const shownAt = useRef(performance.now());
   const startedAt = useRef(0);
 
-  useEffect(() => {
-    document.title = "Произношение · KQuiz";
-    (group ? api.group("speech", group) : api.queue("speech")).then(
-      ({ items }) => {
-        setQueue(items);
-        setTotal(items.length);
-        shownAt.current = performance.now();
-      },
-      (e: Error) => setError(e.message),
-    );
-    return () => recorder.current?.close();
-  }, []);
-
-  // The take's object URL lives until the next take or the screen closes.
+  // The take's object URL lives until the next take or the card goes.
   useEffect(() => () => void (take && URL.revokeObjectURL(take)), [take]);
 
   // The timer and the live level only matter while recording.
@@ -87,20 +151,16 @@ export function SpeechScreen({ group }: { group?: GroupFilter }) {
     return () => clearInterval(id);
   }, [phase]);
 
-  const item = queue?.[0];
-  const card = item?.card;
-  const cloze = useMemo(() => item && clozeFor(item), [item]);
-  const leeches = useLeechIds("speech");
-  const intonation = useIntonation(card ? cardAudioUrl(card.id) : "", takeWav);
+  // Graded or left mid-take: the recording stops with the card.
+  useEffect(() => () => void (recorder.current?.recording && recorder.current.stop()), [recorder]);
 
-  // The next few too, so their audio is ready by the time they come up.
-  useEffect(() => {
-    if (queue) preloadSpeech(...queue.slice(0, 3).map((i) => i.card));
-  }, [queue]);
+  const cloze = useMemo(() => clozeFor(item), [item]);
+  const leeches = useLeechIds("speech");
+  const intonation = useIntonation(cardAudioUrl(card.id), takeWav);
 
   const stop = useCallback(async () => {
     const r = recorder.current;
-    if (!r?.recording || !card) return;
+    if (!r?.recording) return;
     setPhase("scoring");
     setLevel(0);
     const recorded = await r.stop();
@@ -120,10 +180,9 @@ export function SpeechScreen({ group }: { group?: GroupFilter }) {
     }
     setRevealed(true);
     setPhase("result");
-  }, [card, result, scoreFailed]);
+  }, [card, recorder, result, scoreFailed]);
 
   const record = useCallback(async () => {
-    if (!card) return;
     if (phase === "recording") return void stop();
     if (phase === "scoring") return;
     setError(undefined);
@@ -140,11 +199,11 @@ export function SpeechScreen({ group }: { group?: GroupFilter }) {
     startedAt.current = performance.now();
     setSeconds(0);
     setPhase("recording");
-  }, [card, phase, stop]);
+  }, [phase, recorder, stop]);
 
   const rate = useCallback(
     (rating: RatingName) => {
-      if (!card || phase !== "result") return;
+      if (phase !== "result") return;
       void submitReview({
         id: crypto.randomUUID(),
         cardId: card.id,
@@ -152,26 +211,15 @@ export function SpeechScreen({ group }: { group?: GroupFilter }) {
         rating,
         reviewedAt: new Date().toISOString(),
         elapsedMs: Math.round(performance.now() - shownAt.current),
-      }).catch((e: Error) => setError(e.message));
-      setQueue((q) => (q ? (rating === "again" ? [...q.slice(1), q[0]!] : q.slice(1)) : q));
-      if (rating !== "again") setDone((n) => n + 1);
-      setStep((n) => n + 1);
-      setPhase("prompt");
-      setRevealed(false);
-      setResult(undefined);
-      setScoreFailed(undefined);
-      setError(undefined);
-      setTake(undefined);
-      setTakeWav(undefined);
-      shownAt.current = performance.now();
+      }).catch(() => undefined);
+      onRated(rating);
     },
-    [card, phase],
+    [card, phase, onRated],
   );
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") navigate("today");
-      else if (e.key === " " && !e.repeat) {
+      if (e.key === " " && !e.repeat) {
         e.preventDefault();
         void record();
       } else if (phase === "result") {
@@ -183,129 +231,108 @@ export function SpeechScreen({ group }: { group?: GroupFilter }) {
     return () => removeEventListener("keydown", onKey);
   }, [phase, record, rate]);
 
-  const progress = total ? Math.min(done / total, 1) : 0;
   const suggested = result?.suggestedRating;
   const recordable = canRecord();
 
   return (
-    <main className="review speech">
-      <header className="review-top">
-        <a className="icon-button" href="#/" aria-label="Закончить тренировку">
-          <CloseIcon />
-        </a>
-        <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
-          <div className="progress-fill" style={{ transform: `scaleX(${progress})` }} />
-        </div>
-        <span className="review-count">
-          {Math.min(done, total)} / {total}
-        </span>
-      </header>
-
-      {!queue && !error && <div className="review-stage" aria-busy="true" />}
-
-      {queue && !card && <Finished count={done} />}
-
-      {card && (
-        <>
-          <div className="review-stage">
-            <div className="review-card speech-card" key={step}>
-              <div className="speech-body">
-              {leeches.has(card.id) && <LeechBadge />}
-              <p className="speech-ask">
-                {cloze ? `Скажи пропущенное слово${card.korean.endsWith("다") ? " в словарной форме" : ""}` : "Скажи по-корейски"}
+    <>
+      <div className="review-stage">
+        <div className="review-card speech-card">
+          <div className="speech-body">
+          {leeches.has(card.id) && <LeechBadge />}
+          <p className="speech-ask">
+            {cloze ? `Скажи пропущенное слово${card.korean.endsWith("다") ? " в словарной форме" : ""}` : "Скажи по-корейски"}
+          </p>
+          <p className="speech-meaning">{card.meaning}</p>
+          {cloze && (
+            <div className="speech-context">
+              <p lang="ko">
+                {cloze.before}
+                {revealed ? <mark className="cloze-mark">{cloze.word}</mark> : <span className="cloze-gap" aria-label="пропуск" />}
+                {cloze.after}
               </p>
-              <p className="speech-meaning">{card.meaning}</p>
-              {cloze && (
-                <div className="speech-context">
-                  <p lang="ko">
-                    {cloze.before}
-                    {revealed ? <mark className="cloze-mark">{cloze.word}</mark> : <span className="cloze-gap" aria-label="пропуск" />}
-                    {cloze.after}
-                  </p>
-                  <p className="muted">{card.examples[cloze.example]!.ru}</p>
-                </div>
-              )}
+              <p className="muted">{card.examples[cloze.example]!.ru}</p>
+            </div>
+          )}
 
-              {revealed ? (
-                <div className="speech-word">
-                  <p className={`review-korean${result ? " is-scored" : ""}`} lang="ko" aria-label={card.korean}>
-                    {result
-                      ? segments(card.korean, result.syllables).map((s, i) =>
-                          s.status ? (
-                            <span key={i} className={`syl syl-${s.status}`} style={{ "--i": i } as CSSProperties}>
-                              {s.text}
-                            </span>
-                          ) : (
-                            <span key={i}>{s.text}</span>
-                          ),
-                        )
-                      : card.korean}
-                  </p>
-                  <Pronunciation card={card} standard={result?.pronunciation} />
-                </div>
-              ) : (
-                <button type="button" className="speech-reveal" onClick={() => setRevealed(true)}>
-                  Показать слово
-                </button>
-              )}
+          {revealed ? (
+            <div className="speech-word">
+              <p className={`review-korean${result ? " is-scored" : ""}`} lang="ko" aria-label={card.korean}>
+                {result
+                  ? segments(card.korean, result.syllables).map((s, i) =>
+                      s.status ? (
+                        <span key={i} className={`syl syl-${s.status}`} style={{ "--i": i } as CSSProperties}>
+                          {s.text}
+                        </span>
+                      ) : (
+                        <span key={i}>{s.text}</span>
+                      ),
+                    )
+                  : card.korean}
+              </p>
+              <Pronunciation card={card} standard={result?.pronunciation} />
+            </div>
+          ) : (
+            <button type="button" className="speech-reveal" onClick={() => setRevealed(true)}>
+              Показать слово
+            </button>
+          )}
 
-              {phase === "result" && <ResultDetails result={result} failed={scoreFailed} />}
-              {phase === "result" && <IntonationChart state={intonation} compact />}
-              </div>
+          {phase === "result" && <ResultDetails result={result} failed={scoreFailed} />}
+          {phase === "result" && <IntonationChart state={intonation} compact />}
+          </div>
 
-              {canSpeak() && (
-                <button type="button" className="icon-button speak-button" aria-label="Послушать образец" onClick={() => speak(card)}>
-                  <SpeakerIcon />
+          {canSpeak() && (
+            <button type="button" className="icon-button speak-button" aria-label="Послушать образец" onClick={() => speak(card)}>
+              <SpeakerIcon />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div aria-live="polite">{error && <p className="notice notice-error speech-notice">{error}</p>}</div>
+
+      <footer className="review-actions">
+        {phase === "result" ? (
+          <>
+            <div className="speech-again">
+              <button type="button" className="chip-button" onClick={() => void record()}>
+                <RetryIcon />
+                Записать ещё раз
+              </button>
+              {take && (
+                <button type="button" className="chip-button" onClick={() => void new Audio(take).play()}>
+                  <PlayIcon />
+                  Моя запись
                 </button>
               )}
             </div>
-          </div>
-
-          <div aria-live="polite">{error && <p className="notice notice-error speech-notice">{error}</p>}</div>
-
-          <footer className="review-actions">
-            {phase === "result" ? (
-              <>
-                <div className="speech-again">
-                  <button type="button" className="chip-button" onClick={() => void record()}>
-                    <RetryIcon />
-                    Записать ещё раз
-                  </button>
-                  {take && (
-                    <button type="button" className="chip-button" onClick={() => void new Audio(take).play()}>
-                      <PlayIcon />
-                      Моя запись
-                    </button>
-                  )}
-                </div>
-                <div className="ratings is-in">
-                  {RATINGS.map((r) => (
-                    <button
-                      key={r.name}
-                      type="button"
-                      className={`rating rating-${r.name}`}
-                      data-suggested={r.name === suggested || undefined}
-                      onClick={() => rate(r.name)}
-                    >
-                      {r.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="review-tip muted small">{suggested ? "Подсвечена оценка по записи, решаешь ты" : "Оцени себя сам"}</p>
-              </>
-            ) : (
-              <RecordButton
-                phase={phase}
-                level={level}
-                seconds={seconds}
-                disabled={!recordable}
-                onPress={() => void record()}
-              />
-            )}
-          </footer>
-        </>
-      )}
-    </main>
+            <div className="ratings is-in">
+              {RATINGS.map((r) => (
+                <button
+                  key={r.name}
+                  type="button"
+                  className={`rating rating-${r.name}`}
+                  data-suggested={r.name === suggested || undefined}
+                  onClick={() => rate(r.name)}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+            <p className="review-tip muted small">{suggested ? "Подсвечена оценка по записи, решаешь ты" : "Оцени себя сам"}</p>
+          </>
+        ) : (
+          <RecordButton
+            phase={phase}
+            level={level}
+            seconds={seconds}
+            disabled={!recordable}
+            onPress={() => void record()}
+          />
+        )}
+      </footer>
+    </>
   );
 }
 

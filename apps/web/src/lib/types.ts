@@ -2,6 +2,8 @@
 
 /** Meaning: Hangul → translation. Speech: say it aloud. Listening: hear it with no text → translation. */
 export type ReviewMode = "meaning" | "speech" | "listening";
+/** A queue of one mode, or every mode mixed in one session (each item keeps its own mode). */
+export type QueueMode = ReviewMode | "mixed";
 export type RatingName = "again" | "hard" | "good" | "easy";
 export type CardSource = "app" | "claude" | "bulk";
 

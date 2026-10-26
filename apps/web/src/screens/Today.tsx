@@ -3,7 +3,7 @@ import { api, auth, lastToday, pendingReviewCount, remembered, rememberToday } f
 import { cardsWord } from "../lib/plural";
 import { hideSplash } from "../lib/splash";
 import type { QueueItem, Stats } from "../lib/types";
-import { HeadphonesIcon, MicIcon } from "../ui/icons";
+import { HeadphonesIcon, MicIcon, ShuffleIcon } from "../ui/icons";
 import { PracticeLinks } from "../ui/PracticeLinks";
 import { ScheduleSettings } from "./ScheduleSettings";
 
@@ -44,6 +44,8 @@ export function TodayScreen() {
   const speechDue = stats?.due.speech ?? 0;
   const listenDue = stats?.due.listening ?? 0;
   const restDue = speechDue + listenDue;
+  // Worth offering once at least two kinds of review wait.
+  const mixable = [due, speechDue, listenDue].filter((n) => n > 0).length > 1;
   const pending = pendingReviewCount();
   const today = new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
 
@@ -155,6 +157,13 @@ export function TodayScreen() {
         {due > 0 && (
           <a className="button primary" href="#/review">
             Повторить {due} {cardsWord(due)}
+          </a>
+        )}
+        {mixable && (
+          <a className="button" href="#/mix">
+            <ShuffleIcon />
+            Всё вперемешку
+            <span className="button-count">{due + restDue}</span>
           </a>
         )}
         {restDue > 0 && (

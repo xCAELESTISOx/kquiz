@@ -16,38 +16,39 @@ const hasCurrentAudio = sql`exists (select 1 from ${cardAudio} where ${cardAudio
 /** Review states a mode can actually show, for queries over `review_states` joined with `cards`; paused cards never. */
 export const reviewable = sql`${cards.suspended} = 0 and (${reviewStates.mode} = 'meaning' or (${reviewStates.mode} = 'speech' and ${cards.speakable} = 1) or (${reviewStates.mode} = 'listening' and ${hasCurrentAudio}))`;
 
+/** A single mode, or all of them mixed in one session. */
+export type QueueMode = ReviewMode | "mixed";
+
+const modeCondition = (mode: QueueMode) => (mode === "mixed" ? reviewable : and(eq(reviewStates.mode, mode), reviewable));
+
+function toQueueItem({ card, state }: { card: typeof cards.$inferSelect; state: typeof reviewStates.$inferSelect }): QueueItem {
+  return {
+    card: toCardDto(card),
+    mode: state.mode,
+    due: state.due.toISOString(),
+    state: state.state,
+    reps: state.reps,
+    lapses: state.lapses,
+  };
+}
+
 /**
  * Cards due in a mode: the most overdue `limit` of them, in random order, so cards added together
  * don't always come up together and one word doesn't prompt the next. Only speakable cards enter
  * the pronunciation queue, only cards with their recording the listening one; paused ones enter none.
+ * Mixed takes the most overdue across all modes, each item graded in its own mode's schedule.
  */
-export function dueQueue(db: Db, userId: number, mode: ReviewMode, now = new Date(), limit = 50, random = Math.random): QueueItem[] {
+export function dueQueue(db: Db, userId: number, mode: QueueMode, now = new Date(), limit = 50, random = Math.random): QueueItem[] {
   const items = db
     .select({ card: cards, state: reviewStates })
     .from(reviewStates)
     .innerJoin(cards, eq(cards.id, reviewStates.cardId))
-    .where(
-      and(
-        eq(cards.userId, userId),
-        eq(reviewStates.mode, mode),
-        lte(reviewStates.due, now),
-        eq(cards.suspended, false),
-        mode === "speech" ? eq(cards.speakable, true) : undefined,
-        mode === "listening" ? hasCurrentAudio : undefined,
-      ),
-    )
+    .where(and(eq(cards.userId, userId), lte(reviewStates.due, now), modeCondition(mode)))
     .orderBy(asc(reviewStates.due))
     .limit(Math.min(Math.max(limit, 1), 200))
     .all()
-    .map(({ card, state }) => ({
-      card: toCardDto(card),
-      mode,
-      due: state.due.toISOString(),
-      state: state.state,
-      reps: state.reps,
-      lapses: state.lapses,
-    }));
-  return shuffle(items, random);
+    .map(toQueueItem);
+  return mode === "mixed" ? spreadCards(items, random) : shuffle(items, random);
 }
 
 export const GROUP_LIMIT = 200;
@@ -57,12 +58,13 @@ export type GroupFilter = Pick<CardQuery, "q" | "tag" | "status" | "notReady">;
 /**
  * A group the owner picked on the cards screen (a search, a tag), due or not, in random order.
  * Ratings go into the usual schedule: FSRS takes an early review into account. Queued cards in the
- * group are taken into reviews now, as "learn now" would; paused ones stay out.
+ * group are taken into reviews now, as "learn now" would; paused ones stay out. Mixed gives every
+ * card in each mode it can be shown in.
  */
 export function groupQueue(
   db: Db,
   userId: number,
-  mode: ReviewMode,
+  mode: QueueMode,
   filter: GroupFilter,
   now = new Date(),
   random = Math.random,
@@ -85,25 +87,34 @@ export function groupQueue(
       .where(
         and(
           eq(cards.userId, userId),
-          eq(reviewStates.mode, mode),
+          modeCondition(mode),
           inArray(
             cards.id,
             picked.map((row) => row.id),
           ),
-          mode === "speech" ? eq(cards.speakable, true) : undefined,
-          mode === "listening" ? hasCurrentAudio : undefined,
         ),
       )
       .all();
-    const byId = new Map(rows.map((row) => [row.card.id, row]));
-    const items = picked.flatMap(({ id }) => {
-      const row = byId.get(id);
-      if (!row) return [];
-      const { card, state } = row;
-      return [{ card: toCardDto(card), mode, due: state.due.toISOString(), state: state.state, reps: state.reps, lapses: state.lapses }];
-    });
-    return { items, total: matched.length };
+    const byId = new Map<number, typeof rows>();
+    for (const row of rows) byId.set(row.card.id, [...(byId.get(row.card.id) ?? []), row]);
+    const items = picked.flatMap(({ id }) => (byId.get(id) ?? []).map(toQueueItem));
+    return { items: mode === "mixed" ? spreadCards(items, random) : items, total: matched.length };
   });
+}
+
+/**
+ * Shuffles a mixed session so the same word comes back in another mode only after `gap` other
+ * cards where possible: right after its translation, hearing or saying it would be a giveaway.
+ */
+export function spreadCards(items: QueueItem[], random = Math.random, gap = 8): QueueItem[] {
+  const pool = shuffle(items, random);
+  const out: QueueItem[] = [];
+  while (pool.length) {
+    const recent = new Set(out.slice(-gap).map((item) => item.card.id));
+    const at = pool.findIndex((item) => !recent.has(item.card.id));
+    out.push(pool.splice(Math.max(at, 0), 1)[0]!);
+  }
+  return out;
 }
 
 /** A shuffled copy (Fisher–Yates). */

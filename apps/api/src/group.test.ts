@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { createCards } from "./cardStore.js";
-import { shuffle } from "./reviewStore.js";
+import { saveCardAudio } from "./cardAudio.js";
+import { shuffle, spreadCards, type QueueItem } from "./reviewStore.js";
 import { testApp } from "./testing.js";
 import { OWNER_ID } from "./users.js";
 
@@ -58,6 +59,43 @@ describe("reviewing a chosen group", () => {
   it("rejects a bad request", async () => {
     const t = await signedIn();
     expect((await group(t, { mode: "nope" })).status).toBe(400);
+  });
+});
+
+describe("mixed sessions", () => {
+  it("puts every mode a card is due in into one queue", async () => {
+    const t = await signedIn();
+    const { json } = await t.request("/cards/bulk", {
+      body: { cards: [{ korean: "물", meaning: "вода" }, { korean: "TV 보다", meaning: "смотреть ТВ" }] },
+    });
+    saveCardAudio(t.db, json.created[0].id, "물", new Uint8Array([1]), t.clock.now);
+    const items = (await t.request("/reviews/queue?mode=mixed")).json.items as QueueItem[];
+    expect(items.map((i) => `${i.card.korean}:${i.mode}`).sort()).toEqual(["TV 보다:meaning", "물:listening", "물:meaning", "물:speech"]);
+
+    // A rating names its own mode, and only that schedule moves.
+    const speech = items.find((i) => i.mode === "speech")!;
+    const review = { id: randomUUID(), cardId: speech.card.id, mode: "speech", rating: "good", reviewedAt: t.clock.now.toISOString() };
+    await t.request("/reviews", { body: { reviews: [review] } });
+    expect((await t.request("/reviews/queue?mode=mixed")).json.items).toHaveLength(3);
+  });
+
+  it("mixes the modes of a group", async () => {
+    const t = await signedIn();
+    await t.request("/cards/bulk", {
+      body: { cards: [{ korean: "사과", meaning: "яблоко", tags: ["еда"] }, { korean: "책", meaning: "книга" }] },
+    });
+    const res = await group(t, { mode: "mixed", tag: "еда" });
+    expect(res.json.total).toBe(1);
+    expect(res.json.items.map((i: any) => i.mode).sort()).toEqual(["meaning", "speech"]);
+  });
+
+  it("keeps the same word apart where it can", () => {
+    const items = [1, 2, 3].flatMap((id) =>
+      (["meaning", "speech", "listening"] as const).map((mode) => ({ card: { id }, mode }) as unknown as QueueItem),
+    );
+    const ids = spreadCards(items, () => 0, 2).map((i) => i.card.id);
+    expect(ids).toHaveLength(9);
+    for (let i = 1; i < ids.length; i++) expect(ids[i]).not.toBe(ids[i - 1]);
   });
 });
 

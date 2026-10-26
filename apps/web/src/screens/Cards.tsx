@@ -3,7 +3,7 @@ import { api, remembered } from "../lib/api";
 import { cardsCount, cardsWord } from "../lib/plural";
 import { groupHash } from "../lib/router";
 import type { Card, CardFilter, CardSummary, GroupFilter, Settings, Stats } from "../lib/types";
-import { DownloadIcon, HeadphonesIcon, MicIcon, MinusIcon, PlusIcon, SearchIcon } from "../ui/icons";
+import { DownloadIcon, HeadphonesIcon, MicIcon, MinusIcon, PlusIcon, SearchIcon, ShuffleIcon } from "../ui/icons";
 import { EmptyState } from "../ui/EmptyState";
 import { Spinner } from "../ui/Spinner";
 
@@ -232,6 +232,10 @@ function GroupBar({ group, cards, more }: { group: GroupFilter; cards: Card[]; m
       <div className="group-bar-actions">
         <a className="button primary" href={groupHash("review", group)}>
           Перевод
+        </a>
+        <a className="button" href={groupHash("mix", group)}>
+          <ShuffleIcon />
+          Вперемешку
         </a>
         <a className="button" href={groupHash("speech", group)}>
           <MicIcon />
