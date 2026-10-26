@@ -5,7 +5,8 @@ export type ReviewMode = "meaning" | "speech" | "listening";
 /** A queue of one mode, or every mode mixed in one session (each item keeps its own mode). */
 export type QueueMode = ReviewMode | "mixed";
 /** What a mixed session may hold: the speech schedule is gone through aloud, by picking from options, or both. */
-export type MixKind = "meaning" | "aloud" | "choice" | "listening";
+/** What a mixed session can ask: typing by translation goes to the speech schedule, by ear to listening. */
+export type MixKind = "meaning" | "aloud" | "choice" | "write" | "listening" | "dictation";
 export type RatingName = "again" | "hard" | "good" | "easy";
 export type CardSource = "app" | "claude" | "bulk";
 

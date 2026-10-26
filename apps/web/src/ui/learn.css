@@ -1,0 +1,206 @@
+/* "Учить" one word, and typing the word in Hangul (here and in the mix). */
+
+.learn-step {
+  min-width: 0;
+  font-variant-numeric: normal;
+  white-space: nowrap;
+}
+
+/* ---------- Typing ---------- */
+
+.type-card {
+  gap: 18px;
+}
+
+.type-context {
+  font-size: var(--fs-lg);
+}
+
+.type-answer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  animation: answer-in var(--dur-2) var(--ease-out);
+}
+
+.type-word {
+  font-size: var(--fs-3xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.type-mark {
+  border-radius: 6px;
+  transition: color var(--dur-2) var(--ease);
+}
+
+.type-mark.is-ok {
+  color: var(--ok);
+}
+
+/* The syllable that went wrong, so the eye goes straight to it. */
+.type-mark.is-wrong,
+.type-mark.is-missing {
+  color: var(--wrong);
+  background: rgb(248 113 113 / 0.12);
+  box-shadow: 0 0 0 2px rgb(248 113 113 / 0.12);
+}
+
+.type-mark.is-missing {
+  text-decoration: underline dotted;
+  text-underline-offset: 6px;
+}
+
+.type-meaning {
+  color: var(--text-muted);
+  font-size: var(--fs-md);
+}
+
+.type-actions {
+  gap: 10px;
+}
+
+.type-input {
+  min-height: 64px;
+  text-align: center;
+  font-size: 28px;
+}
+
+.type-input.is-right {
+  border-color: rgb(74 222 128 / 0.5);
+}
+
+.type-input.is-wrong {
+  border-color: rgb(248 113 113 / 0.5);
+  color: var(--text-muted);
+  text-decoration: line-through;
+  text-decoration-color: rgb(248 113 113 / 0.6);
+}
+
+.type-actions > .dont-know {
+  align-self: center;
+  color: var(--text-muted);
+}
+
+/* ---------- Learn: meeting the word ---------- */
+
+.intro-card {
+  gap: 14px;
+}
+
+.intro-word {
+  font-size: 56px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  text-wrap: balance;
+  animation: finished-in 520ms var(--ease-spring) backwards;
+}
+
+.intro-example {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  font-size: var(--fs-md);
+  animation: answer-in var(--dur-3) var(--ease-out) 160ms backwards;
+}
+
+.intro-example .muted {
+  font-size: var(--fs-sm);
+}
+
+/* ---------- Learn: building from syllables ---------- */
+
+.build-slots {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.build-slot {
+  width: 56px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  border: 1.5px dashed var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 30px;
+  font-weight: 700;
+  transition:
+    border-color var(--dur-1) var(--ease),
+    background var(--dur-1) var(--ease),
+    transform var(--dur-1) var(--ease-spring);
+}
+
+.build-slot:not(:empty) {
+  border-style: solid;
+  border-color: rgb(124 140 255 / 0.5);
+  background: var(--accent-soft);
+  animation: rating-in var(--dur-2) var(--ease-spring);
+}
+
+.build-slot:disabled {
+  cursor: default;
+}
+
+.build-slot[data-state="right"] {
+  border-color: rgb(74 222 128 / 0.6);
+  background: rgb(74 222 128 / 0.12);
+  color: var(--ok);
+}
+
+.build-slot[data-state="wrong"] {
+  border-color: rgb(248 113 113 / 0.6);
+  background: rgb(248 113 113 / 0.12);
+  color: var(--wrong);
+}
+
+.build-correct {
+  font-size: var(--fs-2xl);
+  color: var(--ok);
+  animation: answer-in var(--dur-2) var(--ease-out);
+}
+
+.build-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.build-tile {
+  min-width: 60px;
+  height: 60px;
+  padding: 0 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  color: var(--text);
+  font-size: 26px;
+  font-weight: 700;
+  transition:
+    transform var(--dur-1) var(--ease-spring),
+    opacity var(--dur-2) var(--ease);
+  animation: rating-in var(--dur-2) var(--ease-spring) backwards;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+.build-tile:active:not(:disabled) {
+  transform: scale(0.92);
+  transition-duration: var(--dur-press);
+}
+
+.build-tile:disabled {
+  opacity: 0.2;
+  cursor: default;
+}

@@ -5,6 +5,7 @@ import { hideSplash } from "./lib/splash";
 import { AccessScreen } from "./screens/Access";
 import { AddScreen } from "./screens/Add";
 import { InviteScreen } from "./screens/Invite";
+import { LearnScreen } from "./screens/Learn";
 import { LeechesScreen } from "./screens/Leeches";
 import { CardScreen } from "./screens/Card";
 import { CardsScreen } from "./screens/Cards";
@@ -42,7 +43,7 @@ export function App() {
   const groupKey = group && JSON.stringify(group);
   if (route === "review") return <ReviewScreen key={`meaning${groupKey}`} mode="meaning" group={group} />;
   if (route === "listen") return <ReviewScreen key={`listening${groupKey}`} mode="listening" group={group} />;
-  if (route === "learn") return <ReviewScreen key={`learn${param}`} mode="mixed" learn={Number(param)} />;
+  if (route === "learn") return <LearnScreen key={param} id={Number(param)} />;
   if (route === "mix") return <ReviewScreen key={`mixed${groupKey}`} mode="mixed" group={group} />;
   if (route === "speech") return <SpeechScreen key={`speech${groupKey}`} group={group} />;
   if (route === "choose") return <ChoiceScreen key={`choose${groupKey}`} group={group} />;
