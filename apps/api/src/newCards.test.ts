@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { createCards } from "./cardStore.js";
 import { startOfDay } from "./newCards.js";
-import { mixNew } from "./reviewStore.js";
+import { shuffle } from "./reviewStore.js";
 import { testApp } from "./testing.js";
 import { OWNER_ID } from "./users.js";
 
@@ -90,12 +90,14 @@ describe("new-card queue", () => {
   });
 });
 
-describe("mixNew", () => {
-  it("spreads new cards among reviews and keeps the reviews' order", () => {
-    const items = [{ reps: 2, n: 1 }, { reps: 1, n: 2 }, { reps: 0, n: 3 }, { reps: 0, n: 4 }];
-    const values = [0, 0.99];
-    const mixed = mixNew(items, () => values.shift()!);
-    expect(mixed.map((i) => i.n)).toEqual([3, 1, 2, 4]);
+describe("shuffle", () => {
+  it("mixes the order and keeps every item", () => {
+    const values = [0, 0, 0];
+    expect(shuffle([1, 2, 3, 4], () => values.shift()!)).toEqual([2, 3, 4, 1]);
+    const many = Array.from({ length: 50 }, (_, i) => i);
+    const mixed = shuffle(many);
+    expect([...mixed].sort((a, b) => a - b)).toEqual(many);
+    expect(mixed).not.toEqual(many);
   });
 });
 

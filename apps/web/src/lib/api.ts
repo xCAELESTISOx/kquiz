@@ -312,6 +312,52 @@ export async function submitReview(input: ReviewInput): Promise<void> {
   return flushPendingReviews();
 }
 
+// The review screen keeps its latest rating here instead of sending it, so going back to that card
+// can take it back. The next rating or leaving the screen sends it; if the app is closed first,
+// the next start does (App.tsx).
+const HELD_KEY = "kquiz.heldReview.v1";
+
+function readHeld(): ReviewInput | undefined {
+  try {
+    return (JSON.parse(localStorage.getItem(HELD_KEY) ?? "null") as ReviewInput | null) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeHeld(input: ReviewInput | undefined) {
+  try {
+    if (input) localStorage.setItem(HELD_KEY, JSON.stringify(input));
+    else localStorage.removeItem(HELD_KEY);
+  } catch {
+    // Storage blocked: an unheld rating is simply sent by the next release.
+  }
+}
+
+/** Sends the previously held rating and holds this one until `releaseHeldReview` or the next hold. */
+export async function holdReview(input: ReviewInput): Promise<void> {
+  forgetToday();
+  const previous = readHeld();
+  writeHeld(input);
+  if (readHeld()?.id !== input.id) return submitReview(input);
+  if (previous) return submitReview(previous);
+}
+
+/** Drops the held rating, if it is this one; false when it has already gone. */
+export function takeBackReview(id: string): boolean {
+  if (readHeld()?.id !== id) return false;
+  writeHeld(undefined);
+  return true;
+}
+
+/** Sends the held rating, if any, with everything else waiting. */
+export function releaseHeldReview(): Promise<void> {
+  const held = readHeld();
+  if (!held) return flushPendingReviews();
+  writeHeld(undefined);
+  return submitReview(held);
+}
+
 let flushing: Promise<void> | undefined;
 export function flushPendingReviews(): Promise<void> {
   flushing ??= sendPending().finally(() => {

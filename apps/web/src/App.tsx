@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { flushPendingReviews } from "./lib/api";
+import { flushPendingReviews, releaseHeldReview } from "./lib/api";
 import { useLocation } from "./lib/router";
 import { hideSplash } from "./lib/splash";
 import { AccessScreen } from "./screens/Access";
@@ -28,7 +28,8 @@ export function App() {
   useEffect(() => {
     // Nobody is signed in yet on these, and a stored review would send the browser to /login.
     if (location.pathname === "/login" || location.hash.startsWith("#/invite/")) return;
-    void flushPendingReviews();
+    // A rating held for going back that the closed app never sent.
+    void releaseHeldReview();
     const onOnline = () => void flushPendingReviews();
     addEventListener("online", onOnline);
     return () => removeEventListener("online", onOnline);
