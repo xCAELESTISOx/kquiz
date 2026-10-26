@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { playOnce } from "../lib/audioSession";
 import { play, practice, preload, stopPlayback, textAudioUrl, useIntonation, type ShadowItem } from "../lib/practice";
 import { canRecord, Recorder, RecorderFailure, type RecorderError } from "../lib/recorder";
 import { navigate } from "../lib/router";
@@ -205,7 +206,7 @@ export function ShadowingScreen() {
                     Образец
                   </button>
                   {take && (
-                    <button type="button" className="chip-button" onClick={() => void new Audio(take.url).play()}>
+                    <button type="button" className="chip-button" onClick={() => playOnce(take.url)}>
                       <PlayIcon />
                       Моя запись
                     </button>
