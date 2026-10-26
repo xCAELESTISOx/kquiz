@@ -9,6 +9,7 @@ import type {
   CardSource,
   CardSummary,
   FsrsStatus,
+  GroupFilter,
   NewCard,
   QueueItem,
   RatingName,
@@ -188,7 +189,7 @@ export class MockApi {
     return result;
   }
 
-  queue(mode: ReviewMode, limit = 50): QueueItem[] {
+  queue(mode: ReviewMode, limit = 50, anyDue = false): QueueItem[] {
     const now = this.now().getTime();
     return this.state.cards
       // No recordings in the mock: listening falls back to the phone's voice for every Hangul card.
@@ -200,9 +201,19 @@ export class MockApi {
         const reps = this.state.reps[key] ?? 0;
         return { card, mode, due, state: reps ? 2 : 0, reps, lapses: 0 };
       })
-      .filter((item) => Date.parse(item.due) <= now)
+      .filter((item) => anyDue || Date.parse(item.due) <= now)
       .sort((a, b) => Date.parse(a.due) - Date.parse(b.due))
       .slice(0, limit);
+  }
+
+  group(mode: ReviewMode, filter: GroupFilter): { items: QueueItem[]; total: number } {
+    const ids = new Set(this.cards({ ...filter, limit: Infinity }).cards.filter((c) => !c.suspended).map((c) => c.id));
+    for (const card of this.state.cards) if (ids.has(card.id) && card.queued) card.queued = false;
+    this.save();
+    const items = this.queue(mode, Infinity, true)
+      .filter((item) => ids.has(item.card.id))
+      .sort(() => Math.random() - 0.5);
+    return { items, total: ids.size };
   }
 
   review(reviews: ReviewInput[]): { results: ReviewResult[] } {

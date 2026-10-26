@@ -7,7 +7,7 @@ import { canRecord, MAX_SECONDS, Recorder, RecorderFailure, type RecorderError }
 import { navigate } from "../lib/router";
 import { cardAudioUrl, useIntonation } from "../lib/practice";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
-import type { Card, QueueItem, RatingName, ScoreResult } from "../lib/types";
+import type { Card, GroupFilter, QueueItem, RatingName, ScoreResult } from "../lib/types";
 import { LeechBadge } from "../ui/LeechBadge";
 import { CloseIcon, MicIcon, PlayIcon, RetryIcon, SpeakerIcon, StopIcon } from "../ui/icons";
 import { IntonationChart } from "../ui/IntonationChart";
@@ -45,7 +45,8 @@ function scoreError(error: unknown): string {
   }
 }
 
-export function SpeechScreen() {
+/** With a group, the cards picked on the cards screen come instead of the day's queue. */
+export function SpeechScreen({ group }: { group?: GroupFilter }) {
   const [queue, setQueue] = useState<QueueItem[]>();
   const [total, setTotal] = useState(0);
   const [done, setDone] = useState(0);
@@ -65,7 +66,7 @@ export function SpeechScreen() {
 
   useEffect(() => {
     document.title = "Произношение · KQuiz";
-    api.queue("speech").then(
+    (group ? api.group("speech", group) : api.queue("speech")).then(
       ({ items }) => {
         setQueue(items);
         setTotal(items.length);

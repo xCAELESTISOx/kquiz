@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseHash, safeReturnTo } from "./router";
+import { groupHash, parseHash, safeReturnTo } from "./router";
 
 describe("safeReturnTo", () => {
   it("allows same-origin paths only", () => {
@@ -25,5 +25,13 @@ describe("parseHash", () => {
     expect(parseHash("#/access")).toEqual({ route: "access" });
     expect(parseHash("#/invite/Ab-9_x")).toEqual({ route: "invite", param: "Ab-9_x" });
     expect(parseHash("#/invite")).toEqual({ route: "today" });
+  });
+
+  it("reads a chosen group of cards to review", () => {
+    const hash = groupHash("speech", { q: "물 병", tag: "еда" });
+    expect(parseHash(hash)).toEqual({ route: "speech", group: { q: "물 병", tag: "еда" } });
+    expect(parseHash("#/listen?status=queued&status2=x")).toEqual({ route: "listen", group: { status: "queued" } });
+    expect(parseHash("#/review?")).toEqual({ route: "review", group: {} });
+    expect(parseHash("#/cards/queued?x=1")).toEqual({ route: "cards", param: "queued" });
   });
 });

@@ -1,8 +1,9 @@
-import { and, asc, count, eq, lte, sql } from "drizzle-orm";
-import { toCardDto, type CardDto } from "./cardStore.js";
+import { and, asc, count, eq, inArray, lte, sql } from "drizzle-orm";
+import { isKoreanOnly } from "./cards.js";
+import { cardConditions, toCardDto, type CardDto, type CardQuery } from "./cardStore.js";
 import type { Db } from "./db/client.js";
 import { cardAudio, cards, reviewLog, reviewStates } from "./db/schema.js";
-import { newCardsToday, startOfDay, type NewCardsToday } from "./newCards.js";
+import { introduce, newCardsToday, startOfDay, type NewCardsToday } from "./newCards.js";
 import { getFsrsSetup, schedulerFor } from "./fsrs.js";
 import { applyRating, fromStateRow, toStateRow, type RatingName, type ReviewMode } from "./review.js";
 
@@ -47,6 +48,62 @@ export function dueQueue(db: Db, userId: number, mode: ReviewMode, now = new Dat
       lapses: state.lapses,
     }));
   return shuffle(items, random);
+}
+
+export const GROUP_LIMIT = 200;
+
+export type GroupFilter = Pick<CardQuery, "q" | "tag" | "status" | "notReady">;
+
+/**
+ * A group the owner picked on the cards screen (a search, a tag), due or not, in random order.
+ * Ratings go into the usual schedule: FSRS takes an early review into account. Queued cards in the
+ * group are taken into reviews now, as "learn now" would; paused ones stay out.
+ */
+export function groupQueue(
+  db: Db,
+  userId: number,
+  mode: ReviewMode,
+  filter: GroupFilter,
+  now = new Date(),
+  random = Math.random,
+): { items: QueueItem[]; total: number } {
+  return db.transaction((tx) => {
+    const matched = tx
+      .select({ id: cards.id, korean: cards.korean, introducedAt: cards.introducedAt })
+      .from(cards)
+      .where(and(...cardConditions(userId, filter), eq(cards.suspended, false)))
+      .all()
+      .filter((row) => !filter.notReady || !isKoreanOnly(row.korean));
+    const picked = shuffle(matched, random).slice(0, GROUP_LIMIT);
+    introduce(tx, picked.filter((row) => !row.introducedAt).map((row) => row.id), "early", now);
+    if (!picked.length) return { items: [], total: 0 };
+
+    const rows = tx
+      .select({ card: cards, state: reviewStates })
+      .from(reviewStates)
+      .innerJoin(cards, eq(cards.id, reviewStates.cardId))
+      .where(
+        and(
+          eq(cards.userId, userId),
+          eq(reviewStates.mode, mode),
+          inArray(
+            cards.id,
+            picked.map((row) => row.id),
+          ),
+          mode === "speech" ? eq(cards.speakable, true) : undefined,
+          mode === "listening" ? hasCurrentAudio : undefined,
+        ),
+      )
+      .all();
+    const byId = new Map(rows.map((row) => [row.card.id, row]));
+    const items = picked.flatMap(({ id }) => {
+      const row = byId.get(id);
+      if (!row) return [];
+      const { card, state } = row;
+      return [{ card: toCardDto(card), mode, due: state.due.toISOString(), state: state.state, reps: state.reps, lapses: state.lapses }];
+    });
+    return { items, total: matched.length };
+  });
 }
 
 /** A shuffled copy (Fisher–Yates). */

@@ -4,7 +4,7 @@ import { clozeFor } from "../lib/cloze";
 import { useLeechIds } from "../lib/leeches";
 import { navigate } from "../lib/router";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
-import type { Card, QueueItem, RatingName, ReviewMode } from "../lib/types";
+import type { Card, GroupFilter, QueueItem, RatingName, ReviewMode } from "../lib/types";
 import { CloseIcon, SpeakerIcon, UndoIcon } from "../ui/icons";
 import { LeechBadge } from "../ui/LeechBadge";
 import { useGlide } from "../ui/motion";
@@ -22,9 +22,10 @@ type Swipe = RatingName | "back";
 
 /**
  * Meaning: the Hangul is shown, recall the translation. Listening: only the card's recording plays,
- * the text appears with the answer. Each mode has its own schedule on the server.
+ * the text appears with the answer. Each mode has its own schedule on the server. With a group, the
+ * cards picked on the cards screen come instead of the day's queue, and are graded the same way.
  */
-export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "listening"> }) {
+export function ReviewScreen({ mode, group }: { mode: Extract<ReviewMode, "meaning" | "listening">; group?: GroupFilter }) {
   const listening = mode === "listening";
   const [queue, setQueue] = useState<QueueItem[]>();
   const [total, setTotal] = useState(0);
@@ -40,7 +41,7 @@ export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "
 
   useEffect(() => {
     document.title = listening ? "На слух · KQuiz" : "Повторение · KQuiz";
-    api.queue(mode).then(
+    (group ? api.group(mode, group) : api.queue(mode)).then(
       ({ items }) => {
         setQueue(items);
         setTotal(items.length);
@@ -50,6 +51,7 @@ export function ReviewScreen({ mode }: { mode: Extract<ReviewMode, "meaning" | "
       },
       (e: Error) => setError(e.message),
     );
+    // A new group is a new screen (App keys it), so `group` never changes here.
   }, [mode, listening]);
 
   const item = queue?.[0];

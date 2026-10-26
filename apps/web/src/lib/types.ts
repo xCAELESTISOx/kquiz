@@ -97,6 +97,13 @@ export type CardPatch = Partial<Omit<NewCard, "tags">> & { tags?: string[]; spea
 
 export type CardFilter = "queued" | "paused";
 
+/** A group of cards picked on the cards screen to review on its own: a search, a tag, the queue. */
+export interface GroupFilter {
+  q?: string;
+  tag?: string;
+  status?: "queued";
+}
+
 export interface CardList {
   cards: Card[];
   nextBefore: number | null;
