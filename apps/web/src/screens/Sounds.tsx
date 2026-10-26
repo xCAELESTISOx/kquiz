@@ -193,7 +193,14 @@ export function SoundsScreen() {
                 </p>
               </>
             ) : (
-              <p className="review-tip muted small">{heard ? "Выбери, что услышал" : "Сначала послушай"}</p>
+              <>
+                {heard && (
+                  <button type="button" className="chip-button dont-know" onClick={() => pick(-1)}>
+                    Не знаю
+                  </button>
+                )}
+                <p className="review-tip muted small">{heard ? "Выбери, что услышал" : "Сначала послушай"}</p>
+              </>
             )}
           </footer>
         </>

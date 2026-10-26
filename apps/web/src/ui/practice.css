@@ -508,3 +508,93 @@
 .review-tip a {
   color: var(--accent);
 }
+
+/* ---------- Mixed session: what goes in ---------- */
+
+.mix-stage {
+  flex-direction: column;
+  justify-content: center;
+}
+
+.mix-setup {
+  display: grid;
+  gap: 14px;
+}
+
+.mix-title {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+.mix-options {
+  display: grid;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.mix-option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 72px;
+  padding: 12px 16px 12px 12px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  transition: background var(--dur-1) var(--ease), opacity var(--dur-1) var(--ease);
+  animation: answer-in var(--dur-3) var(--ease-out) backwards;
+  animation-delay: calc(80ms + var(--i, 0) * 50ms);
+}
+
+.mix-option + .mix-option {
+  border-top: 1px solid var(--border);
+}
+
+.mix-option:active {
+  background: var(--surface-hover);
+  transition-duration: var(--dur-press);
+}
+
+.mix-option[aria-pressed="false"] .practice-icon,
+.mix-option[aria-pressed="false"] .practice-text {
+  opacity: 0.45;
+}
+
+.mix-option:disabled {
+  opacity: 0.6;
+}
+
+.mix-count {
+  margin-left: 8px;
+  color: var(--text-muted);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.mix-check {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1.5px solid var(--border-strong);
+  color: transparent;
+  transition: background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+}
+
+.mix-check svg {
+  width: 16px;
+  height: 16px;
+}
+
+.mix-option[aria-pressed="true"] .mix-check {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+

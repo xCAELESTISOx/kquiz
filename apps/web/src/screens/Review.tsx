@@ -5,12 +5,13 @@ import { useLeechIds } from "../lib/leeches";
 import { navigate } from "../lib/router";
 import { canRecord, type Recorder } from "../lib/recorder";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
-import type { Card, ChoiceOption, GroupFilter, QueueItem, QueueMode, RatingName } from "../lib/types";
+import type { Card, ChoiceOption, GroupFilter, MixKind, QueueItem, QueueMode, RatingName, ReviewMode } from "../lib/types";
 import { CloseIcon, SpeakerIcon, UndoIcon } from "../ui/icons";
 import { LeechBadge } from "../ui/LeechBadge";
 import { useGlide } from "../ui/motion";
 import { useFamily, WordFamily } from "../ui/WordFamily";
 import { ChoiceCard } from "./Choice";
+import { MixSetup } from "./MixSetup";
 import { SpeechCard } from "./Speech";
 
 const RATINGS: { name: RatingName; label: string; key: string }[] = [
@@ -30,6 +31,7 @@ type Swipe = RatingName | "back";
  * cards picked on the cards screen come instead of the day's queue, and are graded the same way.
  * Mixed puts every mode in one session, saying aloud included: each card is shown and graded in its
  * item's own mode, and the speech schedule is gone through partly aloud, partly by picking from options.
+ * What goes into the mix is picked first (MixSetup).
  */
 export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meaning" | "listening" | "mixed">; group?: GroupFilter }) {
   const [queue, setQueue] = useState<QueueItem[]>();
@@ -48,22 +50,27 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
   // Look-alike words for the speech items, and the ones picked from them instead of said aloud.
   const [options, setOptions] = useState<Record<number, ChoiceOption[]>>({});
   const [quiet, setQuiet] = useState<ReadonlySet<QueueItem>>(new Set());
+  // A mixed session starts once its kinds are picked.
+  const [kinds, setKinds] = useState<ReadonlySet<MixKind>>();
 
   useEffect(() => {
     document.title = mode === "mixed" ? "Вперемешку · KQuiz" : mode === "listening" ? "На слух · KQuiz" : "Повторение · KQuiz";
-    (group ? api.group(mode, group) : api.queue(mode, mode === "mixed" ? 200 : undefined)).then(
+    if (mode === "mixed" && !kinds) return;
+    const aloud = !!kinds?.has("aloud") && canRecord();
+    const choice = !!kinds?.has("choice");
+    const modes = kinds && serverModes(kinds);
+    (group ? api.group(mode, group, modes) : api.queue(mode, mode === "mixed" ? 200 : undefined, modes)).then(
       async ({ items: all }) => {
         const spoken = all.filter((i) => i.mode === "speech");
         const { options } = spoken.length
           ? await api.choices(spoken.map((i) => i.card.id)).catch(() => ({ options: {} as Record<number, ChoiceOption[]> }))
           : { options: {} };
         const pickable = (i: QueueItem) => (options[i.card.id]?.length ?? 0) > 0;
-        const recordable = canRecord();
-        // About half are picked from options, all of them where nothing can record; a card with no
-        // look-alikes and no microphone waits for a better day.
-        const items = all.filter((i) => i.mode !== "speech" || recordable || pickable(i));
+        // With both, about half are picked from options; with one, all go that way. A card that can
+        // be neither said here nor picked (no look-alikes) waits for a better day.
+        const items = all.filter((i) => i.mode !== "speech" || aloud || (choice && pickable(i)));
         setOptions(options);
-        setQuiet(new Set(spoken.filter((i) => pickable(i) && (!recordable || Math.random() < 0.5))));
+        setQuiet(new Set(spoken.filter((i) => choice && pickable(i) && (!aloud || Math.random() < 0.5))));
         setQueue(items);
         setTotal(items.length);
         shownAt.current = performance.now();
@@ -73,7 +80,7 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
       (e: Error) => setError(e.message),
     );
     // A new group is a new screen (App keys it), so `group` never changes here.
-  }, [mode]);
+  }, [mode, kinds]);
 
   const item = queue?.[0];
   const card = item?.card;
@@ -190,9 +197,7 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
         <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
           <div className="progress-fill" style={{ transform: `scaleX(${progress})` }} />
         </div>
-        <span className="review-count">
-          {Math.min(done, total)} / {total}
-        </span>
+        <span className="review-count">{mode !== "mixed" || kinds ? `${Math.min(done, total)} / ${total}` : ""}</span>
         <button
           type="button"
           className="icon-button review-back"
@@ -207,7 +212,9 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
 
       <div aria-live="polite">{error && <p className="notice notice-error">{error}</p>}</div>
 
-      {!queue && !error && <div className="review-stage" aria-busy="true" />}
+      {mode === "mixed" && !kinds && <MixSetup counted={!group} onStart={setKinds} />}
+
+      {!queue && !error && (mode !== "mixed" || kinds) && <div className="review-stage" aria-busy="true" />}
 
       {queue && !card && <Finished count={done} />}
 
@@ -359,6 +366,15 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
       )}
     </main>
   );
+}
+
+/** Saying aloud and picking from options both go through the speech schedule. */
+function serverModes(kinds: ReadonlySet<MixKind>): ReviewMode[] {
+  const modes: ReviewMode[] = [];
+  if (kinds.has("meaning")) modes.push("meaning");
+  if (kinds.has("aloud") || kinds.has("choice")) modes.push("speech");
+  if (kinds.has("listening")) modes.push("listening");
+  return modes;
 }
 
 function toggled<T>(set: ReadonlySet<T>, value: T): ReadonlySet<T> {
