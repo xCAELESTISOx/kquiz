@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, remembered } from "../lib/api";
 import type { FsrsModeStatus, FsrsStatus, ReviewMode } from "../lib/types";
 
 const RETENTIONS = [0.85, 0.9, 0.95];
@@ -8,7 +8,7 @@ const percent = (r: number) => `${Math.round(r * 100)} %`;
 
 /** Target retention per mode, and whether intervals are already fitted to the owner's history. */
 export function ScheduleSettings() {
-  const [status, setStatus] = useState<FsrsStatus>();
+  const [status, setStatus] = useState<FsrsStatus | undefined>(remembered.fsrs);
   const [saving, setSaving] = useState<ReviewMode>();
   const [error, setError] = useState<string>();
 
