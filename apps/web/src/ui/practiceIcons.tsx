@@ -48,3 +48,11 @@ export const ChoiceIcon = () => (
     <path d="m14 16.5 2 2 3.5-4" />
   </svg>
 );
+
+/** A pen: typing the word in Hangul. */
+export const PenIcon = () => (
+  <svg {...props}>
+    <path d="M15.5 4.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z" />
+    <path d="M13.5 6.5l3 3" />
+  </svg>
+);

@@ -3,7 +3,7 @@ import { api, remembered } from "../lib/api";
 import { canRecord } from "../lib/recorder";
 import type { MixKind, Stats } from "../lib/types";
 import { CardsIcon, CheckIcon, HeadphonesIcon, MicIcon } from "../ui/icons";
-import { ChoiceIcon } from "../ui/practiceIcons";
+import { ChoiceIcon, EarIcon, PenIcon } from "../ui/practiceIcons";
 import "../ui/practice.css";
 
 const KINDS: { kind: MixKind; title: string; sub: string; icon: ReactNode }[] = [
@@ -26,21 +26,35 @@ const KINDS: { kind: MixKind; title: string; sub: string; icon: ReactNode }[] = 
     icon: <ChoiceIcon />,
   },
   {
+    kind: "write",
+    title: "Написать по переводу",
+    sub: "Перевод → набрать хангылем",
+    icon: <PenIcon />,
+  },
+  {
     kind: "listening",
     title: "На слух",
     sub: "Послушать → вспомнить перевод",
     icon: <HeadphonesIcon />,
   },
+  {
+    kind: "dictation",
+    title: "Написать по звуку",
+    sub: "Послушать → набрать хангылем",
+    icon: <EarIcon />,
+  },
 ];
 
 /**
- * What goes into a mixed session, picked before it starts; everything by default. Saying aloud and
- * picking from options both go through the speech schedule, so they share one count.
+ * What goes into a mixed session, picked before it starts; everything but typing by default. Saying aloud,
+ * picking and typing by translation all go through the speech schedule, so they share one count;
+ * typing by ear shares the listening one.
  */
 export function MixSetup({ counted, onStart }: { counted: boolean; onStart: (kinds: ReadonlySet<MixKind>) => void }) {
   const recordable = canRecord();
   const [kinds, setKinds] = useState<ReadonlySet<MixKind>>(
-    () => new Set(KINDS.map((k) => k.kind).filter((k) => recordable || k !== "aloud")),
+    // Typing takes the keyboard out, so it joins only when picked.
+    () => new Set(KINDS.map((k) => k.kind).filter((k) => (recordable || k !== "aloud") && k !== "write" && k !== "dictation")),
   );
   const [stats, setStats] = useState<Stats | undefined>(remembered.stats);
 
@@ -52,7 +66,9 @@ export function MixSetup({ counted, onStart }: { counted: boolean; onStart: (kin
     meaning: stats.due.meaning,
     aloud: stats.due.speech,
     choice: stats.due.speech,
+    write: stats.due.speech,
     listening: stats.due.listening,
+    dictation: stats.due.listening,
   };
 
   function toggle(kind: MixKind) {
@@ -98,8 +114,8 @@ export function MixSetup({ counted, onStart }: { counted: boolean; onStart: (kin
               );
             })}
           </div>
-          {kinds.has("aloud") && kinds.has("choice") && (
-            <p className="muted small">Слова «вслух» пополам: часть сказать, часть выбрать.</p>
+          {(["aloud", "choice", "write"] as const).filter((k) => kinds.has(k)).length > 1 && (
+            <p className="muted small">Слова «вслух» делятся между выбранными способами поровну.</p>
           )}
         </section>
       </div>

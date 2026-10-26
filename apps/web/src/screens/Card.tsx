@@ -169,7 +169,7 @@ export function CardScreen({ id }: { id: number }) {
               </button>
             )}
             <Menu label="Ещё">
-              <MenuItem href={`#/learn/${card.id}`} icon={<LearnIcon />} hint="Все режимы подряд, без оценок в статистику">
+              <MenuItem href={`#/learn/${card.id}`} icon={<LearnIcon />} hint="Заучить слово по шагам, не трогая статистику">
                 Учить
               </MenuItem>
             </Menu>
