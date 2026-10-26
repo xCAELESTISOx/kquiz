@@ -3,7 +3,8 @@ import { api, remembered } from "../lib/api";
 import { isKoreanOnly } from "../lib/korean";
 import { canSpeak, speak } from "../lib/speech";
 import type { Card, CardPatch, Example } from "../lib/types";
-import { BackIcon, SpeakerIcon } from "../ui/icons";
+import { BackIcon, LearnIcon, SpeakerIcon } from "../ui/icons";
+import { Menu, MenuItem } from "../ui/Menu";
 import { Spinner } from "../ui/Spinner";
 import { useFamily, WordFamily } from "../ui/WordFamily";
 import { lastCardsHash } from "./Cards";
@@ -160,10 +161,19 @@ export function CardScreen({ id }: { id: number }) {
         >
           <BackIcon />
         </a>
-        {card && canSpeak() && (
-          <button type="button" className="icon-button" aria-label="Послушать" onClick={() => speak(card)}>
-            <SpeakerIcon />
-          </button>
+        {card && (
+          <div className="card-top-actions">
+            {canSpeak() && (
+              <button type="button" className="icon-button" aria-label="Послушать" onClick={() => speak(card)}>
+                <SpeakerIcon />
+              </button>
+            )}
+            <Menu label="Ещё">
+              <MenuItem href={`#/learn/${card.id}`} icon={<LearnIcon />} hint="Все режимы подряд, без оценок в статистику">
+                Учить
+              </MenuItem>
+            </Menu>
+          </div>
         )}
       </header>
 

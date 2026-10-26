@@ -14,6 +14,7 @@ export type Route =
   | "mix"
   | "cards"
   | "card"
+  | "learn"
   | "leeches"
   | "shadow"
   | "sounds"
@@ -23,7 +24,7 @@ export type Route =
 
 export interface Location {
   route: Route;
-  /** The card id on "card", the filter on "cards" ("queued", "paused"), the code on "invite". */
+  /** The card id on "card" and "learn", the filter on "cards" ("queued", "paused"), the code on "invite". */
   param?: string;
   /** A group picked on the cards screen, reviewed instead of the day's queue: `#/review?tag=еда`. */
   group?: GroupFilter;
@@ -74,6 +75,8 @@ export function parseHash(hash: string): Location {
   ) {
     return { route: head };
   }
+  // "Учить" from a card's menu: that one word in every mode, #/learn/<id>.
+  if (head === "learn" && param && /^\d+$/.test(param)) return { route: "learn", param };
   // A friend's invite link: #/invite/<code>.
   if (head === "invite" && param) return { route: "invite", param };
   if (head === "cards") {
@@ -89,7 +92,7 @@ function parse(): Location {
   return parseHash(location.hash);
 }
 
-export function navigate(route: Exclude<Route, "login" | "card" | "invite">) {
+export function navigate(route: Exclude<Route, "login" | "card" | "learn" | "invite">) {
   location.hash = route === "today" ? "/" : `/${route}`;
 }
 

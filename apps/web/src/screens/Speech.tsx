@@ -133,11 +133,14 @@ export function SpeechCard({
   recorder,
   onRated,
   quiet,
+  practice,
 }: {
   item: QueueItem;
   recorder: RefObject<Recorder | undefined>;
   onRated: (rating: RatingName) => void;
   quiet?: ReactNode;
+  /** Learning one word: neither the rating nor the take is kept. */
+  practice?: boolean;
 }) {
   const { card } = item;
   const [phase, setPhase] = useState<Phase>("prompt");
@@ -184,7 +187,7 @@ export function SpeechCard({
     setTake(URL.createObjectURL(new Blob([recorded.wav], { type: "audio/wav" })));
     setTakeWav(recorded.wav);
     try {
-      setResult(await api.score(card.id, recorded.wav));
+      setResult(await api.score(card.id, recorded.wav, practice));
       setScoreFailed(undefined);
     } catch (e) {
       setResult(undefined);
@@ -192,7 +195,7 @@ export function SpeechCard({
     }
     setRevealed(true);
     setPhase("result");
-  }, [card, recorder, result, scoreFailed]);
+  }, [card, recorder, result, scoreFailed, practice]);
 
   const record = useCallback(async () => {
     if (phase === "recording") return void stop();
@@ -216,17 +219,18 @@ export function SpeechCard({
   const rate = useCallback(
     (rating: RatingName) => {
       if (phase !== "result") return;
-      void submitReview({
-        id: crypto.randomUUID(),
-        cardId: card.id,
-        mode: "speech",
-        rating,
-        reviewedAt: new Date().toISOString(),
-        elapsedMs: Math.round(performance.now() - shownAt.current),
-      }).catch(() => undefined);
+      if (!practice)
+        void submitReview({
+          id: crypto.randomUUID(),
+          cardId: card.id,
+          mode: "speech",
+          rating,
+          reviewedAt: new Date().toISOString(),
+          elapsedMs: Math.round(performance.now() - shownAt.current),
+        }).catch(() => undefined);
       onRated(rating);
     },
-    [card, phase, onRated],
+    [card, phase, onRated, practice],
   );
 
   useEffect(() => {

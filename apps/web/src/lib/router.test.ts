@@ -21,6 +21,8 @@ describe("parseHash", () => {
     expect(parseHash("#/cards")).toEqual({ route: "cards", param: undefined });
     expect(parseHash("#/cards/queued")).toEqual({ route: "cards", param: "queued" });
     expect(parseHash("#/cards/12")).toEqual({ route: "card", param: "12" });
+    expect(parseHash("#/learn/12")).toEqual({ route: "learn", param: "12" });
+    expect(parseHash("#/learn/x")).toEqual({ route: "today" });
     expect(parseHash("#/nope")).toEqual({ route: "today" });
     expect(parseHash("#/access")).toEqual({ route: "access" });
     expect(parseHash("#/invite/Ab-9_x")).toEqual({ route: "invite", param: "Ab-9_x" });

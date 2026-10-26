@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { phoneStats } from "./db/schema.js";
+import { attempts, phoneStats } from "./db/schema.js";
 import { httpScorer, ScorerError, type Scorer, type ScoreResult } from "./scorer.js";
 import { testApp } from "./testing.js";
 
@@ -97,6 +97,14 @@ describe("score", () => {
     await t.request(`/score?cardId=${t.card.id}`, { body: wav() });
     const ŋ = t.db.select().from(phoneStats).all().find((r) => r.phone === "ŋ");
     expect(ŋ).toMatchObject({ attempts: 2, errors: 2 });
+  });
+
+  it("keeps no attempt when practising one word", async () => {
+    const t = await withCard(fakeScorer().scorer);
+    const res = await t.request(`/score?cardId=${t.card.id}&practice=1`, { body: wav() });
+    expect(res.json).toMatchObject({ attemptId: null, suggestedRating: "hard" });
+    expect(t.db.select().from(attempts).all()).toHaveLength(0);
+    expect(t.db.select().from(phoneStats).all()).toHaveLength(0);
   });
 
   it("rejects unknown cards, non-Hangul cards and non-WAV bodies before calling the scorer", async () => {

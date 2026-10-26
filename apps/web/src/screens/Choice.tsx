@@ -101,11 +101,14 @@ export function ChoiceCard({
   options,
   onDone,
   aloud,
+  practice,
 }: {
   item: QueueItem;
   options: ChoiceOption[];
   onDone: (rating: RatingName) => void;
   aloud?: ReactNode;
+  /** Learning one word: the pick grades nothing. */
+  practice?: boolean;
 }) {
   const { card } = item;
   const [picked, setPicked] = useState<number>();
@@ -132,16 +135,17 @@ export function ChoiceCard({
       rating.current = choiceRating(correct, elapsedMs);
       setPicked(id);
       if (canSpeak()) speak(card);
-      void submitReview({
-        id: crypto.randomUUID(),
-        cardId: card.id,
-        mode: "speech",
-        rating: rating.current,
-        reviewedAt: new Date().toISOString(),
-        elapsedMs,
-      }).catch((e: Error) => setError(e.message));
+      if (!practice)
+        void submitReview({
+          id: crypto.randomUUID(),
+          cardId: card.id,
+          mode: "speech",
+          rating: rating.current,
+          reviewedAt: new Date().toISOString(),
+          elapsedMs,
+        }).catch((e: Error) => setError(e.message));
     },
-    [card, picked, choices],
+    [card, picked, choices, practice],
   );
 
   const next = useCallback(() => {
