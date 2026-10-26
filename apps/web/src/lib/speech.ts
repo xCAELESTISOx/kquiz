@@ -1,3 +1,5 @@
+import { resume, shortClip } from "./audioSession";
+
 // Reference audio: the server's recording of the card (Supertonic, apps/api/src/cardAudio.ts),
 // or the system ko-KR voice while there is none yet or it fails to load.
 type SpeechCard = { id: number; korean: string };
@@ -62,7 +64,7 @@ async function pruneAudioCache(cache: Cache, card: SpeechCard) {
 function clipFor(card: SpeechCard): Clip {
   const cached = clips.get(card.id);
   if (cached && cached.korean === card.korean) return cached;
-  const audio = new Audio();
+  const audio = shortClip(new Audio());
   audio.preload = "auto";
   const clip: Clip = { audio, korean: card.korean, failed: false };
   // 404 until the server has made it.
@@ -107,7 +109,8 @@ export function speak(card: SpeechCard) {
   for (const other of clips.values()) other.audio.pause();
   const clip = hasAudio() ? clipFor(card) : undefined;
   if (!clip || clip.failed) return speakWithSystemVoice(card.korean);
-  if (!clip.audio.src) clip.audio.src = audioUrl(card.id);
+  resume(clip.audio);
+  if (!clip.audio.getAttribute("src")) clip.audio.src = audioUrl(card.id);
   clip.audio.currentTime = 0;
   clip.audio.play().catch((e: unknown) => {
     // Played without a tap and the browser said no: the phone's voice would be refused too,

@@ -1,6 +1,7 @@
 // Shadowing and sound drills (apps/api/src/routes/practice.ts). Neither touches the review schedule.
 import { useEffect, useState } from "react";
 import { request } from "./api";
+import { resume, shortClip } from "./audioSession";
 import { compareIntonation, loadReference, resampleTo, wavSamples, type IntonationComparison } from "./intonation";
 
 export interface ShadowItem {
@@ -95,7 +96,7 @@ const players = new Map<string, HTMLAudioElement>();
 function player(url: string): HTMLAudioElement {
   let audio = players.get(url);
   if (!audio) {
-    audio = new Audio(url);
+    audio = shortClip(new Audio(url));
     audio.preload = "auto";
     players.set(url, audio);
     // A short session touches a few dozen clips at most; drop the oldest beyond that.
@@ -116,6 +117,7 @@ export function play(url: string): Promise<boolean> {
   if (typeof Audio === "undefined") return Promise.resolve(false);
   for (const other of players.values()) other.pause();
   const audio = player(url);
+  resume(audio);
   audio.currentTime = 0;
   return audio.play().then(
     () => true,

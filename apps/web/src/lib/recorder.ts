@@ -1,3 +1,4 @@
+import { enterRecording, leaveRecording } from "./audioSession";
 import { downsample, encodeWav, rms } from "./wav";
 
 // Recording through an AudioWorklet into 16 kHz WAV (docs/PLAN.md §4.1). MediaRecorder is avoided:
@@ -19,8 +20,9 @@ export function canRecord(): boolean {
 }
 
 /**
- * One instance per screen. The microphone stays open between takes, so iOS asks once per visit,
- * and is released by `close()` when the screen goes away.
+ * One instance per screen. The microphone is opened for each take and released right after it:
+ * while it is held, iOS keeps the phone in the call audio session (earpiece, call volume).
+ * Safari remembers the permission for the page, so it doesn't ask again.
  */
 export class Recorder {
   private ctx?: AudioContext;
@@ -40,19 +42,15 @@ export class Recorder {
    */
   async start(onLevel: (level: number) => void, onLimit: () => void): Promise<void> {
     if (!canRecord()) throw new RecorderFailure("unsupported");
+    enterRecording();
     this.ctx ??= new AudioContext();
     const resumed = this.ctx.resume();
-    // iOS ends the microphone track when the app goes to the background; open it again.
-    if (this.stream?.getAudioTracks().every((t) => t.readyState === "ended")) {
-      this.stream = undefined;
-      this.ready = undefined;
-    }
     try {
       this.ready ??= this.open();
       await this.ready;
       await resumed;
     } catch (error) {
-      this.ready = undefined;
+      this.close();
       throw error instanceof RecorderFailure ? error : new RecorderFailure("failed");
     }
     const ctx = this.ctx;
@@ -96,12 +94,10 @@ export class Recorder {
       new Promise<Float32Array>((resolve) => setTimeout(() => resolve(new Float32Array()), 300)),
     ]);
     this.finish = undefined;
-    this.source?.disconnect();
-    node.disconnect();
-    this.sink?.disconnect();
     node.port.onmessage = null;
-    this.node = undefined;
-    const limit = MAX_SECONDS * ctx.sampleRate;
+    const sampleRate = ctx.sampleRate;
+    this.close();
+    const limit = MAX_SECONDS * sampleRate;
     if (this.length < limit) this.chunks.push(last.subarray(0, limit - this.length));
     const samples = new Float32Array(this.chunks.reduce((n, c) => n + c.length, 0));
     let offset = 0;
@@ -111,12 +107,13 @@ export class Recorder {
     }
     this.chunks = [];
     if (!samples.length) return undefined;
-    return { wav: encodeWav(downsample(samples, ctx.sampleRate)), seconds: samples.length / ctx.sampleRate };
+    return { wav: encodeWav(downsample(samples, sampleRate)), seconds: samples.length / sampleRate };
   }
 
   close() {
     this.source?.disconnect();
     this.node?.disconnect();
+    this.sink?.disconnect();
     this.node = undefined;
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = undefined;
@@ -124,6 +121,7 @@ export class Recorder {
     void this.ctx?.close().catch(() => {});
     this.ctx = undefined;
     this.module = undefined;
+    leaveRecording();
   }
 
   private async open() {

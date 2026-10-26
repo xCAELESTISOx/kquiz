@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { api, ApiError, submitReview } from "../lib/api";
+import { playOnce } from "../lib/audioSession";
 import { clozeFor } from "../lib/cloze";
 import { useLeechIds } from "../lib/leeches";
 import { describeErrors, segments, verdict } from "../lib/pronunciation";
@@ -351,7 +352,7 @@ export function SpeechCard({
                 Записать ещё раз
               </button>
               {take && (
-                <button type="button" className="chip-button" onClick={() => void new Audio(take).play()}>
+                <button type="button" className="chip-button" onClick={() => playOnce(take)}>
                   <PlayIcon />
                   Моя запись
                 </button>
