@@ -18,7 +18,7 @@ import { TodayScreen } from "./screens/Today";
 import { TabBar } from "./ui/TabBar";
 
 export function App() {
-  const { route, param, group } = useLocation();
+  const { route, param, group, root } = useLocation();
 
   // Today lifts the splash itself once its numbers are in.
   useEffect(() => {
@@ -50,7 +50,7 @@ export function App() {
       {route === "add" ? (
         <AddScreen />
       ) : route === "cards" ? (
-        <CardsScreen key="cards" filter={param === "queued" || param === "paused" ? param : undefined} />
+        <CardsScreen key="cards" filter={param === "queued" || param === "paused" ? param : undefined} root={root} />
       ) : route === "card" ? (
         <CardScreen key={param} id={Number(param)} />
       ) : route === "stats" ? (

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { isSpeakable, normalizeKorean, type NewCard } from "../cards.js";
+import { isSpeakable, normalizeKorean, type NewCard, type Root } from "../cards.js";
 
 export type CardSource = "app" | "claude" | "bulk";
 
@@ -19,6 +19,10 @@ export interface CardQuery {
   /** Matches korean, meaning, pronunciation or romanization, case-insensitive. */
   text?: string;
   tag?: string;
+  /** A hanja: cards that have this root. */
+  root?: string;
+  /** Only cards whose roots were never filled in. */
+  withoutRoots?: boolean;
   limit: number;
 }
 
@@ -64,6 +68,8 @@ export interface CardStore {
   insert(cards: NewCard[], source: CardSource): Promise<StoredCard[]>;
   find(query: CardQuery): Promise<StoredCard[]>;
   update(id: string, patch: CardPatch): Promise<StoredCard | null>;
+  /** Sets roots only; unlike update it is not an edit, so a hard card stays on the hard list. */
+  setRoots(items: { id: string; roots: Root[] }[]): Promise<{ saved: string[]; notFound: string[] }>;
   stats(now: Date): Promise<Stats>;
   weakSounds(limit: number): Promise<WeakSound[]>;
   hardCards(limit: number): Promise<HardCard[]>;
@@ -101,12 +107,14 @@ export class MemoryCardStore implements CardStore {
     });
   }
 
-  async find({ text, tag, limit }: CardQuery): Promise<StoredCard[]> {
+  async find({ text, tag, root, withoutRoots, limit }: CardQuery): Promise<StoredCard[]> {
     const needle = text?.toLocaleLowerCase();
     const result: StoredCard[] = [];
     // Newest first, like the app's card list.
     for (const card of [...this.cards.values()].reverse()) {
       if (tag && !card.tags.includes(tag)) continue;
+      if (root && !card.roots?.some((r) => r.hanja === root)) continue;
+      if (withoutRoots && card.roots) continue;
       if (needle) {
         const haystack = [card.korean, card.meaning, card.pronunciation, card.romanization];
         if (!haystack.some((field) => field?.toLocaleLowerCase().includes(needle))) continue;
@@ -127,6 +135,20 @@ export class MemoryCardStore implements CardStore {
     }
     this.cards.set(id, updated);
     return updated;
+  }
+
+  async setRoots(items: { id: string; roots: Root[] }[]) {
+    const saved: string[] = [];
+    const notFound: string[] = [];
+    for (const { id, roots } of items) {
+      const card = this.cards.get(id);
+      if (!card) notFound.push(id);
+      else {
+        card.roots = roots;
+        saved.push(id);
+      }
+    }
+    return { saved, notFound };
   }
 
   async stats(): Promise<Stats> {

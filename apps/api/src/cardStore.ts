@@ -1,5 +1,5 @@
 import { and, count, desc, eq, isNull, lt, sql, type SQL } from "drizzle-orm";
-import { isKoreanOnly, isSpeakable, koreanKey, normalizeKorean, type CardPatch, type Example, type NewCard } from "./cards.js";
+import { isKoreanOnly, isSpeakable, koreanKey, normalizeKorean, type CardPatch, type Example, type NewCard, type Root } from "./cards.js";
 import type { Db } from "./db/client.js";
 import { cards } from "./db/schema.js";
 import { introduce } from "./newCards.js";
@@ -17,6 +17,8 @@ export type CardDto = {
   examples: Example[];
   notes: string | null;
   tags: string[];
+  /** Sino-Korean roots; null until someone (usually Claude) fills them in, [] for a native word. */
+  roots: Root[] | null;
   speakable: boolean;
   /** False when `korean` has non-Hangul text: the card can't enter the pronunciation queue. */
   readyForSpeech: boolean;
@@ -39,6 +41,7 @@ export function toCardDto(row: CardRow): CardDto {
     examples: row.examples,
     notes: row.notes,
     tags: row.tags,
+    roots: row.roots,
     speakable: row.speakable,
     readyForSpeech: isKoreanOnly(row.korean),
     source: row.source,
@@ -88,6 +91,7 @@ export function createCards(db: Db, userId: number, inputs: NewCard[], source: C
           examples: input.examples ?? [],
           notes: emptyToNull(input.notes),
           tags: uniqueTags(input.tags),
+          roots: input.roots ?? null,
           speakable: (input.speakable ?? isSpeakable(korean)) && isKoreanOnly(korean),
           source,
           createdAt: now,
@@ -115,6 +119,10 @@ export type CardQuery = {
   /** Substring of the Korean text or the meaning. */
   q?: string;
   tag?: string;
+  /** Hanja of a root: the word family of that root. */
+  root?: string;
+  /** Only cards whose roots nobody has filled in yet. */
+  rootsUnset?: boolean;
   /** Only cards with non-Hangul `korean`, the "not ready for checking" filter. */
   notReady?: boolean;
   /** Only queued cards (not yet in reviews), or only paused ones. */
@@ -132,6 +140,8 @@ export function cardConditions(userId: number, query: Omit<CardQuery, "limit" | 
     where.push(sql`(ulower(${cards.korean}) like ${pattern} escape '\\' or ulower(${cards.meaning}) like ${pattern} escape '\\')`);
   }
   if (query.tag) where.push(sql`exists (select 1 from json_each(${cards.tags}) where value = ${query.tag})`);
+  if (query.root) where.push(sql`exists (select 1 from json_each(${cards.roots}) where json_extract(value, '$.hanja') = ${query.root})`);
+  if (query.rootsUnset) where.push(isNull(cards.roots));
   if (query.status === "queued") where.push(isNull(cards.introducedAt));
   if (query.status === "paused") where.push(eq(cards.suspended, true));
   return where;
@@ -181,6 +191,36 @@ export function cardCounts(db: Db, userId: number): { all: number; queued: numbe
   return { all: row?.all ?? 0, queued: row?.queued ?? 0, paused: row?.paused ?? 0 };
 }
 
+export type FamilyMember = { id: number; korean: string; meaning: string };
+export type Family = Root & { cards: FamilyMember[]; total: number };
+
+/**
+ * For each root of a card, the user's other cards with the same hanja (newest first, at most
+ * `perRoot`), and how many there are in all. Paused and queued cards count too: they are still words
+ * the user has.
+ */
+export function cardFamily(db: Db, userId: number, id: number, perRoot = 5): Family[] | undefined {
+  const card = db.select({ roots: cards.roots }).from(cards).where(and(eq(cards.id, id), eq(cards.userId, userId))).get();
+  if (!card) return undefined;
+  const seen = new Set<string>();
+  const families: Family[] = [];
+  for (const root of card.roots ?? []) {
+    if (seen.has(root.hanja)) continue;
+    seen.add(root.hanja);
+    const where = and(...cardConditions(userId, { root: root.hanja }), sql`${cards.id} <> ${id}`);
+    const total = db.select({ n: count() }).from(cards).where(where).get()?.n ?? 0;
+    const members = db
+      .select({ id: cards.id, korean: cards.korean, meaning: cards.meaning })
+      .from(cards)
+      .where(where)
+      .orderBy(desc(cards.id))
+      .limit(perRoot)
+      .all();
+    families.push({ ...root, cards: members, total });
+  }
+  return families;
+}
+
 export type UpdateResult = { card: CardDto } | { error: "not_found" } | { error: "duplicate"; existingId: number };
 
 /** `suspended` comes only from the app: Claude can't pause cards. */
@@ -212,6 +252,7 @@ export function updateCard(
         examples: patch.examples ?? current.examples,
         notes: optional(patch.notes, current.notes),
         tags: patch.tags ? uniqueTags(patch.tags) : current.tags,
+        roots: patch.roots ?? current.roots,
         suspended: patch.suspended ?? current.suspended,
         speakable: (patch.speakable ?? (patch.korean === undefined ? current.speakable : isSpeakable(korean))) && isKoreanOnly(korean),
         updatedAt: now,

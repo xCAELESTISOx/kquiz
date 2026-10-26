@@ -9,6 +9,7 @@ import type {
   CardList,
   CardPatch,
   CardSummary,
+  Family,
   FsrsStatus,
   GroupFilter,
   InviteStatus,
@@ -138,7 +139,7 @@ function lastAnswer<T>(path: string): T | undefined {
   return lastAnswers.get(path) as T | undefined;
 }
 
-type CardsQuery = { q?: string; tag?: string; status?: CardFilter; before?: number; limit?: number };
+type CardsQuery = { q?: string; tag?: string; root?: string; status?: CardFilter; before?: number; limit?: number };
 
 function cardsPath(query: CardsQuery): string {
   const params = new URLSearchParams();
@@ -227,6 +228,9 @@ export const access = {
 const QUEUE_TTL = 60_000;
 const recentQueues = new Map<string, { at: number; promise: Promise<{ items: QueueItem[] }> }>();
 
+// Families change only when cards are added or edited, rarely mid-session; a reload refreshes them.
+const families = new Map<string, Promise<Family[]>>();
+
 export const api = {
   async addCard(card: NewCard): Promise<AddCardResult> {
     const res = await request<{ card: Card } | { error: "duplicate"; existingId: number }>("POST", "/cards", {
@@ -246,6 +250,20 @@ export const api = {
   cards: (query: CardsQuery = {}) => request<CardList>("GET", cardsPath(query), { fallback: (m) => m.cards(query) }),
 
   cardSummary: () => request<CardSummary>("GET", "/cards/summary", { fallback: (m) => m.cardSummary() }),
+
+  /** The card's roots with the other cards that share each; cached per card version. */
+  family(card: Card): Promise<Family[]> {
+    const key = `${card.id}:${card.updatedAt}:${JSON.stringify(card.roots)}`;
+    let promise = families.get(key);
+    if (!promise) {
+      promise = request<{ families: Family[] }>("GET", `/cards/${card.id}/family`, { fallback: (m) => ({ families: m.family(card.id) }) }).then(
+        (res) => res.families,
+      );
+      families.set(key, promise);
+      promise.catch(() => families.delete(key));
+    }
+    return promise;
+  },
 
   card: (id: number) => request<{ card: Card }>("GET", `/cards/${id}`, { fallback: (m) => ({ card: m.card(id) }) }),
 

@@ -11,6 +11,20 @@ export interface Example {
   ru: string;
 }
 
+/** A Sino-Korean root: the syllable, its hanja and a short gloss, e.g. 학 學 «учёба». */
+export interface Root {
+  ko: string;
+  hanja: string;
+  meaning: string;
+}
+
+/** One root of a card and the user's other cards that share it (GET /api/cards/:id/family). */
+export interface Family extends Root {
+  cards: { id: number; korean: string; meaning: string }[];
+  /** All cards with this root besides this one; `cards` holds the newest few. */
+  total: number;
+}
+
 export interface NewCard {
   korean: string;
   meaning: string;
@@ -19,6 +33,7 @@ export interface NewCard {
   examples?: Example[];
   notes?: string;
   tags?: string[];
+  roots?: Root[];
 }
 
 export interface Card {
@@ -30,6 +45,8 @@ export interface Card {
   examples: Example[];
   notes: string | null;
   tags: string[];
+  /** Null until Claude fills them in; [] for a native word. */
+  roots: Root[] | null;
   speakable: boolean;
   /** False when `korean` has non-Hangul text; such cards never become speakable. */
   readyForSpeech: boolean;
@@ -101,6 +118,8 @@ export type CardFilter = "queued" | "paused";
 export interface GroupFilter {
   q?: string;
   tag?: string;
+  /** A hanja: the word family of that root. */
+  root?: string;
   status?: "queued";
 }
 
