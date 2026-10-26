@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
-import { api } from "../lib/api";
+import { api, remembered } from "../lib/api";
 import type { StatsOverview } from "../lib/types";
 import "./Stats.css";
 
@@ -25,7 +25,7 @@ const MIN_RETENTION_REVIEWS = 20;
 const MIN_TREND_ATTEMPTS = 3;
 
 export function StatsScreen() {
-  const [stats, setStats] = useState<StatsOverview>();
+  const [stats, setStats] = useState<StatsOverview | undefined>(remembered.statsOverview);
   const [error, setError] = useState<string>();
 
   useEffect(() => {

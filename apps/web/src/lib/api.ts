@@ -51,8 +51,11 @@ function getMock(): MockApi | undefined {
 // The session cookie is httpOnly; the CSRF token comes in JSON from /auth/status and the login responses.
 let csrfToken: string | undefined;
 
+/** Called right after a sign-in: nothing remembered from before may belong to this person. */
 export function setCsrfToken(token: string | undefined) {
   csrfToken = token;
+  lastAnswers.clear();
+  forgetToday();
 }
 
 export function loginUrl(returnTo = location.pathname + location.search + location.hash): string {
@@ -69,7 +72,13 @@ interface RequestOptions<T> {
   accept?: number[];
 }
 
-export async function request<T>(method: string, path: string, opts: RequestOptions<T> = {}, retried = false): Promise<T> {
+export async function request<T>(method: string, path: string, opts: RequestOptions<T> = {}): Promise<T> {
+  const data = await send(method, path, opts);
+  if (method === "GET") lastAnswers.set(path, data);
+  return data;
+}
+
+async function send<T>(method: string, path: string, opts: RequestOptions<T>, retried = false): Promise<T> {
   const { body, fallback } = opts;
   // Any change (a rating, new cards) can change the queue.
   if (method !== "GET") recentQueues.clear();
@@ -102,13 +111,16 @@ export async function request<T>(method: string, path: string, opts: RequestOpti
     if (m) return fallback(m);
   }
   if (res.status === 401 && !path.startsWith("/auth/")) {
+    // Whoever signs in next may be someone else.
+    lastAnswers.clear();
+    forgetToday();
     location.assign(loginUrl());
     throw new ApiError(401, "Нужно войти");
   }
   if (res.status === 403 && !retried && method !== "GET") {
     // The token may be stale after the session was renewed; fetch a fresh one once.
     csrfToken = undefined;
-    return request(method, path, opts, true);
+    return send(method, path, opts, true);
   }
   if (!res.ok && !opts.accept?.includes(res.status)) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -117,6 +129,65 @@ export async function request<T>(method: string, path: string, opts: RequestOpti
   }
   return (await res.json()) as T;
 }
+
+// The last answer to each GET, so a screen opened again shows it at once and refreshes behind it.
+// Memory only: signing in reloads the page, so one person's answers never reach another.
+const lastAnswers = new Map<string, unknown>();
+
+function lastAnswer<T>(path: string): T | undefined {
+  return lastAnswers.get(path) as T | undefined;
+}
+
+type CardsQuery = { q?: string; tag?: string; status?: CardFilter; before?: number; limit?: number };
+
+function cardsPath(query: CardsQuery): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== "") params.set(key, String(value));
+  return `/cards?${params}`;
+}
+
+const statsOverviewPath = () => `/stats?tz=${-new Date().getTimezoneOffset()}`;
+
+/** Keeps the remembered card lists in step with a change made here; `null` means the card is gone. */
+function rememberCard(id: number, card: Card | null) {
+  for (const [path, answer] of lastAnswers) {
+    if (path === `/cards/${id}`) {
+      if (card) lastAnswers.set(path, { card });
+      else lastAnswers.delete(path);
+    }
+    if (!path.startsWith("/cards?")) continue;
+    const list = answer as CardList;
+    if (!list.cards.some((c) => c.id === id)) continue;
+    const stays = card && !(path.includes("status=queued") && !card.queued);
+    lastAnswers.set(path, {
+      ...list,
+      cards: stays ? list.cards.map((c) => (c.id === id ? card : c)) : list.cards.filter((c) => c.id !== id),
+    });
+  }
+}
+
+/** What the server said last time, for drawing a screen before its fresh answer arrives. */
+export const remembered = {
+  cards: (query: CardsQuery) => lastAnswer<CardList>(cardsPath(query)),
+  cardSummary: () => lastAnswer<CardSummary>("/cards/summary"),
+  /** A card from its own screen or from any list it was seen in. */
+  card(id: number): Card | undefined {
+    const own = lastAnswer<{ card: Card }>(`/cards/${id}`);
+    if (own) return own.card;
+    for (const [path, answer] of lastAnswers)
+      if (path.startsWith("/cards?")) {
+        const found = (answer as CardList).cards.find((c) => c.id === id);
+        if (found) return found;
+      }
+    return undefined;
+  },
+  settings: () => lastAnswer<Settings>("/settings"),
+  stats: () => lastAnswer<Stats>("/reviews/stats"),
+  statsOverview: () => lastAnswer<StatsOverview>(statsOverviewPath()),
+  leeches: () => lastAnswer<{ items: Leech[] }>("/reviews/leeches"),
+  fsrs: () => lastAnswer<FsrsStatus>("/reviews/fsrs"),
+  authStatus: () => lastAnswer<AuthStatus>("/auth/status"),
+};
 
 export async function authStatus(): Promise<AuthStatus> {
   const status = await request<AuthStatus>("GET", "/auth/status", {
@@ -172,11 +243,7 @@ export const api = {
   addCards: (cards: NewCard[]) =>
     request<AddCardsResult>("POST", "/cards/bulk", { body: { cards }, fallback: (m) => m.addCards(cards) }),
 
-  cards(query: { q?: string; tag?: string; status?: CardFilter; before?: number; limit?: number } = {}) {
-    const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== "") params.set(key, String(value));
-    return request<CardList>("GET", `/cards?${params}`, { fallback: (m) => m.cards(query) });
-  },
+  cards: (query: CardsQuery = {}) => request<CardList>("GET", cardsPath(query), { fallback: (m) => m.cards(query) }),
 
   cardSummary: () => request<CardSummary>("GET", "/cards/summary", { fallback: (m) => m.cardSummary() }),
 
@@ -188,14 +255,23 @@ export const api = {
       accept: [409],
       fallback: (m) => ({ card: m.updateCard(id, patch) }),
     });
-    return "card" in res ? { status: "saved", card: res.card } : { status: "duplicate", existingId: res.existingId };
+    if (!("card" in res)) return { status: "duplicate", existingId: res.existingId };
+    rememberCard(id, res.card);
+    return { status: "saved", card: res.card };
   },
 
-  deleteCard: (id: number) => request<{ ok: true }>("DELETE", `/cards/${id}`, { fallback: (m) => m.deleteCard(id) }),
+  async deleteCard(id: number) {
+    const res = await request<{ ok: true }>("DELETE", `/cards/${id}`, { fallback: (m) => m.deleteCard(id) });
+    rememberCard(id, null);
+    return res;
+  },
 
   /** Takes a queued card into reviews now, outside the daily allowance. */
-  introduceCard: (id: number) =>
-    request<{ card: Card }>("POST", `/cards/${id}/introduce`, { body: {}, fallback: (m) => ({ card: m.introduce(id) }) }),
+  async introduceCard(id: number) {
+    const res = await request<{ card: Card }>("POST", `/cards/${id}/introduce`, { body: {}, fallback: (m) => ({ card: m.introduce(id) }) });
+    rememberCard(id, res.card);
+    return res;
+  },
 
   settings: () => request<Settings>("GET", "/settings", { fallback: (m) => m.settings() }),
 
@@ -233,7 +309,7 @@ export const api = {
 
   /** The statistics screen, with days in the phone's time zone. */
   statsOverview: () =>
-    request<StatsOverview>("GET", `/stats?tz=${-new Date().getTimezoneOffset()}`, { fallback: (m) => m.statsOverview() }),
+    request<StatsOverview>("GET", statsOverviewPath(), { fallback: (m) => m.statsOverview() }),
 
   leeches: () => request<{ items: Leech[] }>("GET", "/reviews/leeches", { fallback: () => ({ items: [] }) }),
 
@@ -318,6 +394,52 @@ export async function submitReview(input: ReviewInput): Promise<void> {
   // A flush already in flight may have read the queue before this review landed.
   if (flushing) await flushing;
   return flushPendingReviews();
+}
+
+// The review screen keeps its latest rating here instead of sending it, so going back to that card
+// can take it back. The next rating or leaving the screen sends it; if the app is closed first,
+// the next start does (App.tsx).
+const HELD_KEY = "kquiz.heldReview.v1";
+
+function readHeld(): ReviewInput | undefined {
+  try {
+    return (JSON.parse(localStorage.getItem(HELD_KEY) ?? "null") as ReviewInput | null) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeHeld(input: ReviewInput | undefined) {
+  try {
+    if (input) localStorage.setItem(HELD_KEY, JSON.stringify(input));
+    else localStorage.removeItem(HELD_KEY);
+  } catch {
+    // Storage blocked: an unheld rating is simply sent by the next release.
+  }
+}
+
+/** Sends the previously held rating and holds this one until `releaseHeldReview` or the next hold. */
+export async function holdReview(input: ReviewInput): Promise<void> {
+  forgetToday();
+  const previous = readHeld();
+  writeHeld(input);
+  if (readHeld()?.id !== input.id) return submitReview(input);
+  if (previous) return submitReview(previous);
+}
+
+/** Drops the held rating, if it is this one; false when it has already gone. */
+export function takeBackReview(id: string): boolean {
+  if (readHeld()?.id !== id) return false;
+  writeHeld(undefined);
+  return true;
+}
+
+/** Sends the held rating, if any, with everything else waiting. */
+export function releaseHeldReview(): Promise<void> {
+  const held = readHeld();
+  if (!held) return flushPendingReviews();
+  writeHeld(undefined);
+  return submitReview(held);
 }
 
 let flushing: Promise<void> | undefined;

@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { api } from "../lib/api";
+import { api, remembered } from "../lib/api";
 import type { Leech } from "../lib/types";
 import { EmptyState } from "../ui/EmptyState";
 
@@ -21,7 +21,7 @@ function forgottenText({ forgotten }: Leech): string {
 }
 
 export function LeechesScreen() {
-  const [items, setItems] = useState<Leech[]>();
+  const [items, setItems] = useState<Leech[] | undefined>(() => remembered.leeches()?.items);
   const [error, setError] = useState<string>();
   const [copied, setCopied] = useState(false);
 
