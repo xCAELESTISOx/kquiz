@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { api } from "../lib/api";
 import { isKoreanOnly, parseBulk } from "../lib/korean";
 import { cardsWord } from "../lib/plural";
-import type { AddCardsResult, NewCard } from "../lib/types";
+import { looksLikePhrase, REGISTER_LABELS } from "../lib/phrase";
+import type { AddCardsResult, NewCard, Register } from "../lib/types";
 import { CheckIcon } from "../ui/icons";
 import { Spinner } from "../ui/Spinner";
+import "../ui/phrase.css";
 
 // Autofocus only with a mouse: on iPhone it shifts the layout without opening the keyboard.
 const finePointer = typeof matchMedia !== "undefined" && matchMedia("(pointer: fine)").matches;
@@ -54,6 +56,9 @@ function SingleForm() {
   const [exampleMeaning, setExampleMeaning] = useState("");
   const [notes, setNotes] = useState("");
   const [tags, setTags] = useState("");
+  // Guessed from the text (a space, a polite ending) until it is set by hand.
+  const [phraseSet, setPhraseSet] = useState<boolean>();
+  const [register, setRegister] = useState<Register>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [fieldErrors, setFieldErrors] = useState<{ korean?: string; meaning?: string; example?: string }>({});
@@ -62,14 +67,15 @@ function SingleForm() {
   const meaningRef = useRef<HTMLInputElement>(null);
 
   const notSpeakable = korean.trim() !== "" && !isKoreanOnly(korean.trim());
+  const phrase = phraseSet ?? looksLikePhrase(korean);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (busy) return;
     const errors = {
-      ...(!korean.trim() && { korean: "Впиши слово по-корейски" }),
+      ...(!korean.trim() && { korean: phrase ? "Впиши фразу по-корейски" : "Впиши слово по-корейски" }),
       ...(!meaning.trim() && { meaning: "Впиши перевод" }),
-      ...(!exampleKo.trim() !== !exampleMeaning.trim() && { example: "Нужны и пример, и его перевод" }),
+      ...(!phrase && !exampleKo.trim() !== !exampleMeaning.trim() && { example: "Нужны и пример, и его перевод" }),
     };
     setFieldErrors(errors);
     if (errors.korean) return koreanRef.current?.focus();
@@ -78,7 +84,8 @@ function SingleForm() {
     const card: NewCard = {
       korean: korean.trim(),
       meaning: meaning.trim(),
-      ...(exampleKo.trim() && { examples: [{ ko: exampleKo.trim(), ru: exampleMeaning.trim() }] }),
+      ...(phrase ? { kind: "phrase" as const, ...(register && { register }) } : {}),
+      ...(!phrase && exampleKo.trim() && { examples: [{ ko: exampleKo.trim(), ru: exampleMeaning.trim() }] }),
       ...(notes.trim() && { notes: notes.trim() }),
       tags: tags
         .split(",")
@@ -96,6 +103,8 @@ function SingleForm() {
         setExampleKo("");
         setExampleMeaning("");
         setNotes("");
+        setPhraseSet(undefined);
+        setRegister(undefined);
         koreanRef.current?.focus();
       } else {
         setError(`«${card.korean}» уже есть в карточках`);
@@ -110,7 +119,7 @@ function SingleForm() {
   return (
     <form className="form" onSubmit={submit}>
       <label className="field">
-        <span className="field-label">По-корейски</span>
+        <span className="field-label">{phrase ? "Фраза по-корейски" : "По-корейски"}</span>
         <input
           ref={koreanRef}
           className="input input-korean"
@@ -123,7 +132,7 @@ function SingleForm() {
           autoCapitalize="off"
           spellCheck={false}
           enterKeyHint="next"
-          placeholder="예: 바다…"
+          placeholder={phrase ? "예: 잘 먹겠습니다…" : "예: 바다…"}
           value={korean}
           onChange={(e) => {
             setKorean(e.target.value);
@@ -143,6 +152,14 @@ function SingleForm() {
         )}
       </label>
 
+      <label className="toggle">
+        <span className="toggle-text">
+          <span>Фраза целиком</span>
+          <span className="muted small">В повторении собирается из блоков, а не переводится</span>
+        </span>
+        <input type="checkbox" role="switch" className="switch" checked={phrase} onChange={(e) => setPhraseSet(e.target.checked)} />
+      </label>
+
       <label className="field">
         <span className="field-label">Перевод</span>
         <input
@@ -153,7 +170,7 @@ function SingleForm() {
           enterKeyHint="done"
           name="meaning"
           aria-invalid={!!fieldErrors.meaning}
-          placeholder="например: море…"
+          placeholder={phrase ? "например: приятного аппетита…" : "например: море…"}
           value={meaning}
           onChange={(e) => {
             setMeaning(e.target.value);
@@ -165,36 +182,58 @@ function SingleForm() {
 
       {more ? (
         <div className="more-fields">
+          {phrase && (
+            <fieldset className="register-edit">
+              <legend className="field-label">Вежливость</legend>
+              <div className="register-options">
+                {(Object.keys(REGISTER_LABELS) as Register[]).map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    className="chip"
+                    aria-pressed={register === r}
+                    onClick={() => setRegister(register === r ? undefined : r)}
+                  >
+                    {REGISTER_LABELS[r]}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          )}
+          {!phrase && (
+            <>
+              <label className="field">
+                <span className="field-label">Пример</span>
+                <input
+                  className="input"
+                  lang="ko"
+                  autoComplete="off"
+                  value={exampleKo}
+                  aria-invalid={!!fieldErrors.example && !exampleKo.trim()}
+                  onChange={(e) => {
+                    setExampleKo(e.target.value);
+                    setFieldErrors((f) => ({ ...f, example: undefined }));
+                  }}
+                />
+              </label>
+              <label className="field">
+                <span className="field-label">Перевод примера</span>
+                <input
+                  className="input"
+                  autoComplete="off"
+                  value={exampleMeaning}
+                  aria-invalid={!!fieldErrors.example && !exampleMeaning.trim()}
+                  onChange={(e) => {
+                    setExampleMeaning(e.target.value);
+                    setFieldErrors((f) => ({ ...f, example: undefined }));
+                  }}
+                />
+                {fieldErrors.example && <span className="field-error">{fieldErrors.example}</span>}
+              </label>
+            </>
+          )}
           <label className="field">
-            <span className="field-label">Пример</span>
-            <input
-              className="input"
-              lang="ko"
-              autoComplete="off"
-              value={exampleKo}
-              aria-invalid={!!fieldErrors.example && !exampleKo.trim()}
-              onChange={(e) => {
-                setExampleKo(e.target.value);
-                setFieldErrors((f) => ({ ...f, example: undefined }));
-              }}
-            />
-          </label>
-          <label className="field">
-            <span className="field-label">Перевод примера</span>
-            <input
-              className="input"
-              autoComplete="off"
-              value={exampleMeaning}
-              aria-invalid={!!fieldErrors.example && !exampleMeaning.trim()}
-              onChange={(e) => {
-                setExampleMeaning(e.target.value);
-                setFieldErrors((f) => ({ ...f, example: undefined }));
-              }}
-            />
-            {fieldErrors.example && <span className="field-error">{fieldErrors.example}</span>}
-          </label>
-          <label className="field">
-            <span className="field-label">Заметка</span>
+            <span className="field-label">{phrase ? "Когда говорят" : "Заметка"}</span>
             <textarea className="input textarea" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </label>
           <label className="field">
@@ -211,11 +250,13 @@ function SingleForm() {
         </div>
       ) : (
         <button type="button" className="link-button" onClick={() => setMore(true)}>
-          Пример, заметка, теги
+          {phrase ? "Вежливость, заметка, теги" : "Пример, заметка, теги"}
         </button>
       )}
 
-      <p className="muted small">Произношение и романизация заполнятся сами.</p>
+      <p className="muted small">
+        {phrase ? "Разбор фразы по словам может добавить Claude." : "Произношение и романизация заполнятся сами."}
+      </p>
 
       <div aria-live="polite">{error && <p className="notice notice-error">{error}</p>}</div>
 

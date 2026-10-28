@@ -71,6 +71,13 @@
       "when": 1793021632760,
       "tag": "0009_card_roots",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1793152146943,
+      "tag": "0010_phrases",
+      "breakpoints": true
     }
   ]
 }

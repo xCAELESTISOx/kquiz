@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { isSpeakable, normalizeKorean, type NewCard, type Root } from "../cards.js";
+import { isSpeakable, normalizeKorean, type CardKind, type NewCard, type Root } from "../cards.js";
 
 export type CardSource = "app" | "claude" | "bulk";
 
@@ -23,6 +23,8 @@ export interface CardQuery {
   root?: string;
   /** Only cards whose roots were never filled in. */
   withoutRoots?: boolean;
+  /** Only words, or only phrases. */
+  kind?: CardKind;
   limit: number;
 }
 
@@ -67,6 +69,7 @@ export interface CardStore {
   /** Inserts validated, deduplicated cards and creates their review states. */
   insert(cards: NewCard[], source: CardSource): Promise<StoredCard[]>;
   find(query: CardQuery): Promise<StoredCard[]>;
+  get(id: string): Promise<StoredCard | null>;
   update(id: string, patch: CardPatch): Promise<StoredCard | null>;
   /** Sets roots only; unlike update it is not an edit, so a hard card stays on the hard list. */
   setRoots(items: { id: string; roots: Root[] }[]): Promise<{ saved: string[]; notFound: string[] }>;
@@ -107,7 +110,11 @@ export class MemoryCardStore implements CardStore {
     });
   }
 
-  async find({ text, tag, root, withoutRoots, limit }: CardQuery): Promise<StoredCard[]> {
+  async get(id: string): Promise<StoredCard | null> {
+    return this.cards.get(id) ?? null;
+  }
+
+  async find({ text, tag, root, withoutRoots, kind, limit }: CardQuery): Promise<StoredCard[]> {
     const needle = text?.toLocaleLowerCase();
     const result: StoredCard[] = [];
     // Newest first, like the app's card list.
@@ -115,6 +122,7 @@ export class MemoryCardStore implements CardStore {
       if (tag && !card.tags.includes(tag)) continue;
       if (root && !card.roots?.some((r) => r.hanja === root)) continue;
       if (withoutRoots && card.roots) continue;
+      if (kind && (card.kind ?? "word") !== kind) continue;
       if (needle) {
         const haystack = [card.korean, card.meaning, card.pronunciation, card.romanization];
         if (!haystack.some((field) => field?.toLocaleLowerCase().includes(needle))) continue;

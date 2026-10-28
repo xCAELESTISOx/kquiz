@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { EXAMPLES_PER_CARD, MAX_ROOTS, newCardSchema, normalizeKorean, rootSchema, type NewCard, type Root } from "../cards.js";
+import { CARD_KINDS, EXAMPLES_PER_CARD, MAX_PARTS, MAX_ROOTS, newCardSchema, normalizeKorean, phrasePartSchema, REGISTERS, rootSchema, type NewCard, type Root } from "../cards.js";
 import { MAX_DRILLS_PER_CALL, newDrillSchema } from "../practice.js";
 import type { CardStore, DrillStore, NewDrill } from "./store.js";
 
@@ -19,7 +19,8 @@ Cards added here don't enter reviews at once: they wait in a new-card queue and 
 Call find_cards before adding words the user may already have; add_cards also reports duplicates. To fix a card, use update_card instead of adding a new one: any field can be changed, and an empty string clears pronunciation, romanization or notes. Cards cannot be deleted from here.
 When the user asks to fix hard cards, call get_leeches and rework each with update_card: a clearer meaning, a mnemonic or the confusing neighbour in notes, ${EXAMPLES_PER_CARD} fresh examples. A card that mixes two senses can be split: narrow it with update_card and add the other sense with add_cards. If a card should go, tell the user; only they can delete it in the app.
 Older cards may have no roots yet: when the user asks to fill them in, page through find_cards with without_roots and send them with set_roots, 50 at a time, until none are left.
-When the user asks for practice on sounds they confuse (ㄱ/ㅋ/ㄲ, ㅓ/ㅗ…), add listening drills with add_sound_drills.`;
+When the user asks for practice on sounds they confuse (ㄱ/ㅋ/ㄲ, ㅓ/ㅗ…), add listening drills with add_sound_drills.
+Set phrases learned whole (안녕히 가세요, 잘 먹겠습니다, 화장실이 어디예요?) go in with add_phrases, not add_cards. A phrase has no examples: instead parts breaks it into its pieces in order, exactly as written in the phrase, each with its dictionary form (base) when that differs and a short Russian gloss, e.g. 어떻게 지내요? → [{"ko":"어떻게","meaning":"как"},{"ko":"지내요","base":"지내다","meaning":"поживать"}]. The app links each piece to the user's card for that word and builds the phrase from these pieces, mixed with wrong ones, in reviews (Russian → Korean, and by ear). register is how polite it is: formal (합쇼체), polite (해요체) or casual (반말); notes say when it is said and the reply it usually gets. Keep the phrase in the form it is really said, not the dictionary form. When editing a phrase with update_card, send parts instead of examples.`;
 
 const cardInput = z.object({
   korean: z.string(),
@@ -54,6 +55,33 @@ const examplesInput = z
 
 const newCardInput = cardInput.extend({ examples: examplesInput });
 
+const partsInput = z
+  .array(
+    z.object({
+      ko: z.string().describe("The piece exactly as written in the phrase"),
+      base: z.string().optional().describe("Its dictionary form, when it differs (가세요 → 가다)"),
+      meaning: z.string().describe("Short Russian gloss"),
+    }),
+  )
+  .min(1)
+  .max(MAX_PARTS)
+  .describe("The phrase's pieces in order; together they spell the phrase");
+
+const registerInput = z.enum(REGISTERS).describe("formal: 합쇼체, polite: 해요체, casual: 반말");
+
+const newPhraseInput = z.object({
+  korean: z.string().describe("The phrase in Hangul, as it is said"),
+  meaning: z.string().describe("Russian translation"),
+  parts: partsInput,
+  register: registerInput.optional(),
+  notes: z.string().optional().describe("When it is said, the usual reply, anything worth remembering"),
+  tags: z.array(z.string()).optional(),
+});
+
+const phraseSchema = newCardSchema
+  .pick({ korean: true, meaning: true, notes: true, tags: true, register: true })
+  .extend({ parts: z.array(phrasePartSchema).min(1).max(MAX_PARTS) });
+
 const requiredExamples = newCardSchema.extend({ examples: newCardSchema.shape.examples.unwrap().length(EXAMPLES_PER_CARD) });
 
 function json(value: unknown) {
@@ -62,6 +90,35 @@ function json(value: unknown) {
 
 function error(message: string) {
   return { content: [{ type: "text" as const, text: message }], isError: true };
+}
+
+/** Validates, drops repeats and existing cards, stores the rest in the new-card queue. */
+async function addAll<T extends { korean: string }>(
+  store: CardStore,
+  inputs: T[],
+  parse: (input: T) => { success: true; data: NewCard } | { success: false; error: z.ZodError },
+) {
+  const rejected: { korean: string; reason: string }[] = [];
+  const valid = new Map<string, NewCard>();
+  for (const input of inputs) {
+    const parsed = parse(input);
+    if (!parsed.success) {
+      rejected.push({ korean: input.korean, reason: z.prettifyError(parsed.error) });
+      continue;
+    }
+    const key = normalizeKorean(parsed.data.korean);
+    if (valid.has(key)) rejected.push({ korean: input.korean, reason: "repeated in this batch" });
+    else valid.set(key, parsed.data);
+  }
+
+  const existing = await store.findByKorean([...valid.keys()]);
+  const fresh = [...valid].filter(([key]) => !existing.has(key)).map(([, card]) => card);
+  const created = await store.insert(fresh, "claude");
+  return json({
+    created: created.map(({ id, korean, meaning, speakable, queued }) => ({ id, korean, meaning, speakable, queued })),
+    duplicates: [...existing.values()].map(({ id, korean, meaning }) => ({ id, korean, meaning })),
+    rejected,
+  });
 }
 
 export function createMcpServer(store: CardStore, drills?: DrillStore): McpServer {
@@ -75,29 +132,22 @@ export function createMcpServer(store: CardStore, drills?: DrillStore): McpServe
       inputSchema: { cards: z.array(newCardInput).min(1).max(MAX_CARDS_PER_CALL) },
       annotations: { destructiveHint: false, idempotentHint: true },
     },
-    async ({ cards }) => {
-      const rejected: { korean: string; reason: string }[] = [];
-      const valid = new Map<string, NewCard>();
-      for (const input of cards) {
-        const parsed = requiredExamples.safeParse(input);
-        if (!parsed.success) {
-          rejected.push({ korean: input.korean, reason: z.prettifyError(parsed.error) });
-          continue;
-        }
-        const key = normalizeKorean(parsed.data.korean);
-        if (valid.has(key)) rejected.push({ korean: input.korean, reason: "repeated in this batch" });
-        else valid.set(key, parsed.data);
-      }
+    async ({ cards }) => addAll(store, cards, (input) => requiredExamples.safeParse(input)),
+  );
 
-      const existing = await store.findByKorean([...valid.keys()]);
-      const fresh = [...valid].filter(([key]) => !existing.has(key)).map(([, card]) => card);
-      const created = await store.insert(fresh, "claude");
-      return json({
-        created: created.map(({ id, korean, meaning, speakable, queued }) => ({ id, korean, meaning, speakable, queued })),
-        duplicates: [...existing.values()].map(({ id, korean, meaning }) => ({ id, korean, meaning })),
-        rejected,
-      });
+  server.registerTool(
+    "add_phrases",
+    {
+      title: "Add phrases",
+      description: `Adds up to ${MAX_CARDS_PER_CALL} set Korean phrases, learned whole, to the new-card queue. Each needs parts, its breakdown into pieces (no examples). In reviews the user builds the phrase from those pieces mixed with wrong ones, from the Russian and by ear. Returns created phrases, duplicates of existing cards and rejected ones with the reason.`,
+      inputSchema: { phrases: z.array(newPhraseInput).min(1).max(MAX_CARDS_PER_CALL) },
+      annotations: { destructiveHint: false, idempotentHint: true },
     },
+    async ({ phrases }) =>
+      addAll(store, phrases, (input) => {
+        const parsed = phraseSchema.safeParse(input);
+        return parsed.success ? { success: true as const, data: { ...parsed.data, kind: "phrase" as const } } : parsed;
+      }),
   );
 
   server.registerTool(
@@ -107,6 +157,7 @@ export function createMcpServer(store: CardStore, drills?: DrillStore): McpServe
       description: "Searches cards by Korean text, translation or tag. With no filters, returns the most recent cards.",
       inputSchema: {
         query: z.string().trim().max(200).optional().describe("Substring of korean, meaning, pronunciation or romanization"),
+        kind: z.enum(CARD_KINDS).optional().describe("Only words, or only phrases"),
         tag: z.string().trim().max(50).optional(),
         root: z.string().trim().max(4).optional().describe("A hanja character: cards with this root, i.e. its word family"),
         without_roots: z.boolean().optional().describe("Only cards whose roots were never filled in"),
@@ -114,9 +165,9 @@ export function createMcpServer(store: CardStore, drills?: DrillStore): McpServe
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ query, tag, root, without_roots, limit }) =>
+    async ({ query, kind, tag, root, without_roots, limit }) =>
       json({
-        cards: await store.find({ text: query || undefined, tag: tag || undefined, root: root || undefined, withoutRoots: without_roots, limit }),
+        cards: await store.find({ text: query || undefined, kind, tag: tag || undefined, root: root || undefined, withoutRoots: without_roots, limit }),
       }),
   );
 
@@ -150,15 +201,28 @@ export function createMcpServer(store: CardStore, drills?: DrillStore): McpServe
     "update_card",
     {
       title: "Update card",
-      description: `Edits one card found with find_cards: Korean, meaning, pronunciation, romanization, notes, tags, examples or speakable. Only the given fields change; tags replace the old list; an empty string clears pronunciation, romanization or notes. Every call must include exactly ${EXAMPLES_PER_CARD} examples (resend the current ones if they stay).`,
+      description: `Edits one card found with find_cards: Korean, meaning, pronunciation, romanization, notes, tags, examples or speakable, and for a phrase parts and register. Only the given fields change; tags replace the old list; an empty string clears pronunciation, romanization or notes. Every call on a word must include exactly ${EXAMPLES_PER_CARD} examples (resend the current ones if they stay); a phrase takes no examples.`,
       inputSchema: {
         id: z.string().min(1),
-        changes: cardInput.partial().extend({ examples: examplesInput, speakable: z.boolean().optional() }),
+        changes: cardInput
+          .partial()
+          .extend({
+            examples: examplesInput.optional().describe(`Exactly ${EXAMPLES_PER_CARD} example sentences; required for a word, not for a phrase`),
+            parts: partsInput.optional().describe("A phrase's pieces in order"),
+            register: registerInput.optional(),
+            speakable: z.boolean().optional(),
+          }),
       },
       annotations: { destructiveHint: false, idempotentHint: true },
     },
     async ({ id, changes: { speakable, ...rest } }) => {
-      const parsed = requiredExamples.partial().required({ examples: true }).safeParse(rest);
+      const current = await store.get(id);
+      if (!current) return error(`Card ${id} not found`);
+      const phrase = current.kind === "phrase";
+      if (phrase && rest.examples) return error("A phrase has no examples; send parts instead");
+      if (!phrase && (rest.parts || rest.register)) return error("parts and register are for phrases only");
+      const schema = phrase ? newCardSchema.partial() : requiredExamples.partial().required({ examples: true });
+      const parsed = schema.safeParse(rest);
       if (!parsed.success) return error(z.prettifyError(parsed.error));
       // partial() keeps the tags default, which would wipe tags on every update.
       const patch = Object.fromEntries(

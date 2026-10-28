@@ -3,9 +3,10 @@ import { z } from "zod";
 import type { AuthVariables } from "../auth/sessions.js";
 import { getCardAudio } from "../cardAudio.js";
 import { cardCounts, cardFamily, createCards, deleteCard, getCard, listCards, listTags, updateCard } from "../cardStore.js";
-import { newCardSchema, parseBulk } from "../cards.js";
+import { CARD_KINDS, newCardSchema, parseBulk } from "../cards.js";
 import type { Db } from "../db/client.js";
 import { introduceEarly } from "../newCards.js";
+import { linkParts } from "../phrases.js";
 
 export const MAX_BATCH = 50;
 
@@ -22,6 +23,7 @@ const listQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).optional(),
   before: z.coerce.number().int().positive().optional(),
   status: z.enum(["queued", "paused"]).optional(),
+  kind: z.enum(CARD_KINDS).optional(),
 });
 
 // Pausing is the owner's call, so `suspended` is only in the app's patch, not in Claude's.
@@ -90,8 +92,11 @@ export function cardRoutes(db: Db, now: () => Date) {
 
   app.get("/:id", (c) => {
     const id = idParam.safeParse(c.req.param("id"));
-    const card = id.success ? getCard(db, c.get("user").id, id.data) : undefined;
-    return card ? c.json({ card }) : c.json({ error: "not_found" }, 404);
+    const userId = c.get("user").id;
+    const card = id.success ? getCard(db, userId, id.data) : undefined;
+    if (!card) return c.json({ error: "not_found" }, 404);
+    // A phrase's pieces come with the user's card for each word, to open it from the phrase.
+    return c.json({ card: card.parts ? { ...card, parts: linkParts(db, userId, card.parts) } : card });
   });
 
   // Other cards that share a root with this one, per root (cardStore.ts cardFamily).

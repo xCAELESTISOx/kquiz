@@ -10,7 +10,7 @@ const KINDS: { kind: MixKind; title: string; sub: string; icon: ReactNode }[] = 
   {
     kind: "meaning",
     title: "Перевод",
-    sub: "Корейское слово → вспомнить перевод",
+    sub: "Слово → вспомнить перевод, фраза → собрать из блоков",
     icon: <CardsIcon />,
   },
   {
@@ -40,21 +40,42 @@ const KINDS: { kind: MixKind; title: string; sub: string; icon: ReactNode }[] = 
   {
     kind: "dictation",
     title: "Написать по звуку",
-    sub: "Послушать → набрать хангылем",
+    sub: "Послушать → набрать слово или собрать фразу",
     icon: <EarIcon />,
   },
 ];
+
+const SPEECH_KINDS: ReadonlySet<MixKind> = new Set(["aloud", "choice", "write"]);
+
+// How the ways read when only phrases are mixed.
+const PHRASE_TEXT: Partial<Record<MixKind, { title: string; sub: string }>> = {
+  meaning: { title: "Собрать по переводу", sub: "Перевод → собрать фразу из блоков" },
+  dictation: { title: "Собрать по звуку", sub: "Послушать → собрать фразу из блоков" },
+};
 
 /**
  * What goes into a mixed session, picked before it starts; everything but typing by default. Saying aloud,
  * picking and typing by translation all go through the speech schedule, so they share one count;
  * typing by ear shares the listening one.
  */
-export function MixSetup({ counted, onStart }: { counted: boolean; onStart: (kinds: ReadonlySet<MixKind>) => void }) {
+export function MixSetup({
+  counted,
+  phrases,
+  onStart,
+}: {
+  counted: boolean;
+  /** Only phrases: nothing goes through the speech schedule, so its ways are left out. */
+  phrases?: boolean;
+  onStart: (kinds: ReadonlySet<MixKind>) => void;
+}) {
   const recordable = canRecord();
+  const shown = phrases ? KINDS.filter((k) => !SPEECH_KINDS.has(k.kind)).map((k) => ({ ...k, ...PHRASE_TEXT[k.kind] })) : KINDS;
   const [kinds, setKinds] = useState<ReadonlySet<MixKind>>(
-    // Typing takes the keyboard out, so it joins only when picked.
-    () => new Set(KINDS.map((k) => k.kind).filter((k) => (recordable || k !== "aloud") && k !== "write" && k !== "dictation")),
+    // Typing takes the keyboard out, so it joins only when picked. Building a phrase by ear doesn't.
+    () =>
+      new Set(
+        shown.map((k) => k.kind).filter((k) => (recordable || k !== "aloud") && k !== "write" && (phrases || k !== "dictation")),
+      ),
   );
   const [stats, setStats] = useState<Stats | undefined>(remembered.stats);
 
@@ -87,7 +108,7 @@ export function MixSetup({ counted, onStart }: { counted: boolean; onStart: (kin
             Что смешать
           </h1>
           <div className="mix-options">
-            {KINDS.map(({ kind, title, sub, icon }, i) => {
+            {shown.map(({ kind, title, sub, icon }, i) => {
               const off = kind === "aloud" && !recordable;
               return (
                 <button

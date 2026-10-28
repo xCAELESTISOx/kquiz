@@ -1,10 +1,12 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AuthVariables } from "../auth/sessions.js";
+import { CARD_KINDS } from "../cards.js";
 import { distractors } from "../choices.js";
 import type { Db } from "../db/client.js";
 import { findLeeches } from "../leeches.js";
 import { introduceDailyCards } from "../newCards.js";
+import { phraseTiles } from "../phrases.js";
 import { RETENTION_RANGE, setDesiredRetention } from "../fsrs.js";
 import { fsrsStatus } from "../fsrsOptimizer.js";
 import { ratings } from "../review.js";
@@ -17,6 +19,13 @@ const mode = z.enum(["meaning", "speech", "listening"]);
 const queueMode = z.enum([...mode.options, "mixed"]);
 /** Which modes a mixed session takes; all of them when left out. */
 const mixedModes = z.array(mode).min(1).max(3);
+
+const cardIdsQuery = z.object({
+  cardIds: z
+    .string()
+    .regex(/^\d+(,\d+){0,199}$/)
+    .transform((s) => s.split(",").map(Number)),
+});
 
 const queueModeOf = (queue: z.infer<typeof queueMode>, modes?: z.infer<typeof mixedModes>) =>
   queue === "mixed" && modes ? [...new Set(modes)] : queue;
@@ -53,16 +62,16 @@ export function reviewRoutes(db: Db, now: () => Date, timeZone: string) {
 
   // Wrong options for the "pick the Korean word" screen, for the cards of a queue it already has.
   app.get("/choices", (c) => {
-    const query = z
-      .object({
-        cardIds: z
-          .string()
-          .regex(/^\d+(,\d+){0,199}$/)
-          .transform((s) => s.split(",").map(Number)),
-      })
-      .safeParse(c.req.query());
+    const query = cardIdsQuery.safeParse(c.req.query());
     if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
     return c.json({ options: distractors(db, c.get("user").id, query.data.cardIds) });
+  });
+
+  // Blocks to build each phrase of a queue from, with the wrong ones mixed in (phrases.ts).
+  app.get("/blocks", (c) => {
+    const query = cardIdsQuery.safeParse(c.req.query());
+    if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
+    return c.json({ tiles: phraseTiles(db, c.get("user").id, query.data.cardIds) });
   });
 
   // A group picked on the cards screen. POST because queued cards in it are taken into reviews.
@@ -76,6 +85,7 @@ export function reviewRoutes(db: Db, now: () => Date, timeZone: string) {
         root: z.string().trim().max(4).optional(),
         status: z.literal("queued").optional(),
         notReady: z.boolean().optional(),
+        kind: z.enum(CARD_KINDS).optional(),
       })
       .safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: "invalid_request", issues: body.error.issues }, 400);

@@ -2,7 +2,7 @@
 import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import type { Context } from "hono";
 import { readSession } from "../auth/sessions.js";
-import { cardConditions, createCards, toCardDto, updateCard, type CardDto, type CardSource } from "../cardStore.js";
+import { cardConditions, createCards, getCard, toCardDto, updateCard, type CardDto, type CardSource } from "../cardStore.js";
 import { koreanKey, normalizeKorean, type CardPatch, type NewCard, type Root } from "../cards.js";
 import type { Config } from "../config.js";
 import type { Db } from "../db/client.js";
@@ -39,6 +39,9 @@ function toStoredCard(card: CardDto): StoredCard {
     notes: optional(card.notes),
     tags: card.tags,
     ...(card.roots ? { roots: card.roots } : {}),
+    kind: card.kind,
+    ...(card.parts ? { parts: card.parts } : {}),
+    ...(card.register ? { register: card.register } : {}),
     speakable: card.speakable,
     queued: card.queued,
     source: card.source,
@@ -95,8 +98,15 @@ export class SqliteCardStore implements CardStore {
     return createCards(this.db, this.userId, input, source).created.map(toStoredCard);
   }
 
-  async find({ text, tag, root, withoutRoots, limit }: CardQuery): Promise<StoredCard[]> {
-    const conditions = cardConditions(this.userId, { tag, root, rootsUnset: withoutRoots });
+  async get(id: string): Promise<StoredCard | null> {
+    const numericId = Number(id);
+    if (!Number.isSafeInteger(numericId) || numericId <= 0) return null;
+    const card = getCard(this.db, this.userId, numericId);
+    return card ? toStoredCard(card) : null;
+  }
+
+  async find({ text, tag, root, withoutRoots, kind, limit }: CardQuery): Promise<StoredCard[]> {
+    const conditions = cardConditions(this.userId, { tag, root, rootsUnset: withoutRoots, kind });
     if (text) {
       const pattern = `%${text.toLocaleLowerCase().replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
       conditions.push(

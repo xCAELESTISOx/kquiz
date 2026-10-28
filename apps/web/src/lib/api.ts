@@ -16,6 +16,7 @@ import type {
   InviteStatus,
   Leech,
   NewCard,
+  PhraseTiles,
   QueueItem,
   QueueMode,
   ReviewInput,
@@ -141,7 +142,7 @@ function lastAnswer<T>(path: string): T | undefined {
   return lastAnswers.get(path) as T | undefined;
 }
 
-type CardsQuery = { q?: string; tag?: string; root?: string; status?: CardFilter; before?: number; limit?: number };
+type CardsQuery = { q?: string; tag?: string; root?: string; status?: CardFilter; kind?: "phrase"; before?: number; limit?: number };
 
 function cardsPath(query: CardsQuery): string {
   const params = new URLSearchParams();
@@ -267,7 +268,7 @@ export const api = {
     return promise;
   },
 
-  card: (id: number) => request<{ card: Card }>("GET", `/cards/${id}`, { fallback: (m) => ({ card: m.card(id) }) }),
+  card: (id: number) => request<{ card: Card }>("GET", `/cards/${id}`, { fallback: (m) => ({ card: m.linkedCard(id) }) }),
 
   async updateCard(id: number, patch: CardPatch): Promise<UpdateCardResult> {
     const res = await request<{ card: Card } | { error: "duplicate"; existingId: number }>("PATCH", `/cards/${id}`, {
@@ -321,6 +322,12 @@ export const api = {
   choices: (cardIds: number[]) =>
     request<{ options: Record<number, ChoiceOption[]> }>("GET", `/reviews/choices?cardIds=${cardIds.join(",")}`, {
       fallback: (m) => ({ options: m.choices(cardIds) }),
+    }),
+
+  /** Blocks to build each phrase among the cards from, with wrong ones mixed in, by card id. */
+  blocks: (cardIds: number[]) =>
+    request<{ tiles: Record<number, PhraseTiles> }>("GET", `/reviews/blocks?cardIds=${cardIds.join(",")}`, {
+      fallback: (m) => ({ tiles: m.blocks(cardIds) }),
     }),
 
   /** Every card of a group, due or not, in random order. Queued cards in it are taken into reviews. */

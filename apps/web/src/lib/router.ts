@@ -24,7 +24,7 @@ export type Route =
 
 export interface Location {
   route: Route;
-  /** The card id on "card" and "learn", the filter on "cards" ("queued", "paused"), the code on "invite". */
+  /** The card id on "card" and "learn", the filter on "cards" ("queued", "paused", "phrases"), the code on "invite". */
   param?: string;
   /** A group picked on the cards screen, reviewed instead of the day's queue: `#/review?tag=еда`. */
   group?: GroupFilter;
@@ -40,6 +40,7 @@ export function groupHash(route: GroupRoute, filter: GroupFilter): string {
   if (filter.tag) params.set("tag", filter.tag);
   if (filter.root) params.set("root", filter.root);
   if (filter.status) params.set("status", filter.status);
+  if (filter.kind) params.set("kind", filter.kind);
   return `#/${route}?${params}`;
 }
 
@@ -54,6 +55,7 @@ function parseGroup(search: string | undefined): GroupFilter | undefined {
   const root = params.get("root")?.trim();
   if (root) group.root = root;
   if (params.get("status") === "queued") group.status = "queued";
+  if (params.get("kind") === "phrase") group.kind = "phrase";
   return group;
 }
 

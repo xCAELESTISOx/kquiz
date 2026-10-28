@@ -1,0 +1,292 @@
+/* Phrases: building one from blocks (Phrase.tsx), and a phrase glossed piece by piece (PhraseParts.tsx). */
+
+.phrase-card {
+  gap: 16px;
+}
+
+.phrase-card[data-result="right"] {
+  border-color: rgb(74 222 128 / 0.35);
+}
+
+.phrase-card[data-result="wrong"] {
+  border-color: rgb(248 113 113 / 0.3);
+}
+
+.phrase-kicker {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-hi);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.phrase-whole {
+  font-size: var(--fs-3xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  text-wrap: balance;
+  animation: finished-in 520ms var(--ease-spring) backwards;
+}
+
+.phrase-prompt {
+  max-width: 22ch;
+}
+
+/* ---------- The line being built ---------- */
+
+.phrase-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 8px 6px;
+  width: 100%;
+  min-height: 64px;
+  padding: 14px 4px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.phrase-gap,
+.phrase-chip {
+  height: 48px;
+  border-radius: var(--radius-sm);
+}
+
+.phrase-gap {
+  width: 64px;
+  border: 1.5px dashed var(--border-strong);
+  opacity: 0.7;
+}
+
+.phrase-gap[data-state="wrong"] {
+  border-color: rgb(248 113 113 / 0.6);
+}
+
+.phrase-chip {
+  padding: 0 14px;
+  border: 1px solid rgb(124 140 255 / 0.5);
+  background: var(--accent-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 24px;
+  font-weight: 700;
+  animation: rating-in var(--dur-2) var(--ease-spring);
+  transition:
+    border-color var(--dur-2) var(--ease),
+    background var(--dur-2) var(--ease),
+    color var(--dur-2) var(--ease),
+    transform var(--dur-1) var(--ease-spring);
+}
+
+.phrase-chip:active:not(:disabled) {
+  transform: scale(0.94);
+  transition-duration: var(--dur-press);
+}
+
+.phrase-chip:disabled {
+  cursor: default;
+}
+
+.phrase-chip[data-state="right"] {
+  border-color: rgb(74 222 128 / 0.6);
+  background: rgb(74 222 128 / 0.12);
+  color: var(--ok);
+}
+
+.phrase-chip[data-state="wrong"] {
+  border-color: rgb(248 113 113 / 0.6);
+  background: rgb(248 113 113 / 0.12);
+  color: var(--wrong);
+  text-decoration: line-through;
+  text-decoration-color: rgb(248 113 113 / 0.5);
+}
+
+.phrase-end {
+  align-self: center;
+  color: var(--text-faint);
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.phrase-answer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  animation: answer-in var(--dur-2) var(--ease-out);
+}
+
+.phrase-correct {
+  color: var(--ok);
+  font-size: var(--fs-2xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+/* ---------- The bank of blocks ---------- */
+
+.phrase-actions {
+  gap: 14px;
+}
+
+.phrase-bank {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.phrase-tile {
+  min-height: 52px;
+  padding: 0 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  color: var(--text);
+  font: inherit;
+  font-size: 22px;
+  font-weight: 700;
+  transition:
+    transform var(--dur-1) var(--ease-spring),
+    opacity var(--dur-2) var(--ease),
+    background var(--dur-1) var(--ease);
+  animation: rating-in var(--dur-2) var(--ease-spring) backwards;
+  animation-delay: calc(var(--i, 0) * 35ms);
+}
+
+.phrase-tile:active:not(:disabled) {
+  transform: scale(0.92);
+  transition-duration: var(--dur-press);
+}
+
+/* A used block leaves its outline, so the bank doesn't jump. */
+.phrase-tile:disabled {
+  opacity: 0.18;
+  box-shadow: none;
+  cursor: default;
+}
+
+.phrase-buttons {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.phrase-buttons > .dont-know {
+  color: var(--text-muted);
+}
+
+/* ---------- Pieces of a phrase, glossed ---------- */
+
+.parts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.part-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 64px;
+  min-height: var(--tap);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.part-body.is-linked {
+  border-color: rgb(124 140 255 / 0.35);
+  background: linear-gradient(180deg, var(--accent-soft), transparent 140%), var(--surface-raised);
+  transition:
+    border-color var(--dur-1) var(--ease),
+    transform var(--dur-1) var(--ease-spring);
+}
+
+.part-body.is-linked:active {
+  transform: scale(0.95);
+  transition-duration: var(--dur-press);
+}
+
+.part-ko {
+  font-size: var(--fs-md);
+  font-weight: 700;
+}
+
+.part-meaning {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  line-height: 1.25;
+  max-width: 16ch;
+  text-wrap: balance;
+}
+
+.part-base {
+  color: var(--accent-hi);
+  font-size: 12px;
+}
+
+.register {
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.register-formal {
+  border-color: rgb(251 191 36 / 0.35);
+  color: var(--weak);
+}
+
+.register-casual {
+  border-color: rgb(124 140 255 / 0.35);
+  color: var(--accent-hi);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phrase-whole,
+  .phrase-chip,
+  .phrase-tile,
+  .phrase-answer {
+    animation: none;
+  }
+}
+
+/* ---------- Editing a phrase ---------- */
+
+.register-edit {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.register-edit legend {
+  padding: 0;
+  margin-bottom: 6px;
+}
+
+.register-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

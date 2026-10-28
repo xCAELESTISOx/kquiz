@@ -241,6 +241,7 @@ describe("mcp tools", () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
       "add_cards",
+      "add_phrases",
       "add_sound_drills",
       "find_cards",
       "get_leeches",
@@ -275,6 +276,37 @@ describe("mcp tools", () => {
 
     const stored = [...cards.cards.values()].find((c) => c.korean === "읽다")!;
     expect(stored).toMatchObject({ source: "claude", examples, tags: ["глаголы"] });
+  });
+
+  it("adds phrases with their parts, and edits them without examples", async () => {
+    const client = await mcpClient((await connect()).access_token);
+    const parts = [
+      { ko: "어떻게", meaning: "как" },
+      { ko: "지내요", base: "지내다", meaning: "поживать" },
+    ];
+    const added = parse(
+      await client.callTool({
+        name: "add_phrases",
+        arguments: {
+          phrases: [
+            { korean: "어떻게 지내요?", meaning: "Как поживаешь?", parts, register: "polite", notes: "при встрече" },
+            { korean: "잘 먹겠습니다", meaning: "Приятного аппетита", parts: [{ ko: "jal", meaning: "хорошо" }] },
+          ],
+        },
+      }),
+    );
+    expect(added.created.map((c: { korean: string }) => c.korean)).toEqual(["어떻게 지내요?"]);
+    expect(added.rejected).toHaveLength(1);
+    const id = added.created[0].id;
+    expect(cards.cards.get(id)).toMatchObject({ kind: "phrase", parts, register: "polite", notes: "при встрече" });
+
+    const found = parse(await client.callTool({ name: "find_cards", arguments: { kind: "phrase" } }));
+    expect(found.cards.map((c: { id: string }) => c.id)).toEqual([id]);
+
+    const withExamples = await client.callTool({ name: "update_card", arguments: { id, changes: { examples } } });
+    expect(withExamples.isError).toBe(true);
+    const updated = parse(await client.callTool({ name: "update_card", arguments: { id, changes: { register: "casual", meaning: "Как дела?" } } }));
+    expect(updated.card).toMatchObject({ meaning: "Как дела?", register: "casual", parts });
   });
 
   it("requires exactly three examples on every new card", async () => {

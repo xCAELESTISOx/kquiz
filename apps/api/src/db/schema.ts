@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import type { Example, Root } from "../cards.js";
+import type { Example, PhrasePart, Root } from "../cards.js";
 import { blob, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 const timestamp = (name: string) => integer(name, { mode: "timestamp_ms" });
@@ -51,6 +51,12 @@ export const cards = sqliteTable(
     tags: text("tags", { mode: "json" }).$type<string[]>().notNull().default(sql`'[]'`),
     // Sino-Korean roots (cards.ts rootSchema). Null: not filled in yet; []: a native word, no roots.
     roots: text("roots", { mode: "json" }).$type<Root[]>(),
+    // A word, or a set phrase learned whole (안녕히 가세요). A phrase has no examples: `parts` breaks it
+    // into its pieces instead, and it is built from blocks rather than translated (phrases.ts).
+    kind: text("kind", { enum: ["word", "phrase"] }).notNull().default("word"),
+    parts: text("parts", { mode: "json" }).$type<PhrasePart[]>(),
+    // How polite a phrase is: 합쇼체, 해요체 or 반말.
+    register: text("register", { enum: ["formal", "polite", "casual"] }),
     speakable: integer("speakable", { mode: "boolean" }).notNull(),
     source: text("source", { enum: ["app", "claude", "bulk"] }).notNull(),
     language: text("language").notNull().default("ko"),

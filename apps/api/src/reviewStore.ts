@@ -13,8 +13,12 @@ export type QueueItem = { card: CardDto; mode: ReviewMode; due: string; state: n
 // voice is a poor model for training the ear, so until the recording is there the card waits.
 const hasCurrentAudio = sql`exists (select 1 from ${cardAudio} where ${cardAudio.cardId} = ${cards.id} and ${cardAudio.text} = ${cards.korean})`;
 
-/** Review states a mode can actually show, for queries over `review_states` joined with `cards`; paused cards never. */
-export const reviewable = sql`${cards.suspended} = 0 and (${reviewStates.mode} = 'meaning' or (${reviewStates.mode} = 'speech' and ${cards.speakable} = 1) or (${reviewStates.mode} = 'listening' and ${hasCurrentAudio}))`;
+/**
+ * Review states a mode can actually show, for queries over `review_states` joined with `cards`; paused
+ * cards never. Phrases are built from blocks (meaning) and heard (listening); saying them aloud is
+ * not there yet, so their speech schedule waits.
+ */
+export const reviewable = sql`${cards.suspended} = 0 and (${reviewStates.mode} = 'meaning' or (${reviewStates.mode} = 'speech' and ${cards.speakable} = 1 and ${cards.kind} = 'word') or (${reviewStates.mode} = 'listening' and ${hasCurrentAudio}))`;
 
 /** A single mode, or all of them mixed in one session, or the given ones mixed. */
 export type QueueMode = ReviewMode | "mixed" | readonly ReviewMode[];
@@ -59,7 +63,7 @@ export function dueQueue(db: Db, userId: number, mode: QueueMode, now = new Date
 
 export const GROUP_LIMIT = 200;
 
-export type GroupFilter = Pick<CardQuery, "q" | "tag" | "root" | "status" | "notReady">;
+export type GroupFilter = Pick<CardQuery, "q" | "tag" | "root" | "status" | "notReady" | "kind">;
 
 /**
  * A group the owner picked on the cards screen (a search, a tag), due or not, in random order.

@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "re
 import { api, remembered } from "../lib/api";
 import { isKoreanOnly } from "../lib/korean";
 import { canSpeak, speak } from "../lib/speech";
-import type { Card, CardPatch, Example } from "../lib/types";
+import { REGISTER_LABELS } from "../lib/phrase";
+import type { Card, CardPatch, Example, Register } from "../lib/types";
 import { BackIcon, LearnIcon, SpeakerIcon } from "../ui/icons";
 import { Menu, MenuItem } from "../ui/Menu";
 import { Spinner } from "../ui/Spinner";
+import { PhraseParts } from "../ui/PhraseParts";
 import { useFamily, WordFamily } from "../ui/WordFamily";
 import { lastCardsHash } from "./Cards";
 
@@ -21,6 +23,7 @@ interface Draft {
   examples: Example[];
   speakable: boolean;
   suspended: boolean;
+  register: Register | null;
 }
 
 function toDraft(card: Card): Draft {
@@ -34,6 +37,7 @@ function toDraft(card: Card): Draft {
     examples: Array.from({ length: EXAMPLES }, (_, i) => card.examples[i] ?? { ko: "", ru: "" }),
     speakable: card.speakable,
     suspended: card.suspended,
+    register: card.register,
   };
 }
 
@@ -53,6 +57,7 @@ function diff(card: Card, draft: Draft): CardPatch {
   if (JSON.stringify(examples) !== JSON.stringify(card.examples)) patch.examples = examples;
   if (draft.speakable !== card.speakable) patch.speakable = draft.speakable;
   if (draft.suspended !== card.suspended) patch.suspended = draft.suspended;
+  if (draft.register && draft.register !== card.register) patch.register = draft.register;
   return patch;
 }
 
@@ -99,7 +104,7 @@ export function CardScreen({ id }: { id: number }) {
   async function save(event: FormEvent) {
     event.preventDefault();
     if (!card || !draft || !dirty || busy) return;
-    if (!draft.korean.trim() || !draft.meaning.trim()) return setError("Слово и перевод не могут быть пустыми");
+    if (!draft.korean.trim() || !draft.meaning.trim()) return setError(`${card.kind === "phrase" ? "Фраза" : "Слово"} и перевод не могут быть пустыми`);
     if (fullExamples(draft.examples).some((e) => !e.ko || !e.ru)) return setError("У каждого примера нужен и перевод");
     setBusy("save");
     setError(undefined);
@@ -168,11 +173,13 @@ export function CardScreen({ id }: { id: number }) {
                 <SpeakerIcon />
               </button>
             )}
-            <Menu label="Ещё">
-              <MenuItem href={`#/learn/${card.id}`} icon={<LearnIcon />} hint="Заучить слово по шагам, не трогая статистику">
-                Учить
-              </MenuItem>
-            </Menu>
+            {card.kind === "word" && (
+              <Menu label="Ещё">
+                <MenuItem href={`#/learn/${card.id}`} icon={<LearnIcon />} hint="Заучить слово по шагам, не трогая статистику">
+                  Учить
+                </MenuItem>
+              </Menu>
+            )}
           </div>
         )}
       </header>
@@ -202,8 +209,19 @@ export function CardScreen({ id }: { id: number }) {
             </div>
           )}
 
+          {card.kind === "phrase" && (
+            <div className="field">
+              <span className="field-label">Фраза по частям</span>
+              {card.parts?.length ? (
+                <PhraseParts card={card} />
+              ) : (
+                <p className="muted small">Разбора пока нет. Попроси Claude разобрать фразу.</p>
+              )}
+            </div>
+          )}
+
           <label className="field">
-            <span className="field-label">По-корейски</span>
+            <span className="field-label">{card.kind === "phrase" ? "Фраза по-корейски" : "По-корейски"}</span>
             <input
               className="input input-korean"
               lang="ko"
@@ -248,33 +266,48 @@ export function CardScreen({ id }: { id: number }) {
             </label>
           </div>
 
-          <fieldset className="examples-edit">
-            <legend className="field-label">Примеры</legend>
-            {draft.examples.map((example, i) => (
-              <div key={i} className="example-edit">
-                <input
-                  className="input"
-                  lang="ko"
-                  autoComplete="off"
-                  aria-label={`Пример ${i + 1}`}
-                  placeholder={`Пример ${i + 1}`}
-                  value={example.ko}
-                  onChange={(e) => setExample(i, "ko", e.target.value)}
-                />
-                <input
-                  className="input input-sub"
-                  autoComplete="off"
-                  aria-label={`Перевод примера ${i + 1}`}
-                  placeholder="перевод"
-                  value={example.ru}
-                  onChange={(e) => setExample(i, "ru", e.target.value)}
-                />
+          {card.kind === "phrase" && (
+            <fieldset className="register-edit">
+              <legend className="field-label">Вежливость</legend>
+              <div className="register-options">
+                {(Object.keys(REGISTER_LABELS) as Register[]).map((r) => (
+                  <button key={r} type="button" className="chip" aria-pressed={draft.register === r} onClick={() => set("register", r)}>
+                    {REGISTER_LABELS[r]}
+                  </button>
+                ))}
               </div>
-            ))}
-          </fieldset>
+            </fieldset>
+          )}
+
+          {card.kind === "word" && (
+            <fieldset className="examples-edit">
+              <legend className="field-label">Примеры</legend>
+              {draft.examples.map((example, i) => (
+                <div key={i} className="example-edit">
+                  <input
+                    className="input"
+                    lang="ko"
+                    autoComplete="off"
+                    aria-label={`Пример ${i + 1}`}
+                    placeholder={`Пример ${i + 1}`}
+                    value={example.ko}
+                    onChange={(e) => setExample(i, "ko", e.target.value)}
+                  />
+                  <input
+                    className="input input-sub"
+                    autoComplete="off"
+                    aria-label={`Перевод примера ${i + 1}`}
+                    placeholder="перевод"
+                    value={example.ru}
+                    onChange={(e) => setExample(i, "ru", e.target.value)}
+                  />
+                </div>
+              ))}
+            </fieldset>
+          )}
 
           <label className="field">
-            <span className="field-label">Заметка</span>
+            <span className="field-label">{card.kind === "phrase" ? "Когда говорят" : "Заметка"}</span>
             <textarea className="input textarea" rows={2} value={draft.notes} onChange={(e) => set("notes", e.target.value)} />
           </label>
           <label className="field">
@@ -289,13 +322,15 @@ export function CardScreen({ id }: { id: number }) {
           </label>
 
           <div className="toggles">
-            <Toggle
-              checked={draft.speakable && readyForSpeech}
-              disabled={!readyForSpeech}
-              onChange={(v) => set("speakable", v)}
-              label="Тренировать произношение"
-              hint={readyForSpeech ? "Карточка попадает в «Произношение»" : "Только для слов из одного хангыля"}
-            />
+            {card.kind === "word" && (
+              <Toggle
+                checked={draft.speakable && readyForSpeech}
+                disabled={!readyForSpeech}
+                onChange={(v) => set("speakable", v)}
+                label="Тренировать произношение"
+                hint={readyForSpeech ? "Карточка попадает в «Произношение»" : "Только для слов из одного хангыля"}
+              />
+            )}
             <Toggle
               checked={draft.suspended}
               onChange={(v) => set("suspended", v)}
