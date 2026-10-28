@@ -5,7 +5,8 @@ describe("choice", () => {
   it("rates the pick", () => {
     expect(choiceRating(false, 1000)).toBe("again");
     expect(choiceRating(true, 3000)).toBe("good");
-    expect(choiceRating(true, 15_000)).toBe("hard");
+    expect(choiceRating(true, 6_000)).toBe("good");
+    expect(choiceRating(true, 8_000)).toBe("hard");
   });
 
   it("shuffles without losing or changing the input", () => {
