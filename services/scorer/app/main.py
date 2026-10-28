@@ -102,8 +102,12 @@ async def _unload_idle_synth(state) -> None:
 
 
 @app.post("/tts")
-async def speak(request: Request, text: str = Query(min_length=1, max_length=tts.MAX_TEXT)) -> Response:
-    """Reference audio for a card as MP3. Called by the API's background worker only."""
+async def speak(
+    request: Request,
+    text: str = Query(min_length=1, max_length=tts.MAX_TEXT),
+    voice: str = Query(default=tts.DEFAULT_VOICE, pattern=tts.VOICE_PATTERN),
+) -> Response:
+    """Reference audio as MP3 in one of the built-in voices. Called by the API's background worker only."""
     text = text.strip()
     if not text:
         raise HTTPException(status_code=422, detail="text is empty")
@@ -114,7 +118,7 @@ async def speak(request: Request, text: str = Query(min_length=1, max_length=tts
     async def job() -> bytes:
         async with state.tts_job:
             try:
-                return await run_in_threadpool(lambda: tts.speak(_synth(state), text))
+                return await run_in_threadpool(lambda: tts.speak(_synth(state), text, voice))
             finally:
                 state.synth_used_at = time.monotonic()
 
@@ -136,7 +140,8 @@ async def speak(request: Request, text: str = Query(min_length=1, max_length=tts
     except Exception as exc:
         log.exception("tts failed")
         raise HTTPException(status_code=503, detail=f"tts failed: {type(exc).__name__}") from exc
-    return Response(mp3, media_type="audio/mpeg")
+    # Says which voice it is, so the API never files an older scorer's default voice under another.
+    return Response(mp3, media_type="audio/mpeg", headers={"X-TTS-Voice": voice})
 
 
 @app.get("/g2p")

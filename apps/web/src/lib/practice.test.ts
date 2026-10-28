@@ -11,6 +11,7 @@ const drill = (id: number, ready = true): Drill => ({
   correct: 0,
   wrong: 0,
   ready,
+  voices: ["M1"],
 });
 
 describe("buildRound", () => {
@@ -23,6 +24,7 @@ describe("buildRound", () => {
     expect(used.has(9)).toBe(false);
     for (let i = 1; i < round.length; i++) expect(round[i]!.drill.id).not.toBe(round[i - 1]!.drill.id);
     for (const t of round) expect(t.target).toBeLessThan(t.drill.words.length);
+    for (const t of round) expect([undefined, "M1"]).toContain(t.voice);
   });
 
   it("is empty with nothing playable", () => {

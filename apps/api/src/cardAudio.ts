@@ -1,16 +1,18 @@
 // Reference audio for cards: services/scorer's /tts (Supertonic) makes an MP3 per card, a
 // background worker asks for it once and keeps it in card_audio (examples and drill words go to
-// speech_audio, see practice.ts). Until it is there, or when the
+// speech_audio, see practice.ts; other voices of card and drill words to voice_audio, see voices.ts).
+// Until it is there, or when the
 // scorer is down, the web app falls back to the phone's own voice.
 import { and, asc, eq, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import type { Db } from "./db/client.js";
 import { cardAudio, cards } from "./db/schema.js";
 import { nextTextWithoutAudio, pruneSpeechAudio, saveSpeechAudio } from "./practice.js";
 import { OWNER_ID } from "./users.js";
+import { EXTRA_VOICES, getVoiceAudio, nextVoiceJob, pruneVoiceAudio, saveVoiceAudio, type ExtraVoice } from "./voices.js";
 
 export interface Speaker {
-  /** MP3 of `text` read aloud. */
-  speak(text: string): Promise<Uint8Array>;
+  /** MP3 of `text` read aloud, in the scorer's default voice unless `voice` is given. */
+  speak(text: string, voice?: ExtraVoice): Promise<Uint8Array>;
 }
 
 /** The scorer refused the text itself; asking again won't help. Anything else is worth a retry. */
@@ -21,13 +23,16 @@ const TIMEOUT_MS = 70_000;
 
 export function httpSpeaker(baseUrl: string, fetchImpl: typeof fetch = fetch): Speaker {
   return {
-    async speak(text) {
-      const res = await fetchImpl(`${baseUrl}/tts?text=${encodeURIComponent(text)}`, {
+    async speak(text, voice) {
+      const query = `text=${encodeURIComponent(text)}${voice ? `&voice=${voice}` : ""}`;
+      const res = await fetchImpl(`${baseUrl}/tts?${query}`, {
         method: "POST",
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
       if (res.status === 422) throw new BadTextError(await res.text());
       if (!res.ok) throw new Error(`scorer /tts answered ${res.status}`);
+      // A scorer from before voices ignores the parameter and answers in its default one.
+      if (voice && res.headers.get("x-tts-voice") !== voice) throw new Error(`scorer /tts did not use voice ${voice}`);
       return new Uint8Array(await res.arrayBuffer());
     },
   };
@@ -35,8 +40,15 @@ export function httpSpeaker(baseUrl: string, fetchImpl: typeof fetch = fetch): S
 
 export type StoredAudio = { data: Uint8Array; mime: string; etag: string };
 
-/** The card's audio, if the card is `userId`'s and the audio was made from its current Korean. */
-export function getCardAudio(db: Db, userId: number, cardId: number): StoredAudio | undefined {
+/**
+ * The card's audio, if the card is `userId`'s and the audio was made from its current Korean; with
+ * `voice`, its word read by that other voice.
+ */
+export function getCardAudio(db: Db, userId: number, cardId: number, voice?: ExtraVoice): StoredAudio | undefined {
+  if (voice) {
+    const card = db.select({ korean: cards.korean }).from(cards).where(and(eq(cards.id, cardId), eq(cards.userId, userId))).get();
+    return card && getVoiceAudio(db, card.korean, voice);
+  }
   const row = db
     .select({ data: cardAudio.data, mime: cardAudio.mime, createdAt: cardAudio.createdAt })
     .from(cardAudio)
@@ -77,14 +89,19 @@ export function saveCardAudio(db: Db, cardId: number, text: string, data: Uint8A
 // A text the scorer refused is tried again after a day, in case the model or the text changed.
 const BAD_TEXT_RETRY_MS = 24 * 60 * 60 * 1000;
 
-type Job = { key: string; text: string; save(mp3: Uint8Array): void; ready?: Uint8Array };
+type Job = { key: string; text: string; voice?: ExtraVoice; save(mp3: Uint8Array): void; ready?: Uint8Array };
 
 /**
  * Makes audio for every card that lacks it, one at a time, then for example sentences and drill
- * words (practice.ts), one of those per pass. One pass stops at the first failure that isn't about the text (scorer down,
+ * words (practice.ts), then other voices of card and drill words (voices.ts), one of those per pass. One pass stops at the first failure that isn't about the text (scorer down,
  * busy, slow) and waits for the next tick.
  */
-export function audioWorker(db: Db, speaker: Speaker, now: () => Date = () => new Date()) {
+export function audioWorker(
+  db: Db,
+  speaker: Speaker,
+  now: () => Date = () => new Date(),
+  voices: readonly ExtraVoice[] = EXTRA_VOICES,
+) {
   const badText = new Map<string, number>();
   let running = false;
   let failing = false;
@@ -106,7 +123,16 @@ export function audioWorker(db: Db, speaker: Speaker, now: () => Date = () => ne
     }
     const skipTexts = new Set([...badText.keys()].filter((k) => k.startsWith("text:")).map((k) => k.slice(5)));
     const text = nextTextWithoutAudio(db, skipTexts);
-    return text === undefined ? undefined : { key: `text:${text}`, text, save: (mp3) => saveSpeechAudio(db, text, mp3, now()) };
+    if (text !== undefined) return { key: `text:${text}`, text, save: (mp3) => saveSpeechAudio(db, text, mp3, now()) };
+    const skipVoices = new Set([...badText.keys()].filter((k) => k.startsWith("voice:")).map((k) => k.slice(6)));
+    const voiced = nextVoiceJob(db, skipVoices, voices);
+    return (
+      voiced && {
+        key: `voice:${voiced.voice}:${voiced.text}`,
+        ...voiced,
+        save: (mp3) => saveVoiceAudio(db, voiced.text, voiced.voice, mp3, now()),
+      }
+    );
   }
 
   async function runOnce(): Promise<number> {
@@ -120,6 +146,7 @@ export function audioWorker(db: Db, speaker: Speaker, now: () => Date = () => ne
         const job = nextJob();
         if (!job) {
           pruneSpeechAudio(db);
+          pruneVoiceAudio(db);
           break;
         }
         if (job.ready) {
@@ -127,13 +154,13 @@ export function audioWorker(db: Db, speaker: Speaker, now: () => Date = () => ne
           continue;
         }
         try {
-          job.save(await speaker.speak(job.text));
+          job.save(await speaker.speak(job.text, job.voice));
           made++;
           if (failing) console.log("tts: back to normal");
           failing = false;
-          // Examples and drill words are a long, low-priority backfill: one per tick, so new cards
-          // and pronunciation scoring get the CPU in between.
-          if (job.key.startsWith("text:")) break;
+          // Examples, drill words and other voices are a long, low-priority backfill: one per tick,
+          // so new cards and pronunciation scoring get the CPU in between.
+          if (!job.key.startsWith("card:")) break;
         } catch (error) {
           if (error instanceof BadTextError) {
             console.warn(`tts: ${job.key} refused: ${error.message}`);

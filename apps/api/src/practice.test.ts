@@ -36,7 +36,7 @@ describe("practice audio", () => {
   it("is made after the cards' own audio: drill words, then examples", async () => {
     const t = await setup();
     const { speaker, calls } = fakeSpeaker();
-    const worker = audioWorker(t.db, speaker, () => t.clock.now);
+    const worker = audioWorker(t.db, speaker, () => t.clock.now, []);
     // Cards all at once, then one practice text per pass.
     expect(await worker.runOnce()).toBe(3);
     expect(calls).toEqual(["물", "밥", "불"]);
@@ -56,7 +56,7 @@ describe("practice audio", () => {
   it("is dropped when the example changes", async () => {
     const t = await setup();
     const { speaker, calls } = fakeSpeaker();
-    const worker = audioWorker(t.db, speaker, () => t.clock.now);
+    const worker = audioWorker(t.db, speaker, () => t.clock.now, []);
     while ((await worker.runOnce()) > 0);
     const changed = [{ ko: "물을 많이 마셔요.", ru: "Пью много воды." }, ...examples.slice(1)];
     await t.request(`/cards/${t.id}`, { method: "PATCH", body: { examples: changed } });
@@ -71,7 +71,7 @@ describe("shadowing", () => {
   it("offers only examples that have audio, one per card", async () => {
     const t = await setup();
     expect((await t.request("/practice/shadowing")).json.items).toEqual([]);
-    const worker = audioWorker(t.db, fakeSpeaker().speaker, () => t.clock.now);
+    const worker = audioWorker(t.db, fakeSpeaker().speaker, () => t.clock.now, []);
     while ((await worker.runOnce()) > 0);
     const { items } = (await t.request("/practice/shadowing?limit=5")).json;
     expect(items).toHaveLength(1);
@@ -87,7 +87,7 @@ describe("sound drills", () => {
     let { drills } = (await t.request("/practice/drills")).json;
     expect(drills.map((d: { ready: boolean }) => d.ready)).toEqual([false, false]);
 
-    const worker = audioWorker(t.db, fakeSpeaker().speaker, () => t.clock.now);
+    const worker = audioWorker(t.db, fakeSpeaker().speaker, () => t.clock.now, []);
     while ((await worker.runOnce()) > 0);
     const [first, second] = (await t.request("/practice/drills")).json.drills;
     expect(first.ready && second.ready).toBe(true);

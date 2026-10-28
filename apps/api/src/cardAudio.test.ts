@@ -34,7 +34,7 @@ describe("card audio", () => {
     expect((await t.request(`/cards/${t.ids[0]}/audio`)).status).toBe(404);
 
     const { speaker, calls } = fakeSpeaker();
-    const worker = audioWorker(t.db, speaker, () => t.clock.now);
+    const worker = audioWorker(t.db, speaker, () => t.clock.now, []);
     expect(await worker.runOnce()).toBe(2);
     expect(await worker.runOnce()).toBe(0);
     expect(calls).toEqual(["물", "국물"]);
@@ -61,14 +61,14 @@ describe("card audio", () => {
     createCards(t.db, OWNER_ID, [{ korean: "물", meaning: "вода", tags: [] }], "app");
 
     const { speaker, calls } = fakeSpeaker();
-    expect(await audioWorker(t.db, speaker, () => t.clock.now).runOnce()).toBe(2);
+    expect(await audioWorker(t.db, speaker, () => t.clock.now, []).runOnce()).toBe(2);
     expect(calls).toEqual(["물", "불"]);
   });
 
   it("is made again when the Korean changes and goes with the card", async () => {
     const t = await withCards("물");
     const { speaker, calls } = fakeSpeaker();
-    const worker = audioWorker(t.db, speaker, () => t.clock.now);
+    const worker = audioWorker(t.db, speaker, () => t.clock.now, []);
     await worker.runOnce();
 
     await t.request(`/cards/${t.ids[0]}`, { method: "PATCH", body: { korean: "냉수" } });
@@ -88,7 +88,7 @@ describe("card audio", () => {
     const { speaker, calls } = fakeSpeaker((text) =>
       text === "물" ? new BadTextError("no") : down && text === "국물" ? new Error("scorer /tts answered 503") : undefined,
     );
-    const worker = audioWorker(t.db, speaker, () => t.clock.now);
+    const worker = audioWorker(t.db, speaker, () => t.clock.now, []);
     vi.spyOn(console, "warn").mockImplementation(() => {});
 
     expect(await worker.runOnce()).toBe(0);
@@ -106,13 +106,21 @@ describe("card audio", () => {
 
 describe("httpSpeaker", () => {
   it("posts the text and tells refused text from other failures", async () => {
-    const fetchImpl = vi.fn(async (url: string | URL | Request) =>
-      String(url).includes("%EB%AC%BC") ? new Response(mp3("물")) : new Response("bad", { status: 422 }),
-    );
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      const voice = new URL(String(url)).searchParams.get("voice");
+      return String(url).includes("%EB%AC%BC")
+        ? new Response(mp3("물"), { headers: voice ? { "x-tts-voice": voice } : {} })
+        : new Response("bad", { status: 422 });
+    });
     const speaker = httpSpeaker("http://scorer", fetchImpl as typeof fetch);
     expect(new TextDecoder().decode(await speaker.speak("물"))).toBe("mp3:물");
     expect(fetchImpl.mock.calls[0]![0]).toBe("http://scorer/tts?text=%EB%AC%BC");
     await expect(speaker.speak("x")).rejects.toBeInstanceOf(BadTextError);
+    await speaker.speak("물", "M3");
+    expect(fetchImpl.mock.calls[2]![0]).toBe("http://scorer/tts?text=%EB%AC%BC&voice=M3");
+    // An older scorer that answers in its default voice is not taken for another one.
+    const old = httpSpeaker("http://scorer", (async () => new Response(mp3("물"))) as typeof fetch);
+    await expect(old.speak("물", "M1")).rejects.not.toBeInstanceOf(BadTextError);
 
     const down = httpSpeaker("http://scorer", (async () => new Response("", { status: 503 })) as typeof fetch);
     await expect(down.speak("물")).rejects.not.toBeInstanceOf(BadTextError);

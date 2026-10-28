@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { request } from "./api";
 import { resume, shortClip } from "./audioSession";
+import { pickVoice } from "./voices";
 import { compareIntonation, loadReference, resampleTo, wavSamples, type IntonationComparison } from "./intonation";
 
 export interface ShadowItem {
@@ -20,6 +21,8 @@ export interface Drill {
   wrong: number;
   /** Every word has its reference audio. */
   ready: boolean;
+  /** Other voices every word can be heard in besides the default one (lib/voices.ts). */
+  voices: string[];
 }
 
 // Dev without apps/api: a little to look at. The audio itself 404s there.
@@ -39,6 +42,7 @@ const DEMO_DRILLS: Drill[] = [
     correct: 2,
     wrong: 3,
     ready: true,
+    voices: [],
   },
   {
     id: 2,
@@ -50,6 +54,7 @@ const DEMO_DRILLS: Drill[] = [
     correct: 4,
     wrong: 1,
     ready: true,
+    voices: [],
   },
 ];
 
@@ -69,9 +74,10 @@ const ROUND = 12;
 // The hardest few sets come round again and again; the rest wait for the next round.
 const FOCUS = 6;
 
-export type Trial = { drill: Drill; target: number };
+/** A word of a drill to recognise, in one voice for the whole trial; undefined is the default one. */
+export type Trial = { drill: Drill; target: number; voice?: string };
 
-/** A round over the hardest drills, each trial a random word of its set. */
+/** A round over the hardest drills, each trial a random word of its set in a random voice. */
 export function buildRound(drills: Drill[], random = Math.random): Trial[] {
   const pool = drills.filter((d) => d.ready).slice(0, FOCUS);
   if (!pool.length) return [];
@@ -80,13 +86,14 @@ export function buildRound(drills: Drill[], random = Math.random): Trial[] {
   for (let i = 0; i < ROUND; i++) {
     const choices = pool.length > 1 ? pool.filter((d) => d !== last) : pool;
     const drill = choices[Math.floor(random() * choices.length)]!;
-    trials.push({ drill, target: Math.floor(random() * drill.words.length) });
+    trials.push({ drill, target: Math.floor(random() * drill.words.length), voice: pickVoice(drill.voices, random) });
     last = drill;
   }
   return trials;
 }
 
-export const textAudioUrl = (text: string) => `/api/practice/audio?text=${encodeURIComponent(text)}`;
+export const textAudioUrl = (text: string, voice?: string) =>
+  `/api/practice/audio?text=${encodeURIComponent(text)}${voice ? `&voice=${voice}` : ""}`;
 export const cardAudioUrl = (cardId: number) => `/api/cards/${cardId}/audio`;
 
 // ---- Playback ----
