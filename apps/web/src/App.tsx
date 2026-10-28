@@ -20,7 +20,7 @@ import { TodayScreen } from "./screens/Today";
 import { TabBar } from "./ui/TabBar";
 
 export function App() {
-  const { route, param, group, root } = useLocation();
+  const { route, param, group, root, all } = useLocation();
 
   // Today lifts the splash itself once its numbers are in.
   useEffect(() => {
@@ -43,8 +43,9 @@ export function App() {
   const groupKey = group && JSON.stringify(group);
   if (route === "review") return <ReviewScreen key={`meaning${groupKey}`} mode="meaning" group={group} />;
   if (route === "listen") return <ReviewScreen key={`listening${groupKey}`} mode="listening" group={group} />;
-  if (route === "learn") return <LearnScreen key={param} id={Number(param)} />;
-  if (route === "mix") return <ReviewScreen key={`mixed${groupKey}`} mode="mixed" group={group} />;
+  if (route === "learn")
+    return param ? <LearnScreen key={param} id={Number(param)} /> : <LearnScreen key={`group${groupKey}`} group={group} />;
+  if (route === "mix") return <ReviewScreen key={`mixed${groupKey}${all ? ":all" : ""}`} mode="mixed" group={group} all={all} />;
   if (route === "speech") return <SpeechScreen key={`speech${groupKey}`} group={group} />;
   if (route === "choose") return <ChoiceScreen key={`choose${groupKey}`} group={group} />;
   if (route === "shadow") return <ShadowingScreen />;

@@ -24,23 +24,26 @@ export type Route =
 
 export interface Location {
   route: Route;
-  /** The card id on "card" and "learn", the filter on "cards" ("queued", "paused", "phrases"), the code on "invite". */
+  /** The card id on "card" and "learn" (one word), the filter on "cards" ("queued", "paused", "phrases"), the code on "invite". */
   param?: string;
   /** A group picked on the cards screen, reviewed instead of the day's queue: `#/review?tag=еда`. */
   group?: GroupFilter;
   /** On "cards": the hanja whose word family is shown, `#/cards?root=學`. */
   root?: string;
+  /** On "mix": every way at once, without asking what to mix (`#/mix?tag=еда&all=1`). */
+  all?: boolean;
 }
 
-type GroupRoute = "review" | "speech" | "choose" | "listen" | "mix";
+type GroupRoute = "review" | "speech" | "choose" | "listen" | "mix" | "learn";
 
-export function groupHash(route: GroupRoute, filter: GroupFilter): string {
+export function groupHash(route: GroupRoute, filter: GroupFilter, extra?: { all?: boolean }): string {
   const params = new URLSearchParams();
   if (filter.q) params.set("q", filter.q);
   if (filter.tag) params.set("tag", filter.tag);
   if (filter.root) params.set("root", filter.root);
   if (filter.status) params.set("status", filter.status);
   if (filter.kind) params.set("kind", filter.kind);
+  if (extra?.all) params.set("all", "1");
   return `#/${route}?${params}`;
 }
 
@@ -65,7 +68,8 @@ export function parseHash(hash: string): Location {
   const [head, param] = path!.split("/");
   if (head === "review" || head === "speech" || head === "choose" || head === "listen" || head === "mix") {
     const group = parseGroup(search);
-    return group ? { route: head, group } : { route: head };
+    const all = head === "mix" && new URLSearchParams(search ?? "").get("all") === "1";
+    return { route: head, ...(group && { group }), ...(all && { all }) };
   }
   if (
     head === "add" ||
@@ -79,6 +83,8 @@ export function parseHash(hash: string): Location {
   }
   // "Учить" from a card's menu: that one word in every mode, #/learn/<id>.
   if (head === "learn" && param && /^\d+$/.test(param)) return { route: "learn", param };
+  // "Учить" for a group picked on the cards screen: #/learn?tag=еда.
+  if (head === "learn" && !param && search !== undefined) return { route: "learn", group: parseGroup(search) };
   // A friend's invite link: #/invite/<code>.
   if (head === "invite" && param) return { route: "invite", param };
   if (head === "cards") {

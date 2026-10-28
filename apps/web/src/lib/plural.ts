@@ -17,3 +17,8 @@ export function cardsCount(n: number): string {
 export function phrasesWord(n: number): string {
   return { карточку: "фразу", карточки: "фразы", карточек: "фраз" }[cardsWord(n)]!;
 }
+
+/** Accusative, like cardsWord: 1 слово, 2 слова, 5 слов. */
+export function wordsWord(n: number): string {
+  return { карточку: "слово", карточки: "слова", карточек: "слов" }[cardsWord(n)]!;
+}

@@ -204,3 +204,39 @@
   opacity: 0.2;
   cursor: default;
 }
+
+/* ---------- A group's result ---------- */
+
+.learn-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  max-width: 360px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.learn-summary-word {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgb(74 222 128 / 0.32);
+  background: rgb(74 222 128 / 0.08);
+  color: var(--text);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  animation: finished-in 420ms var(--ease-spring) calc(var(--i, 0) * 45ms) backwards;
+}
+
+/* A word with a missed step: the one "Закрепить трудные" goes over. */
+.learn-summary-word[data-shaky] {
+  border-color: rgb(251 191 36 / 0.4);
+  background: rgb(251 191 36 / 0.1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .learn-summary-word {
+    animation: none;
+  }
+}
