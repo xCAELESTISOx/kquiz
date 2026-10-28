@@ -2211,6 +2211,17 @@ p {
   color: var(--text-muted);
 }
 
+/* How to fix the sound: quieter than the detail, set off by a thin accent rule. */
+.speech-error-fix {
+  margin-top: 6px;
+  padding-left: 10px;
+  border-left: 2px solid var(--accent);
+  font-size: var(--fs-xs);
+  line-height: 1.45;
+  color: var(--text-muted);
+  text-wrap: pretty;
+}
+
 .speech-failed {
   color: var(--text-muted);
   font-size: var(--fs-sm);

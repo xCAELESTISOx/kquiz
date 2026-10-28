@@ -1,8 +1,9 @@
 import { resume, shortClip } from "./audioSession";
 
 // Reference audio: the server's recording of the card (Supertonic, apps/api/src/cardAudio.ts),
-// or the system ko-KR voice while there is none yet or it fails to load.
-type SpeechCard = { id: number; korean: string };
+// or the system ko-KR voice while there is none yet or it fails to load. Listening may ask for the
+// word in another voice (lib/voices.ts); without that recording yet, the default one plays.
+type SpeechCard = { id: number; korean: string; voice?: string };
 type Clip = { audio: HTMLAudioElement; korean: string; failed: boolean; objectUrl?: string };
 
 const hasAudio = () => typeof Audio !== "undefined";
@@ -14,15 +15,18 @@ export function canSpeak(): boolean {
 
 // Recent cards only; each clip is a few dozen KB.
 const MAX_CLIPS = 20;
-const clips = new Map<number, Clip>();
+const clips = new Map<string, Clip>();
+const clipKey = (card: SpeechCard) => `${card.id}:${card.voice ?? ""}`;
 
 // MP3s are also kept in Cache Storage, so a card heard once plays at once next time, even after
 // the app was closed. The key carries the Korean: when it changes, so does the audio.
 const AUDIO_CACHE = "kquiz-audio-v1";
 const MAX_CACHED = 1500;
 
-const audioUrl = (id: number) => `/api/cards/${id}/audio`;
-const cacheKey = (card: SpeechCard) => `${audioUrl(card.id)}?k=${encodeURIComponent(card.korean)}`;
+const baseUrl = (id: number) => `/api/cards/${id}/audio`;
+const audioUrl = (card: SpeechCard) => baseUrl(card.id) + (card.voice ? `?voice=${card.voice}` : "");
+const cacheKey = (card: SpeechCard) =>
+  `${baseUrl(card.id)}?k=${encodeURIComponent(card.korean)}${card.voice ? `&v=${card.voice}` : ""}`;
 
 async function openAudioCache(): Promise<Cache | undefined> {
   try {
@@ -37,7 +41,7 @@ async function loadAudio(card: SpeechCard): Promise<Blob | undefined> {
   const cache = await openAudioCache();
   const hit = await cache?.match(cacheKey(card)).catch(() => undefined);
   if (hit) return hit.blob();
-  const res = await fetch(audioUrl(card.id), { credentials: "same-origin" });
+  const res = await fetch(audioUrl(card), { credentials: "same-origin" });
   if (!res.ok) return undefined;
   if (cache) {
     await cache.put(cacheKey(card), res.clone()).catch(() => {});
@@ -46,13 +50,12 @@ async function loadAudio(card: SpeechCard): Promise<Blob | undefined> {
   return res.blob();
 }
 
-/** Drops the card's audio for its earlier Korean, and the oldest clips past MAX_CACHED. */
+/** Drops the card's audio for its earlier Korean, in every voice, and the oldest clips past MAX_CACHED. */
 async function pruneAudioCache(cache: Cache, card: SpeechCard) {
   try {
     const keys = await cache.keys();
-    const current = new URL(cacheKey(card), location.origin).href;
-    const prefix = new URL(`${audioUrl(card.id)}?`, location.origin).href;
-    const stale = keys.filter((k) => k.url.startsWith(prefix) && k.url !== current);
+    const prefix = new URL(`${baseUrl(card.id)}?`, location.origin).href;
+    const stale = keys.filter((k) => k.url.startsWith(prefix) && new URL(k.url).searchParams.get("k") !== card.korean);
     const rest = keys.filter((k) => !stale.includes(k));
     const old = rest.slice(0, Math.max(rest.length - MAX_CACHED, 0));
     await Promise.all([...stale, ...old].map((k) => cache.delete(k)));
@@ -62,7 +65,8 @@ async function pruneAudioCache(cache: Cache, card: SpeechCard) {
 }
 
 function clipFor(card: SpeechCard): Clip {
-  const cached = clips.get(card.id);
+  const key = clipKey(card);
+  const cached = clips.get(key);
   if (cached && cached.korean === card.korean) return cached;
   const audio = shortClip(new Audio());
   audio.preload = "auto";
@@ -78,19 +82,24 @@ function clipFor(card: SpeechCard): Clip {
     () => (clip.failed = true),
   );
   if (cached?.objectUrl) URL.revokeObjectURL(cached.objectUrl);
-  clips.delete(card.id);
-  clips.set(card.id, clip);
-  for (const [id, old] of clips) {
+  clips.delete(key);
+  clips.set(key, clip);
+  for (const [k, old] of clips) {
     if (clips.size <= MAX_CLIPS) break;
     if (old.objectUrl) URL.revokeObjectURL(old.objectUrl);
-    clips.delete(id);
+    clips.delete(k);
   }
   return clip;
 }
 
 /** Starts loading the cards' audio so a tap plays it at once; iOS only plays inside the tap. */
 export function preloadSpeech(...cards: SpeechCard[]) {
-  if (hasAudio()) for (const card of cards) clipFor(card);
+  if (!hasAudio()) return;
+  for (const card of cards) {
+    clipFor(card);
+    // The fallback while the other voice isn't made yet.
+    if (card.voice) clipFor({ ...card, voice: undefined });
+  }
 }
 
 function speakWithSystemVoice(text: string) {
@@ -104,19 +113,20 @@ function speakWithSystemVoice(text: string) {
   speechSynthesis.speak(utterance);
 }
 
-export function speak(card: SpeechCard) {
+export function speak(card: SpeechCard): void {
   if (hasSystemVoice()) speechSynthesis.cancel();
   for (const other of clips.values()) other.audio.pause();
   const clip = hasAudio() ? clipFor(card) : undefined;
-  if (!clip || clip.failed) return speakWithSystemVoice(card.korean);
+  const fallback = (): void => (card.voice ? speak({ ...card, voice: undefined }) : speakWithSystemVoice(card.korean));
+  if (!clip || clip.failed) return fallback();
   resume(clip.audio);
-  if (!clip.audio.getAttribute("src")) clip.audio.src = audioUrl(card.id);
+  if (!clip.audio.getAttribute("src")) clip.audio.src = audioUrl(card);
   clip.audio.currentTime = 0;
   clip.audio.play().catch((e: unknown) => {
     // Played without a tap and the browser said no: the phone's voice would be refused too,
     // and the recording itself is fine for the next tap.
     if (e instanceof DOMException && e.name === "NotAllowedError") return;
     clip.failed = true;
-    speakWithSystemVoice(card.korean);
+    fallback();
   });
 }

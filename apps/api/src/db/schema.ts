@@ -267,6 +267,20 @@ export const speechAudio = sqliteTable("speech_audio", {
   createdAt: timestamp("created_at").notNull(),
 });
 
+// The same texts read by other voices than the default one (voices.ts), for listening: hearing a
+// word in several voices trains the ear on the sound rather than on one speaker's timbre.
+export const voiceAudio = sqliteTable(
+  "voice_audio",
+  {
+    text: text("text").notNull(),
+    voice: text("voice").notNull(),
+    mime: text("mime").notNull(),
+    data: blob("data", { mode: "buffer" }).notNull(),
+    createdAt: timestamp("created_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.text, t.voice] })],
+);
+
 // Listening drills on similar sounds (ㄱ/ㅋ/ㄲ): 2–4 words that differ in one sound, picked by Claude.
 export const soundDrills = sqliteTable(
   "sound_drills",

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { api, submitReview } from "../lib/api";
 import { useLeechIds } from "../lib/leeches";
 import { groupHash, navigate } from "../lib/router";
-import { choiceRating, shuffled } from "../lib/choice";
+import { choiceRating, REVEAL_MS, shuffled } from "../lib/choice";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
 import type { ChoiceOption, GroupFilter, QueueItem, RatingName } from "../lib/types";
 import { CloseIcon, SpeakerIcon } from "../ui/icons";
@@ -91,14 +91,15 @@ export function ChoiceScreen({ group }: { group?: GroupFilter }) {
   );
 }
 
-/**
- * One card picked among look-alikes. Sends its rating to the speech schedule as soon as the pick is
- * made; "Дальше" tells the session. A fresh one (keyed) per showing, so the order is shuffled anew.
- * `aloud` offers saying it instead.
- */
 /** Picked when the word isn't known at all: counts as a wrong pick and shows the right one. */
 const DONT_KNOW = -1;
 
+/**
+ * One card picked among look-alikes. The options come a few seconds after the meaning (or at once
+ * with "Показать варианты"), so the word is recalled first and only then recognised. Sends its
+ * rating to the speech schedule as soon as the pick is made; "Дальше" tells the session. A fresh one
+ * (keyed) per showing, so the order is shuffled anew. `aloud` offers saying it instead.
+ */
 export function ChoiceCard({
   item,
   options,
@@ -117,6 +118,8 @@ export function ChoiceCard({
   const [picked, setPicked] = useState<number>();
   const [error, setError] = useState<string>();
   const shownAt = useRef(performance.now());
+  const [revealed, setRevealed] = useState(false);
+  const revealedAt = useRef(0);
   const rating = useRef<RatingName>("good");
   const leeches = useLeechIds("speech");
 
@@ -124,6 +127,17 @@ export function ChoiceCard({
     () => shuffled([{ id: card.id, korean: card.korean, meaning: card.meaning }, ...options]),
     [card, options],
   );
+
+  const reveal = useCallback(() => {
+    if (revealedAt.current) return;
+    revealedAt.current = performance.now();
+    setRevealed(true);
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(reveal, REVEAL_MS);
+    return () => clearTimeout(timer);
+  }, [reveal]);
 
   const pick = useCallback(
     (id: number) => {
@@ -134,8 +148,10 @@ export function ChoiceCard({
         return;
       }
       const correct = id === card.id;
-      const elapsedMs = Math.round(performance.now() - shownAt.current);
-      rating.current = choiceRating(correct, elapsedMs);
+      const now = performance.now();
+      const elapsedMs = Math.round(now - shownAt.current);
+      // "Не знаю" can come before the options; then there is no pick time to count.
+      rating.current = choiceRating(correct, revealedAt.current ? now - revealedAt.current : 0);
       setPicked(id);
       if (canSpeak()) speak(card);
       if (!practice)
@@ -157,7 +173,12 @@ export function ChoiceCard({
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (/^[1-4]$/.test(e.key) && choices[Number(e.key) - 1]) pick(choices[Number(e.key) - 1]!.id);
+      if (!revealed) {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          reveal();
+        }
+      } else if (/^[1-4]$/.test(e.key) && choices[Number(e.key) - 1]) pick(choices[Number(e.key) - 1]!.id);
       else if ((e.key === "Enter" || e.key === " ") && picked !== undefined) {
         e.preventDefault();
         next();
@@ -165,7 +186,7 @@ export function ChoiceCard({
     }
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [choices, pick, next, picked]);
+  }, [choices, pick, next, picked, revealed, reveal]);
 
   const answered = picked !== undefined;
   const right = picked === card.id;
@@ -195,27 +216,41 @@ export function ChoiceCard({
       </div>
 
       <footer className="review-actions">
-        <div className="sounds-options choice-options" data-count={choices.length}>
-          {choices.map((c, i) => {
-            const state = !answered ? undefined : c.id === card.id ? "right" : c.id === picked ? "wrong" : "other";
-            return (
-              <button
-                key={c.id}
-                type="button"
-                className="sounds-option"
-                data-state={state}
-                style={{ "--i": i } as CSSProperties}
-                onClick={() => pick(c.id)}
-              >
-                <span className="sounds-option-word" lang="ko">
-                  {c.korean}
-                </span>
-                {/* Translations only after the pick, or they would give the answer away. */}
-                {answered && <span className="sounds-option-meaning">{c.meaning}</span>}
-              </button>
-            );
-          })}
-        </div>
+        {/* Picking "Не знаю" before the options also shows them, with the right one marked. */}
+        {!revealed && !answered ? (
+          <button
+            type="button"
+            className="choice-reveal"
+            style={{ "--reveal-ms": `${REVEAL_MS}ms` } as CSSProperties}
+            onClick={reveal}
+          >
+            <span className="choice-reveal-ask">Вспомни слово</span>
+            <span className="choice-reveal-action">Показать варианты</span>
+            <span className="choice-reveal-bar" aria-hidden="true" />
+          </button>
+        ) : (
+          <div className="sounds-options choice-options" data-count={choices.length}>
+            {choices.map((c, i) => {
+              const state = !answered ? undefined : c.id === card.id ? "right" : c.id === picked ? "wrong" : "other";
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  className="sounds-option"
+                  data-state={state}
+                  style={{ "--i": i } as CSSProperties}
+                  onClick={() => pick(c.id)}
+                >
+                  <span className="sounds-option-word" lang="ko">
+                    {c.korean}
+                  </span>
+                  {/* Translations only after the pick, or they would give the answer away. */}
+                  {answered && <span className="sounds-option-meaning">{c.meaning}</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
         {answered ? (
           <>
             <button type="button" className="button primary" onClick={next}>

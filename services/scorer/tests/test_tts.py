@@ -77,6 +77,14 @@ def test_tts_endpoint(client):
     assert app.state.synth.calls == [("국물", tts.DEFAULT_VOICE)]
 
 
+def test_tts_endpoint_takes_a_voice(client):
+    r = client.post("/tts", params={"text": "국물", "voice": "M3"})
+    assert r.status_code == 200
+    assert r.headers["x-tts-voice"] == "M3"
+    assert app.state.synth.calls == [("국물", "M3")]
+    assert client.post("/tts", params={"text": "국물", "voice": "X9"}).status_code == 422
+
+
 def test_tts_endpoint_rejects_bad_text(client):
     assert client.post("/tts", params={"text": "  "}).status_code == 422
     assert client.post("/tts", params={"text": "가" * (tts.MAX_TEXT + 1)}).status_code == 422

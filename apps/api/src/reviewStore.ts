@@ -6,8 +6,18 @@ import { cardAudio, cards, reviewLog, reviewStates } from "./db/schema.js";
 import { introduce, newCardsToday, startOfDay, type NewCardsToday } from "./newCards.js";
 import { getFsrsSetup, schedulerFor } from "./fsrs.js";
 import { applyRating, fromStateRow, toStateRow, type RatingName, type ReviewMode } from "./review.js";
+import { voicesFor, type ExtraVoice } from "./voices.js";
 
-export type QueueItem = { card: CardDto; mode: ReviewMode; due: string; state: number; reps: number; lapses: number };
+export type QueueItem = {
+  card: CardDto;
+  mode: ReviewMode;
+  due: string;
+  state: number;
+  reps: number;
+  lapses: number;
+  /** Listening only: other voices the word can be heard in besides the default one (voices.ts). */
+  voices?: ExtraVoice[];
+};
 
 // Listening needs the card's own recording (cardAudio.ts), made from its current Korean: the phone's
 // voice is a poor model for training the ear, so until the recording is there the card waits.
@@ -42,6 +52,14 @@ function toQueueItem({ card, state }: { card: typeof cards.$inferSelect; state: 
   };
 }
 
+/** Tells each listening item which other voices its word already has. */
+function withVoices(db: Db, items: QueueItem[]) {
+  const listening = items.filter((item) => item.mode === "listening");
+  if (!listening.length) return;
+  const voices = voicesFor(db, listening.map((item) => item.card.korean));
+  for (const item of listening) item.voices = voices.get(item.card.korean) ?? [];
+}
+
 /**
  * Cards due in a mode: the most overdue `limit` of them, in random order, so cards added together
  * don't always come up together and one word doesn't prompt the next. Only speakable cards enter
@@ -58,6 +76,7 @@ export function dueQueue(db: Db, userId: number, mode: QueueMode, now = new Date
     .limit(Math.min(Math.max(limit, 1), 200))
     .all()
     .map(toQueueItem);
+  withVoices(db, items);
   return isMixed(mode) ? spreadCards(items, random) : shuffle(items, random);
 }
 
@@ -108,6 +127,7 @@ export function groupQueue(
     const byId = new Map<number, typeof rows>();
     for (const row of rows) byId.set(row.card.id, [...(byId.get(row.card.id) ?? []), row]);
     const items = picked.flatMap(({ id }) => (byId.get(id) ?? []).map(toQueueItem));
+    withVoices(tx, items);
     return { items: isMixed(mode) ? spreadCards(items, random) : items, total: matched.length };
   });
 }

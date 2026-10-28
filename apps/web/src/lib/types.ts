@@ -25,7 +25,8 @@ export interface Root {
 
 /** One root of a card and the user's other cards that share it (GET /api/cards/:id/family). */
 export interface Family extends Root {
-  cards: { id: number; korean: string; meaning: string }[];
+  /** `known`: well learned for meaning, a word to guess new ones from. */
+  cards: { id: number; korean: string; meaning: string; known: boolean }[];
   /** All cards with this root besides this one; `cards` holds the newest few. */
   total: number;
 }
@@ -99,6 +100,8 @@ export interface QueueItem {
   state: number;
   reps: number;
   lapses: number;
+  /** Listening only: other voices the word can be heard in besides the default one (lib/voices.ts). */
+  voices?: string[];
 }
 
 /** A wrong option on the "pick the Korean word" screen: another of the user's words. */

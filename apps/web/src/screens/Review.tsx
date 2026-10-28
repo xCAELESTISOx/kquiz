@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { api, holdReview, releaseHeldReview, takeBackReview } from "../lib/api";
+import { shuffled } from "../lib/choice";
 import { clozeFor } from "../lib/cloze";
+import { guessHints, isFirstShow, splitAt, type GuessHint } from "../lib/guess";
 import { useLeechIds } from "../lib/leeches";
 import { mixWays, serverModes } from "../lib/mix";
 import { navigate } from "../lib/router";
 import { canRecord, type Recorder } from "../lib/recorder";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
+import { forgetVoice, heard } from "../lib/voices";
 import type { Card, ChoiceOption, GroupFilter, MixKind, PhraseTiles, QueueItem, QueueMode, RatingName } from "../lib/types";
 import { CloseIcon, SpeakerIcon, UndoIcon } from "../ui/icons";
 import { LeechBadge } from "../ui/LeechBadge";
@@ -17,6 +20,7 @@ import { PhraseCard } from "./Phrase";
 import { PhraseParts, RegisterBadge } from "../ui/PhraseParts";
 import { SpeechCard } from "./Speech";
 import { TypeCard, type TypeAsk } from "./Typing";
+import "../ui/guess.css";
 
 const RATINGS: { name: RatingName; label: string; key: string }[] = [
   { name: "again", label: "Снова", key: "1" },
@@ -36,6 +40,8 @@ type Swipe = RatingName | "back";
  * Mixed puts every mode in one session, saying aloud included: each card is shown and graded in its
  * item's own mode, and the speech schedule is gone through partly aloud, partly by picking from options.
  * What goes into the mix is picked first (MixSetup).
+ * A new word asked for its meaning the first time, when it shares a root with words already well
+ * learned, is guessed first from those words among a few translations; the answer and grading follow.
  */
 export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meaning" | "listening" | "mixed">; group?: GroupFilter }) {
   const [queue, setQueue] = useState<QueueItem[]>();
@@ -60,6 +66,8 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
   const [tiles, setTiles] = useState<Record<number, PhraseTiles>>({});
   // A mixed session starts once its kinds are picked.
   const [kinds, setKinds] = useState<ReadonlySet<MixKind>>();
+  // The translation picked when guessing a new word, or null for "не знаю"; reset with each card.
+  const [guess, setGuess] = useState<{ step: number; meaning: string | null }>();
 
   useEffect(() => {
     document.title = mode === "mixed" ? "Вперемешку · KQuiz" : mode === "listening" ? "На слух · KQuiz" : "Повторение · KQuiz";
@@ -67,9 +75,10 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
     const modes = kinds && serverModes(kinds);
     (group ? api.group(mode, group, modes) : api.queue(mode, mode === "mixed" ? 200 : undefined, modes)).then(
       async ({ items: all }) => {
-        const spoken = all.filter((i) => i.mode === "speech");
-        const { options } = spoken.length
-          ? await api.choices(spoken.map((i) => i.card.id)).catch(() => ({ options: {} as Record<number, ChoiceOption[]> }))
+        // Look-alikes give the wrong options for picking a word, and their translations for guessing a new one.
+        const ids = [...new Set(all.filter((i) => i.mode === "speech" || isFirstShow(i)).map((i) => i.card.id))];
+        const { options } = ids.length
+          ? await api.choices(ids).catch(() => ({ options: {} as Record<number, ChoiceOption[]> }))
           : { options: {} };
         // A single-mode session asks every item its own way.
         const ways = mixWays(all, kinds ?? new Set([mode as MixKind]), {
@@ -91,7 +100,7 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
         setTotal(items.length);
         shownAt.current = performance.now();
         // The tap that opened the screen may still count; if not, the big button is right there.
-        if (items[0]?.mode === "listening") speak(items[0].card);
+        if (items[0]?.mode === "listening") speak(heard(items[0]));
       },
       (e: Error) => setError(e.message),
     );
@@ -108,6 +117,15 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
   // Listening shows no text before the answer, so only meaning reviews ask through an example.
   const cloze = useMemo(() => (item?.mode === "meaning" ? clozeFor(item) : undefined), [item]);
   const families = useFamily(card);
+  const hints = useMemo(() => (item && families && isFirstShow(item) ? guessHints(families) : []), [item, families]);
+  const guessed = guess?.step === step ? guess : undefined;
+  // Translations to guess among: this word's and those of a few look-alikes, with no two alike.
+  const guesses = useMemo(() => {
+    if (!card || !hints.length) return [];
+    const others = [...new Set((options[card.id] ?? []).map((o) => o.meaning))].filter((m) => m !== card.meaning).slice(0, 3);
+    return others.length ? shuffled([card.meaning, ...others]) : [];
+  }, [card, hints, options]);
+  const guessing = guesses.length > 0 && !revealed;
   const leeches = useLeechIds(item?.mode ?? (mode === "listening" ? "listening" : "meaning"));
 
   // Leaving the screen ends the chance to go back, so the held rating goes out.
@@ -117,12 +135,25 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
   // The next few too, so their audio is ready by the time they come up (listening plays the next
   // card straight from the grading tap).
   useEffect(() => {
-    if (queue) preloadSpeech(...queue.slice(0, 3).map((i) => i.card));
+    if (!queue) return;
+    preloadSpeech(...queue.slice(0, 3).map(heard));
+    // And the families of new words, so the guess is there as the card comes up, not a moment later.
+    for (const i of queue.slice(0, 3)) if (isFirstShow(i) && i.card.roots?.length) api.family(i.card).catch(() => undefined);
   }, [queue]);
 
   const reveal = useCallback(() => {
     if (card && !revealed) setRevealed(true);
   }, [card, revealed]);
+
+  /** A guess at a new word's meaning, right or not, opens the answer; the grading is as usual. */
+  const pickGuess = useCallback(
+    (meaning: string | null) => {
+      if (!guessing) return;
+      setGuess({ step, meaning });
+      setRevealed(true);
+    },
+    [guessing, step],
+  );
 
   const rate = useCallback(
     (rating: RatingName, swiped = false) => {
@@ -139,11 +170,13 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
         elapsedMs: Math.round(performance.now() - shownAt.current),
       }).catch((e: Error) => setError(e.message));
       setLast({ reviewId, queue, done });
-      // A forgotten card comes back at the end of this session, like Anki's relearning step.
+      // A forgotten card comes back at the end of this session, like Anki's relearning step, and
+      // is heard in a new voice then.
+      if (rating === "again") forgetVoice(item);
       const next = queue ? (rating === "again" ? [...queue.slice(1), queue[0]!] : queue.slice(1)) : queue;
       setQueue(next);
       // Inside the tap, where iOS still lets audio play.
-      if (next?.[0]?.mode === "listening") speak(next[0].card);
+      if (next?.[0]?.mode === "listening") speak(heard(next[0]));
       if (rating !== "again") setDone((n) => n + 1);
       setRevealed(false);
       setStep((n) => n + 1);
@@ -160,9 +193,10 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
       setLast(undefined);
       void releaseHeldReview();
       setExit(undefined);
+      if (rating === "again") forgetVoice(queue[0]!);
       const next = rating === "again" ? [...queue.slice(1), queue[0]!] : queue.slice(1);
       setQueue(next);
-      if (next[0]?.mode === "listening") speak(next[0].card);
+      if (next[0]?.mode === "listening") speak(heard(next[0]));
       if (rating !== "again") setDone((n) => n + 1);
       setRevealed(false);
       setStep((n) => n + 1);
@@ -192,7 +226,8 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
       else if (e.key === "Backspace" || e.key === "z" || e.key === "я") back();
       // The card said aloud takes its own keys.
       else if (speaking) return;
-      else if (listening && card && (e.key === "r" || e.key === "к")) speak(card);
+      else if (listening && item && (e.key === "r" || e.key === "к")) speak(heard(item));
+      else if (guessing && /^[1-4]$/.test(e.key) && guesses[Number(e.key) - 1]) pickGuess(guesses[Number(e.key) - 1]!);
       else if (!revealed && (e.key === " " || e.key === "Enter")) {
         e.preventDefault();
         reveal();
@@ -203,7 +238,7 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
     }
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [revealed, reveal, rate, back, listening, speaking, card]);
+  }, [revealed, reveal, rate, back, listening, speaking, item, guessing, guesses, pickGuess]);
 
   const progress = total ? Math.min(done / total, 1) : 0;
 
@@ -305,7 +340,7 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
                 aria-label="Послушать ещё раз"
                 onClick={(e) => {
                   e.stopPropagation();
-                  speak(card);
+                  speak(heard(item));
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
               >
@@ -324,6 +359,7 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
             )}
             {revealed ? (
               <div className="review-answer">
+                {guessed && <GuessResult picked={guessed.meaning} meaning={card.meaning} />}
                 {cloze && (
                   <p className="review-word" lang="ko">
                     {card.korean}
@@ -350,6 +386,8 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
                 <WordFamily card={card} families={families} />
                 {card.notes && <p className="review-notes muted">{card.notes}</p>}
               </div>
+            ) : guessing ? (
+              <GuessHints hints={hints} />
             ) : (
               <p className="review-hint muted">
                 {listening ? "Послушай и вспомни перевод" : cloze ? "Вспомни перевод выделенного слова" : "Вспомни перевод"}
@@ -362,7 +400,7 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
                 aria-label="Послушать"
                 onClick={(e) => {
                   e.stopPropagation();
-                  speak(card);
+                  speak(heard(item));
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
               >
@@ -380,13 +418,32 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
                   </button>
                 ))}
               </div>
+            ) : guessing ? (
+              <>
+                <div className="guess-options">
+                  {guesses.map((meaning, i) => (
+                    <button
+                      key={meaning}
+                      type="button"
+                      className="guess-option"
+                      style={{ "--i": i } as CSSProperties}
+                      onClick={() => pickGuess(meaning)}
+                    >
+                      {meaning}
+                    </button>
+                  ))}
+                </div>
+                <button type="button" className="chip-button dont-know" onClick={() => pickGuess(null)}>
+                  Не догадываюсь
+                </button>
+              </>
             ) : (
               <button type="button" className="button primary" onClick={reveal}>
                 Показать ответ
               </button>
             )}
             <p className="review-tip muted small">
-              {revealed ? "Свайп вправо: «Хорошо», влево: «Снова»" : last && "Свайп вправо: вернуть предыдущую"}
+              {revealed ? "Свайп вправо: «Хорошо», влево: «Снова»" : guessing ? "Догадка не влияет на оценку" : last && "Свайп вправо: вернуть предыдущую"}
             </p>
           </footer>
         </>
@@ -404,6 +461,41 @@ function toggled<T>(set: ReadonlySet<T>, value: T): ReadonlySet<T> {
   const next = new Set(set);
   if (!next.delete(value)) next.add(value);
   return next;
+}
+
+/** Words already learned that share a part with the new one, its syllable marked: 학교, 대학 → 학생. */
+function GuessHints({ hints }: { hints: GuessHint[] }) {
+  return (
+    <div className="guess">
+      <p className="guess-ask">Новое слово. Угадай по знакомым</p>
+      <ul className="guess-hints">
+        {hints.flatMap((hint) =>
+          hint.words.map((word) => {
+            const [before, mark, after] = splitAt(word.korean, hint.syllable);
+            return (
+              <li key={`${hint.syllable}:${word.id}`} className="guess-hint">
+                <span className="guess-word" lang="ko">
+                  {before}
+                  {mark && <mark>{mark}</mark>}
+                  {after}
+                </span>
+                <span className="guess-meaning">{word.meaning}</span>
+              </li>
+            );
+          }),
+        )}
+      </ul>
+    </div>
+  );
+}
+
+function GuessResult({ picked, meaning }: { picked: string | null; meaning: string }) {
+  const right = picked === meaning;
+  return (
+    <p className={`guess-result tone-${right ? "ok" : picked === null ? "muted" : "wrong"}`}>
+      {right ? "Угадал" : picked === null ? "Теперь запомни" : <>Ты думал: «{picked}»</>}
+    </p>
+  );
 }
 
 /** The translation stays blurred until the sentence is tapped, so the Korean gets read first. */

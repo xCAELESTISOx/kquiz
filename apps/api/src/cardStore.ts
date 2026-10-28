@@ -1,7 +1,8 @@
+import { State } from "ts-fsrs";
 import { and, count, desc, eq, isNull, lt, sql, type SQL } from "drizzle-orm";
 import { isKoreanOnly, isSpeakable, koreanKey, normalizeKorean, type CardKind, type CardPatch, type Example, type NewCard, type PhrasePart, type Register, type Root } from "./cards.js";
 import type { Db } from "./db/client.js";
-import { cards } from "./db/schema.js";
+import { cards, reviewStates } from "./db/schema.js";
 import { introduce } from "./newCards.js";
 import { cardsLeft, QuotaError } from "./users.js";
 
@@ -206,13 +207,19 @@ export function cardCounts(db: Db, userId: number): { all: number; queued: numbe
   return { all: row?.all ?? 0, queued: row?.queued ?? 0, paused: row?.paused ?? 0, phrases: row?.phrases ?? 0 };
 }
 
-export type FamilyMember = { id: number; korean: string; meaning: string };
+/**
+ * `known`: well learned for meaning (past the learning steps, remembered for a week or more), so a
+ * word the user can lean on to guess a new one.
+ */
+const KNOWN_STABILITY_DAYS = 7;
+
+export type FamilyMember = { id: number; korean: string; meaning: string; known: boolean };
 export type Family = Root & { cards: FamilyMember[]; total: number };
 
 /**
- * For each root of a card, the user's other cards with the same hanja (newest first, at most
- * `perRoot`), and how many there are in all. Paused and queued cards count too: they are still words
- * the user has.
+ * For each root of a card, the user's other cards with the same hanja (known ones first,
+ * then newest, at most `perRoot`), and how many there are in all. Paused and queued cards count too:
+ * they are still words the user has.
  */
 export function cardFamily(db: Db, userId: number, id: number, perRoot = 5): Family[] | undefined {
   const card = db.select({ roots: cards.roots }).from(cards).where(and(eq(cards.id, id), eq(cards.userId, userId))).get();
@@ -224,14 +231,15 @@ export function cardFamily(db: Db, userId: number, id: number, perRoot = 5): Fam
     seen.add(root.hanja);
     const where = and(...cardConditions(userId, { root: root.hanja }), sql`${cards.id} <> ${id}`);
     const total = db.select({ n: count() }).from(cards).where(where).get()?.n ?? 0;
+    const known = sql<number>`exists (select 1 from ${reviewStates} where ${reviewStates.cardId} = ${cards.id} and ${reviewStates.mode} = 'meaning' and ${reviewStates.state} = ${State.Review} and ${reviewStates.stability} >= ${KNOWN_STABILITY_DAYS})`;
     const members = db
-      .select({ id: cards.id, korean: cards.korean, meaning: cards.meaning })
+      .select({ id: cards.id, korean: cards.korean, meaning: cards.meaning, known })
       .from(cards)
       .where(where)
-      .orderBy(desc(cards.id))
+      .orderBy(desc(known), desc(cards.id))
       .limit(perRoot)
       .all();
-    families.push({ ...root, cards: members, total });
+    families.push({ ...root, cards: members.map((m) => ({ ...m, known: !!m.known })), total });
   }
   return families;
 }

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "63c70fc7-7b96-4cad-a03c-bcdbce3ba9c5",
+  "id": "b2104ad4-19fd-4f93-b50c-9d03ff5867f8",
   "prevId": "820dfa6a-d636-42d0-8e4c-e4b57126f03b",
   "tables": {
     "attempts": {
@@ -441,28 +441,6 @@
         },
         "roots": {
           "name": "roots",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'word'"
-        },
-        "parts": {
-          "name": "parts",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "register": {
-          "name": "register",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -1519,6 +1497,59 @@
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "voice_audio": {
+      "name": "voice_audio",
+      "columns": {
+        "text": {
+          "name": "text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "voice": {
+          "name": "voice",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mime": {
+          "name": "mime",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "data": {
+          "name": "data",
+          "type": "blob",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "voice_audio_text_voice_pk": {
+          "columns": [
+            "text",
+            "voice"
+          ],
+          "name": "voice_audio_text_voice_pk"
+        }
+      },
       "uniqueConstraints": {},
       "checkConstraints": {}
     }

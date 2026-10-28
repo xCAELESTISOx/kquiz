@@ -7,6 +7,7 @@ import { CARD_KINDS, newCardSchema, parseBulk } from "../cards.js";
 import type { Db } from "../db/client.js";
 import { introduceEarly } from "../newCards.js";
 import { linkParts } from "../phrases.js";
+import { isExtraVoice } from "../voices.js";
 
 export const MAX_BATCH = 50;
 
@@ -106,10 +107,13 @@ export function cardRoutes(db: Db, now: () => Date) {
     return families ? c.json({ families }) : c.json({ error: "not_found" }, 404);
   });
 
-  // Reference audio (cardAudio.ts). 404 until the worker has made it; the app then uses the phone's voice.
+  // Reference audio (cardAudio.ts), or with ?voice= the word in another voice (voices.ts). 404 until
+  // the worker has made it; the app then uses the default voice or the phone's.
   app.get("/:id/audio", (c) => {
     const id = idParam.safeParse(c.req.param("id"));
-    const audio = id.success ? getCardAudio(db, c.get("user").id, id.data) : undefined;
+    const voice = c.req.query("voice");
+    if (voice !== undefined && !isExtraVoice(voice)) return c.json({ error: "not_found" }, 404);
+    const audio = id.success ? getCardAudio(db, c.get("user").id, id.data, voice) : undefined;
     if (!audio) return c.json({ error: "not_found" }, 404);
     const headers = { "cache-control": "private, no-cache", etag: audio.etag };
     if (c.req.header("if-none-match") === audio.etag) return c.body(null, 304, headers);

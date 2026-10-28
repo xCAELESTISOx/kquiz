@@ -505,6 +505,58 @@
   animation: answer-in var(--dur-2) var(--ease-out);
 }
 
+/* Holds the place of the options (two rows of them) until they come, so nothing jumps. */
+.choice-reveal {
+  position: relative;
+  overflow: hidden;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--radius);
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--text);
+  transition: transform var(--dur-1) var(--ease-spring);
+}
+
+.choice-reveal:active {
+  transform: scale(0.98);
+  transition-duration: var(--dur-press);
+}
+
+.choice-reveal-ask {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.choice-reveal-action {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Runs out as the options come. */
+.choice-reveal-bar {
+  position: absolute;
+  inset: auto 0 0;
+  height: 3px;
+  background: var(--accent);
+  opacity: 0.6;
+  transform-origin: left;
+  animation: choice-reveal var(--reveal-ms) linear forwards;
+}
+
+@keyframes choice-reveal {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
 .review-tip a {
   color: var(--accent);
 }

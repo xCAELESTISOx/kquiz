@@ -5,6 +5,7 @@ import { z } from "zod";
 import { normalizeKorean } from "./cards.js";
 import type { Db } from "./db/client.js";
 import { cards, reviewStates, soundDrills, speechAudio } from "./db/schema.js";
+import { EXTRA_VOICES, voicesFor, type ExtraVoice } from "./voices.js";
 
 // ---- Reference audio for example sentences and drill words ----
 
@@ -132,6 +133,8 @@ export type DrillDto = {
   wrong: number;
   /** Every word has its reference audio, so the drill can be played. */
   ready: boolean;
+  /** Other voices every word has too (voices.ts), besides the default one. */
+  voices: ExtraVoice[];
 };
 
 const wordsKey = (words: { korean: string }[]) =>
@@ -179,6 +182,7 @@ export function listDrills(db: Db, userId: number): DrillDto[] {
       voiced.add(r.text);
     }
   }
+  const others = voicesFor(db, texts);
   const missRate = (r: { correct: number; wrong: number }) => (r.wrong + 1) / (r.correct + r.wrong + 2);
   return rows
     .sort((a, b) => missRate(b) - missRate(a) || a.correct + a.wrong - (b.correct + b.wrong) || a.id - b.id)
@@ -189,6 +193,7 @@ export function listDrills(db: Db, userId: number): DrillDto[] {
       correct: r.correct,
       wrong: r.wrong,
       ready: r.words.every((w) => voiced.has(w.korean)),
+      voices: EXTRA_VOICES.filter((v) => r.words.every((w) => others.get(w.korean)?.includes(v))),
     }));
 }
 

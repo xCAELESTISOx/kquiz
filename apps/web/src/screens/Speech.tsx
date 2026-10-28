@@ -429,6 +429,7 @@ function ResultDetails({ result, failed }: { result?: ScoreResult; failed?: stri
               <span>
                 <span className="speech-error-label">{line.status === "weak" ? `${line.label}, на грани` : line.label}</span>
                 <span className="speech-error-detail">{line.detail}</span>
+                {line.fix && <span className="speech-error-fix">{line.fix}</span>}
               </span>
             </li>
           ))}

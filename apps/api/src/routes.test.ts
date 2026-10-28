@@ -132,6 +132,16 @@ describe("word families", () => {
     expect((await t.request(`/cards/${math.id}/family`)).json.families[0]).toMatchObject({ hanja: "數", total: 0 });
     expect((await t.request("/cards/999/family")).status).toBe(404);
 
+    // A word remembered for a week comes first and is marked known: the hint for guessing a new one.
+    // One just met (still in learning steps) is not.
+    const [, student] = json.created;
+    const review = (cardId: number, rating: string) => ({ id: randomUUID(), cardId, mode: "meaning", rating, reviewedAt: t.clock.now.toISOString() });
+    await t.request("/reviews", { body: { reviews: [review(math.id, "easy"), review(school.id, "good")] } });
+    expect((await t.request(`/cards/${student.id}/family`)).json.families[0].cards).toEqual([
+      { id: math.id, korean: "수학", meaning: "математика", known: true },
+      { id: school.id, korean: "학교", meaning: "школа", known: false },
+    ]);
+
     expect((await t.request("/cards?root=" + encodeURIComponent("學"))).json.cards).toHaveLength(3);
     const group = await t.request("/reviews/group", { body: { mode: "meaning", root: "學" } });
     expect(group.json.total).toBe(3);
