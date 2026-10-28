@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { AuthVariables } from "../auth/sessions.js";
 import type { Db } from "../db/client.js";
 import { deleteDrill, getSpeechAudio, listDrills, recordDrillAnswer, shadowingItems } from "../practice.js";
+import { getVoiceAudio, isExtraVoice } from "../voices.js";
 
 const idParam = z.coerce.number().int().positive();
 
@@ -10,10 +11,13 @@ const idParam = z.coerce.number().int().positive();
 export function practiceRoutes(db: Db, now: () => Date) {
   const app = new Hono<{ Variables: AuthVariables }>();
 
-  // Reference audio of an example sentence or a drill word; 404 until the worker has made it.
+  // Reference audio of an example sentence or a drill word, or with ?voice= a drill word in another
+  // voice (voices.ts); 404 until the worker has made it.
   app.get("/audio", (c) => {
     const text = z.string().min(1).max(300).safeParse(c.req.query("text"));
-    const audio = text.success ? getSpeechAudio(db, text.data) : undefined;
+    const voice = c.req.query("voice");
+    if (voice !== undefined && !isExtraVoice(voice)) return c.json({ error: "not_found" }, 404);
+    const audio = !text.success ? undefined : voice ? getVoiceAudio(db, text.data, voice) : getSpeechAudio(db, text.data);
     if (!audio) return c.json({ error: "not_found" }, 404);
     const headers = { "cache-control": "private, max-age=86400", etag: audio.etag };
     if (c.req.header("if-none-match") === audio.etag) return c.body(null, 304, headers);

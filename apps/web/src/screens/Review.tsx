@@ -8,6 +8,7 @@ import { mixWays, serverModes } from "../lib/mix";
 import { navigate } from "../lib/router";
 import { canRecord, type Recorder } from "../lib/recorder";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
+import { forgetVoice, heard } from "../lib/voices";
 import type { Card, ChoiceOption, GroupFilter, MixKind, QueueItem, QueueMode, RatingName } from "../lib/types";
 import { CloseIcon, SpeakerIcon, UndoIcon } from "../ui/icons";
 import { LeechBadge } from "../ui/LeechBadge";
@@ -90,7 +91,7 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
         setTotal(items.length);
         shownAt.current = performance.now();
         // The tap that opened the screen may still count; if not, the big button is right there.
-        if (items[0]?.mode === "listening") speak(items[0].card);
+        if (items[0]?.mode === "listening") speak(heard(items[0]));
       },
       (e: Error) => setError(e.message),
     );
@@ -125,7 +126,7 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
   // card straight from the grading tap).
   useEffect(() => {
     if (!queue) return;
-    preloadSpeech(...queue.slice(0, 3).map((i) => i.card));
+    preloadSpeech(...queue.slice(0, 3).map(heard));
     // And the families of new words, so the guess is there as the card comes up, not a moment later.
     for (const i of queue.slice(0, 3)) if (isFirstShow(i) && i.card.roots?.length) api.family(i.card).catch(() => undefined);
   }, [queue]);
@@ -159,11 +160,13 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
         elapsedMs: Math.round(performance.now() - shownAt.current),
       }).catch((e: Error) => setError(e.message));
       setLast({ reviewId, queue, done });
-      // A forgotten card comes back at the end of this session, like Anki's relearning step.
+      // A forgotten card comes back at the end of this session, like Anki's relearning step, and
+      // is heard in a new voice then.
+      if (rating === "again") forgetVoice(item);
       const next = queue ? (rating === "again" ? [...queue.slice(1), queue[0]!] : queue.slice(1)) : queue;
       setQueue(next);
       // Inside the tap, where iOS still lets audio play.
-      if (next?.[0]?.mode === "listening") speak(next[0].card);
+      if (next?.[0]?.mode === "listening") speak(heard(next[0]));
       if (rating !== "again") setDone((n) => n + 1);
       setRevealed(false);
       setStep((n) => n + 1);
@@ -180,9 +183,10 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
       setLast(undefined);
       void releaseHeldReview();
       setExit(undefined);
+      if (rating === "again") forgetVoice(queue[0]!);
       const next = rating === "again" ? [...queue.slice(1), queue[0]!] : queue.slice(1);
       setQueue(next);
-      if (next[0]?.mode === "listening") speak(next[0].card);
+      if (next[0]?.mode === "listening") speak(heard(next[0]));
       if (rating !== "again") setDone((n) => n + 1);
       setRevealed(false);
       setStep((n) => n + 1);
@@ -212,7 +216,7 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
       else if (e.key === "Backspace" || e.key === "z" || e.key === "я") back();
       // The card said aloud takes its own keys.
       else if (speaking) return;
-      else if (listening && card && (e.key === "r" || e.key === "к")) speak(card);
+      else if (listening && item && (e.key === "r" || e.key === "к")) speak(heard(item));
       else if (guessing && /^[1-4]$/.test(e.key) && guesses[Number(e.key) - 1]) pickGuess(guesses[Number(e.key) - 1]!);
       else if (!revealed && (e.key === " " || e.key === "Enter")) {
         e.preventDefault();
@@ -224,7 +228,7 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
     }
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [revealed, reveal, rate, back, listening, speaking, card, guessing, guesses, pickGuess]);
+  }, [revealed, reveal, rate, back, listening, speaking, item, guessing, guesses, pickGuess]);
 
   const progress = total ? Math.min(done / total, 1) : 0;
 
@@ -322,7 +326,7 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
                 aria-label="Послушать ещё раз"
                 onClick={(e) => {
                   e.stopPropagation();
-                  speak(card);
+                  speak(heard(item));
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
               >
@@ -380,7 +384,7 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
                 aria-label="Послушать"
                 onClick={(e) => {
                   e.stopPropagation();
-                  speak(card);
+                  speak(heard(item));
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
               >

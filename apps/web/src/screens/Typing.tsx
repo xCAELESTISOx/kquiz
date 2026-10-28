@@ -3,6 +3,7 @@ import { submitReview } from "../lib/api";
 import type { Cloze } from "../lib/cloze";
 import { useLeechIds } from "../lib/leeches";
 import { canSpeak, speak } from "../lib/speech";
+import { heard } from "../lib/voices";
 import type { QueueItem, RatingName } from "../lib/types";
 import { checkTyped, typingRating, wrongKeyboard, type TypingCheck } from "../lib/typing";
 import { LeechBadge } from "../ui/LeechBadge";
@@ -53,7 +54,7 @@ export function TypeCard({
       const result = checkTyped(expected, typed);
       setCheck(result);
       input.current?.blur();
-      if (canSpeak()) speak(card);
+      if (canSpeak()) speak(heard(item));
       if (!practice)
         void submitReview({
           id: crypto.randomUUID(),
@@ -64,7 +65,7 @@ export function TypeCard({
           elapsedMs: Math.round(performance.now() - shownAt.current),
         }).catch((e: Error) => setError(e.message));
     },
-    [check, expected, card, item.mode, practice],
+    [check, expected, card, item, practice],
   );
 
   function submit(event: FormEvent) {
@@ -93,7 +94,7 @@ export function TypeCard({
           {leeches.has(card.id) && <LeechBadge />}
           <p className="speech-ask">{ASK[ask]}</p>
           {ask === "sound" && (
-            <button type="button" className="listen-play" aria-label="Послушать ещё раз" onClick={() => speak(card)}>
+            <button type="button" className="listen-play" aria-label="Послушать ещё раз" onClick={() => speak(heard(item))}>
               <SpeakerIcon />
             </button>
           )}
@@ -119,7 +120,7 @@ export function TypeCard({
               </p>
               {ask !== "meaning" && <p className="type-meaning">{card.meaning}</p>}
               {canSpeak() && ask !== "sound" && (
-                <button type="button" className="icon-button speak-button" aria-label="Послушать слово" onClick={() => speak(card)}>
+                <button type="button" className="icon-button speak-button" aria-label="Послушать слово" onClick={() => speak(heard(item))}>
                   <SpeakerIcon />
                 </button>
               )}

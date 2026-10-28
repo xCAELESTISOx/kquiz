@@ -72,6 +72,8 @@ export interface QueueItem {
   state: number;
   reps: number;
   lapses: number;
+  /** Listening only: other voices the word can be heard in besides the default one (lib/voices.ts). */
+  voices?: string[];
 }
 
 /** A wrong option on the "pick the Korean word" screen: another of the user's words. */

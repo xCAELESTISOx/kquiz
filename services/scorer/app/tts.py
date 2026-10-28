@@ -15,6 +15,7 @@ import numpy as np
 import soundfile as sf
 
 # Built-in voices: F1–F5, M1–M5.
+VOICE_PATTERN = r"^[FM][1-5]$"
 DEFAULT_VOICE = os.environ.get("TTS_VOICE", "F1")
 STEPS = int(os.environ.get("TTS_STEPS", "32"))
 SPEED = float(os.environ.get("TTS_SPEED", "0.7"))

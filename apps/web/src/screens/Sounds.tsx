@@ -40,17 +40,17 @@ export function SoundsScreen() {
   const finished = drills !== undefined && step >= round.length;
 
   useEffect(() => {
-    for (const t of round.slice(step, step + 2)) for (const w of t.drill.words) preload(textAudioUrl(w.korean));
+    for (const t of round.slice(step, step + 2)) for (const w of t.drill.words) preload(textAudioUrl(w.korean, t.voice));
   }, [round, step]);
 
-  const listen = useCallback((text: string) => {
-    void play(textAudioUrl(text)).then((ok) => !ok && setError("Не получилось проиграть звук. Попробуй ещё раз."));
+  const listen = useCallback((text: string, voice?: string) => {
+    void play(textAudioUrl(text, voice)).then((ok) => !ok && setError("Не получилось проиграть звук. Попробуй ещё раз."));
   }, []);
 
   const listenTarget = useCallback(() => {
     if (!trial) return;
     setHeard(true);
-    listen(trial.drill.words[trial.target]!.korean);
+    listen(trial.drill.words[trial.target]!.korean, trial.voice);
   }, [trial, listen]);
 
   const pick = useCallback(
@@ -58,7 +58,7 @@ export function SoundsScreen() {
       if (!trial) return;
       if (picked !== undefined) {
         // After the answer every word can be played to compare.
-        listen(trial.drill.words[i]!.korean);
+        listen(trial.drill.words[i]!.korean, trial.voice);
         return;
       }
       const correct = i === trial.target;
@@ -76,7 +76,7 @@ export function SoundsScreen() {
     setError(undefined);
     // Still inside the tap, so iOS lets the next word play right away.
     setHeard(!!following);
-    if (following) listen(following.drill.words[following.target]!.korean);
+    if (following) listen(following.drill.words[following.target]!.korean, following.voice);
   }, [round, step, listen]);
 
   const remove = useCallback(() => {
