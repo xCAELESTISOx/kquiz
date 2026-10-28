@@ -3,6 +3,7 @@ import { and, count, desc, eq, isNull, lt, sql, type SQL } from "drizzle-orm";
 import { isKoreanOnly, isSpeakable, koreanKey, normalizeKorean, type CardKind, type CardPatch, type Example, type NewCard, type PhrasePart, type Register, type Root } from "./cards.js";
 import type { Db } from "./db/client.js";
 import { cards, reviewStates } from "./db/schema.js";
+import { isInitialsQuery, spellOut } from "./hangulSearch.js";
 import { introduce } from "./newCards.js";
 import { cardsLeft, QuotaError } from "./users.js";
 
@@ -150,8 +151,12 @@ export type CardQuery = {
 export function cardConditions(userId: number, query: Omit<CardQuery, "limit" | "before" | "notReady">): SQL[] {
   const where: SQL[] = [eq(cards.userId, userId)];
   if (query.q) {
-    const pattern = `%${query.q.toLocaleLowerCase().replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
-    where.push(sql`(ulower(${cards.korean}) like ${pattern} escape '\\' or ulower(${cards.meaning}) like ${pattern} escape '\\')`);
+    const like = (text: string) => `%${text.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+    const pattern = like(query.q.toLocaleLowerCase());
+    // Korean by letters, so 하 and ㅎ find 학교 while it is still being typed; ㅎㄱ by initials.
+    const korean = [sql`hangul_letters(${cards.korean}) like ${like(spellOut(query.q))} escape '\\'`];
+    if (isInitialsQuery(query.q)) korean.push(sql`hangul_initials(${cards.korean}) like ${like(query.q.replace(/\s+/g, ""))} escape '\\'`);
+    where.push(sql`(${sql.join(korean, sql` or `)} or ulower(${cards.meaning}) like ${pattern} escape '\\')`);
   }
   if (query.tag) where.push(sql`exists (select 1 from json_each(${cards.tags}) where value = ${query.tag})`);
   if (query.root) where.push(sql`exists (select 1 from json_each(${cards.roots}) where json_extract(value, '$.hanja') = ${query.root})`);

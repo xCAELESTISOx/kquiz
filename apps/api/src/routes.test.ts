@@ -78,6 +78,21 @@ describe("cards", () => {
     expect(second.json).toMatchObject({ cards: [{ korean: "사과" }], nextBefore: null });
   });
 
+  it("searches Korean by letters, unfinished syllables and initials", async () => {
+    const t = await signedIn();
+    await t.request("/cards/bulk", {
+      body: { cards: [{ korean: "학교", meaning: "школа" }, { korean: "사과", meaning: "яблоко" }, { korean: "닭", meaning: "курица" }] },
+    });
+    const find = async (q: string) => (await t.request("/cards?q=" + encodeURIComponent(q))).json.cards.map((c: any) => c.korean);
+    expect(await find("하")).toEqual(["학교"]);
+    expect(await find("ㅎ")).toEqual(["학교"]);
+    expect(await find("ㅎㄱ")).toEqual(["학교"]);
+    expect(await find("ㅅㄱ")).toEqual(["사과"]);
+    expect(await find("사고")).toEqual(["사과"]);
+    expect(await find("달")).toEqual(["닭"]);
+    expect(await find("ябл")).toEqual(["사과"]);
+  });
+
   it("treats % in a search as a literal", async () => {
     const t = await signedIn();
     await t.request("/cards", { body: { korean: "물", meaning: "вода" } });

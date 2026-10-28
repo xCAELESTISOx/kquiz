@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { initials, spellOut } from "../hangulSearch.js";
 import * as schema from "./schema.js";
 
 export type Db = BetterSQLite3Database<typeof schema>;
@@ -17,6 +18,9 @@ export function openDb(path: string): Db {
   sqlite.function("ulower", { deterministic: true }, (text: unknown) =>
     typeof text === "string" ? text.toLocaleLowerCase() : text,
   );
+  // Korean is searched letter by letter, see hangulSearch.ts.
+  sqlite.function("hangul_letters", { deterministic: true }, (text: unknown) => (typeof text === "string" ? spellOut(text) : text));
+  sqlite.function("hangul_initials", { deterministic: true }, (text: unknown) => (typeof text === "string" ? initials(text) : text));
   const db = drizzle(sqlite, { schema });
   // Off while migrating: rebuilding a table (0008) drops the old one, and with foreign keys on
   // that would cascade into every row that points at it. The pragma can't change inside the
