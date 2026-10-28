@@ -38,7 +38,12 @@ describe("pronunciation", () => {
 
   it("lists wrong sounds first in plain words", () => {
     expect(describeErrors(result)).toEqual([
-      { syllable: "국", status: "wrong", label: "Патчхим", detail: "нужно ㅇ [ŋ], слышно ㄱ [k]" },
+      {
+        syllable: "국",
+        status: "wrong",
+        label: "Патчхим", detail: "нужно ㅇ [ŋ], слышно ㄱ [k]",
+        fix: "Здесь звук носовой: перед ㄴ и ㅁ ㄱ читается как ㅇ. Не обрывай его, пусти воздух в нос.",
+      },
       { syllable: "물", status: "weak", label: "Гласная", detail: "ㅜ [u] звучит неуверенно" },
     ]);
   });

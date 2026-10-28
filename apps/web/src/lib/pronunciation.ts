@@ -1,3 +1,4 @@
+import { fixHint } from "./fixes";
 import type { ScoreResult, Sound, SyllableStatus } from "./types";
 
 export type Segment = { text: string; status?: SyllableStatus; index?: number };
@@ -26,7 +27,8 @@ function sound(s: Sound | null | undefined): string {
   return s.ipa ? `${s.jamo} [${s.ipa}]` : s.jamo;
 }
 
-export type ErrorLine = { syllable: string; status: "weak" | "wrong"; label: string; detail: string };
+/** `fix` says how to say the sound right; only wrong sounds get one, weak ones are not mistakes. */
+export type ErrorLine = { syllable: string; status: "weak" | "wrong"; label: string; detail: string; fix?: string };
 
 export function describeErrors(result: ScoreResult): ErrorLine[] {
   // Wrong sounds first: those are the ones worth fixing.
@@ -41,7 +43,14 @@ export function describeErrors(result: ScoreResult): ErrorLine[] {
             : e.kind === "insertion"
               ? `лишнее ${sound(e.heard)}`
               : `${sound(e.expected)} звучит неуверенно`;
-      return { syllable: result.syllables[e.syllable]?.text ?? "", status: e.status, label: POSITION[e.position], detail };
+      const fix = e.status === "wrong" ? fixHint(e) : undefined;
+      return {
+        syllable: result.syllables[e.syllable]?.text ?? "",
+        status: e.status,
+        label: POSITION[e.position],
+        detail,
+        ...(fix && { fix }),
+      };
     });
 }
 
