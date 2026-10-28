@@ -108,7 +108,7 @@ describe("cards summary and export", () => {
     fromClaude(t, 1);
     const res = await t.request("/cards/summary");
     expect(res.json).toEqual({
-      counts: { all: 3, queued: 1, paused: 0 },
+      counts: { all: 3, queued: 1, paused: 0, phrases: 0 },
       tags: [
         { tag: "еда", count: 2 },
         { tag: "фрукты", count: 1 },

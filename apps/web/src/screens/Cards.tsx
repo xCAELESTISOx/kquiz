@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { api, remembered } from "../lib/api";
-import { cardsCount, cardsWord } from "../lib/plural";
+import { cardsCount, cardsWord, phrasesWord } from "../lib/plural";
 import { groupHash } from "../lib/router";
 import type { Card, CardFilter, CardSummary, GroupFilter, Settings, Stats } from "../lib/types";
 import { CloseIcon, DownloadIcon, HeadphonesIcon, MicIcon, MinusIcon, PlusIcon, SearchIcon, ShuffleIcon } from "../ui/icons";
@@ -17,7 +17,8 @@ const listQuery = (query: string, tag: string | undefined, filter: CardFilter | 
   q: query.trim(),
   tag,
   root,
-  status: filter,
+  status: filter === "phrases" ? undefined : filter,
+  kind: filter === "phrases" ? ("phrase" as const) : undefined,
   limit: PAGE,
 });
 
@@ -95,6 +96,7 @@ export function CardsScreen({ filter, root }: { filter?: CardFilter; root?: stri
   const filters: { id: CardFilter | undefined; label: string; count?: number }[] = [
     { id: undefined, label: "Все", count: counts?.all },
     { id: "queued", label: "Очередь", count: counts?.queued },
+    { id: "phrases", label: "Фразы", count: counts?.phrases },
     { id: "paused", label: "Пауза", count: counts?.paused },
   ];
 
@@ -150,9 +152,15 @@ export function CardsScreen({ filter, root }: { filter?: CardFilter; root?: stri
 
       {filter === "queued" && <QueuePanel onChange={refreshSummary} />}
 
-      {cards && (query.trim() || tag || root || filter === "queued") && filter !== "paused" && (
+      {cards && (query.trim() || tag || root || filter === "queued" || filter === "phrases") && filter !== "paused" && (
         <GroupBar
-          group={{ q: query.trim() || undefined, tag, root, status: filter === "queued" ? "queued" : undefined }}
+          group={{
+            q: query.trim() || undefined,
+            tag,
+            root,
+            status: filter === "queued" ? "queued" : undefined,
+            kind: filter === "phrases" ? "phrase" : undefined,
+          }}
           cards={cards}
           more={nextBefore !== null}
         />
@@ -168,6 +176,8 @@ export function CardsScreen({ filter, root }: { filter?: CardFilter; root?: stri
             "Ничего не нашлось. Попробуй другое слово или сними фильтр."
           ) : filter === "queued" ? (
             "Очередь пуста: все новые карточки уже в повторении."
+          ) : filter === "phrases" ? (
+            "Фраз пока нет. Попроси Claude добавить фразы, которые хочешь выучить целиком."
           ) : filter === "paused" ? (
             "На паузе ничего нет. Поставить карточку на паузу можно в её настройках."
           ) : (
@@ -187,11 +197,12 @@ export function CardsScreen({ filter, root }: { filter?: CardFilter; root?: stri
                   {card.korean}
                 </span>
                 <span className="card-row-meaning">{card.meaning}</span>
-                {(card.suspended || (card.queued && filter !== "queued") || !card.speakable) && (
+                {(card.suspended || (card.queued && filter !== "queued") || card.kind === "phrase" || !card.speakable) && (
                   <span className="card-row-badges">
+                    {card.kind === "phrase" && filter !== "phrases" && <span className="badge badge-phrase">фраза</span>}
                     {card.queued && filter !== "queued" && <span className="badge">в очереди</span>}
                     {card.suspended && <span className="badge">пауза</span>}
-                    {!card.speakable && <span className="badge badge-faint">без произношения</span>}
+                    {!card.speakable && card.kind === "word" && <span className="badge badge-faint">без произношения</span>}
                   </span>
                 )}
               </a>
@@ -256,20 +267,23 @@ function GroupBar({ group, cards, more }: { group: GroupFilter; cards: Card[]; m
   return (
     <section className="group-bar" aria-label="Учить выбранные">
       <p className="group-bar-title">
-        Учить эти <span className="group-bar-count">{count}</span> {more ? "карточек" : cardsWord(active.length)}
+        Учить эти <span className="group-bar-count">{count}</span>{" "}
+        {group.kind === "phrase" ? (more ? "фраз" : phrasesWord(active.length)) : more ? "карточек" : cardsWord(active.length)}
       </p>
       <div className="group-bar-actions">
         <a className="button primary" href={groupHash("review", group)}>
-          Перевод
+          {group.kind === "phrase" ? "Собрать" : "Перевод"}
         </a>
         <a className="button" href={groupHash("mix", group)}>
           <ShuffleIcon />
           Вперемешку
         </a>
-        <a className="button" href={groupHash("speech", group)}>
-          <MicIcon />
-          Вслух
-        </a>
+        {group.kind !== "phrase" && (
+          <a className="button" href={groupHash("speech", group)}>
+            <MicIcon />
+            Вслух
+          </a>
+        )}
         <a className="button" href={groupHash("listen", group)}>
           <HeadphonesIcon />
           На слух

@@ -55,7 +55,7 @@ export function App() {
       {route === "add" ? (
         <AddScreen />
       ) : route === "cards" ? (
-        <CardsScreen key="cards" filter={param === "queued" || param === "paused" ? param : undefined} root={root} />
+        <CardsScreen key="cards" filter={param === "queued" || param === "paused" || param === "phrases" ? param : undefined} root={root} />
       ) : route === "card" ? (
         <CardScreen key={param} id={Number(param)} />
       ) : route === "stats" ? (

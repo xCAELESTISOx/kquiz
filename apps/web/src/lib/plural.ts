@@ -12,3 +12,8 @@ export function cardsCount(n: number): string {
   const word = cardsWord(n);
   return `${n} ${word === "карточку" ? "карточка" : word}`;
 }
+
+/** Accusative, like cardsWord: 1 фразу, 2 фразы, 5 фраз. */
+export function phrasesWord(n: number): string {
+  return { карточку: "фразу", карточки: "фразы", карточек: "фраз" }[cardsWord(n)]!;
+}

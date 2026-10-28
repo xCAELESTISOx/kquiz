@@ -1,9 +1,11 @@
 import { isKoreanOnly, normalizeKorean } from "./korean";
+import { fallbackTiles } from "./phrase";
 import type {
   AddCardResult,
   AddCardsResult,
   Card,
   CardFilter,
+  CardKind,
   CardList,
   CardPatch,
   CardSource,
@@ -12,6 +14,7 @@ import type {
   Family,
   FsrsStatus,
   GroupFilter,
+  PhraseTiles,
   NewCard,
   QueueItem,
   QueueMode,
@@ -43,7 +46,7 @@ export interface KeyValueStorage {
   setItem(key: string, value: string): void;
 }
 
-const KEY = "kquiz.mock.v4";
+const KEY = "kquiz.mock.v5";
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
 
@@ -69,6 +72,25 @@ const SEED: NewCard[] = [
   { korean: "학생", meaning: "студент, ученик", pronunciation: "학쌩", tags: ["учёба"], roots: [root("학", "學", "учёба"), root("생", "生", "жизнь, рождение")] },
   { korean: "대학교", meaning: "университет", pronunciation: "대학꾜", tags: ["учёба"], roots: [root("대", "大", "большой"), root("학", "學", "учёба"), root("교", "校", "школа")] },
   { korean: "선생님", meaning: "учитель", tags: ["учёба"], roots: [root("선", "先", "прежде"), root("생", "生", "жизнь, рождение")] },
+  { korean: "가다", meaning: "идти, ехать", tags: ["глаголы"], roots: [] },
+  { korean: "화장실", meaning: "туалет", roots: [root("화", "化", "превращение"), root("장", "粧", "наряд"), root("실", "室", "комната")] },
+  { korean: "어디", meaning: "где, куда", roots: [] },
+  { korean: "화장실이 어디예요?", meaning: "Где здесь туалет?", kind: "phrase", register: "polite", notes: "В кафе, в метро, в гостях.", parts: [
+      { ko: "화장실이", base: "화장실", meaning: "туалет (+이)" },
+      { ko: "어디예요", base: "어디", meaning: "где (+예요)" },
+    ] },
+  { korean: "안녕히 가세요", meaning: "До свидания (уходящему)", kind: "phrase", register: "polite", notes: "Говорит тот, кто остаётся. Уходящий отвечает 안녕히 계세요.", parts: [
+      { ko: "안녕히", meaning: "спокойно, благополучно" },
+      { ko: "가세요", base: "가다", meaning: "идите" },
+    ] },
+  { korean: "잘 먹겠습니다", meaning: "Приятного мне аппетита, спасибо за еду", kind: "phrase", register: "formal", notes: "Перед едой, особенно когда угощают.", parts: [
+      { ko: "잘", meaning: "хорошо" },
+      { ko: "먹겠습니다", base: "먹다", meaning: "буду есть" },
+    ] },
+  { korean: "어떻게 지내요?", meaning: "Как поживаешь?", kind: "phrase", register: "polite", parts: [
+      { ko: "어떻게", meaning: "как" },
+      { ko: "지내요", base: "지내다", meaning: "поживать" },
+    ] },
 ];
 
 // As if Claude had just added them: they wait in the new-card queue.
@@ -77,6 +99,15 @@ const SEED_QUEUED: NewCard[] = [
   { korean: "편의점", meaning: "круглосуточный магазин", pronunciation: "펴니점", tags: ["город"] },
   { korean: "영수증", meaning: "чек", tags: ["покупки"] },
   { korean: "계산하다", meaning: "расплачиваться, считать", tags: ["покупки", "глаголы"] },
+];
+
+// A few of the server's grammar look-alikes (apps/api/src/phrases.ts), so the mock's wrong blocks look real.
+const MOCK_SWAPS: [string, string][] = [
+  ["예요", "이에요"],
+  ["습니다", "어요"],
+  ["세요", "셨어요"],
+  ["이", "을"],
+  ["요", ""],
 ];
 
 /** Same rule as the server: duplicates ignore spaces and punctuation. */
@@ -101,7 +132,7 @@ export class MockApi {
     }
   }
 
-  cards(query: { q?: string; tag?: string; root?: string; status?: CardFilter; before?: number; limit?: number }): CardList {
+  cards(query: { q?: string; tag?: string; root?: string; status?: CardFilter; kind?: CardKind; before?: number; limit?: number }): CardList {
     const limit = query.limit ?? 50;
     const q = query.q?.toLocaleLowerCase();
     const found = [...this.state.cards]
@@ -113,6 +144,7 @@ export class MockApi {
           (!query.root || !!c.roots?.some((r) => r.hanja === query.root)) &&
           (query.status !== "queued" || c.queued) &&
           (query.status !== "paused" || c.suspended) &&
+          (!query.kind || c.kind === query.kind) &&
           (!query.before || c.id < query.before),
       );
     const page = found.slice(0, limit);
@@ -127,6 +159,7 @@ export class MockApi {
         all: this.state.cards.length,
         queued: this.state.cards.filter((c) => c.queued).length,
         paused: this.state.cards.filter((c) => c.suspended).length,
+        phrases: this.state.cards.filter((c) => c.kind === "phrase").length,
       },
       tags: [...tags].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag)),
     };
@@ -152,6 +185,35 @@ export class MockApi {
     return card;
   }
 
+  /** A phrase's pieces linked to the words, as GET /api/cards/:id gives them. */
+  linkedCard(id: number): Card {
+    const card = this.card(id);
+    if (!card.parts) return card;
+    const parts = card.parts.map((p) => {
+      const word = this.state.cards.find((c) => c.kind === "word" && (c.korean === p.base || c.korean === p.ko));
+      return word ? { ...p, cardId: word.id } : p;
+    });
+    return { ...card, parts };
+  }
+
+  /** The phrase's words and a few blocks of other phrases; the server also makes grammar look-alikes. */
+  blocks(cardIds: number[]): Record<number, PhraseTiles> {
+    const phrases = this.state.cards.filter((c) => c.kind === "phrase");
+    return Object.fromEntries(
+      phrases
+        .filter((c) => cardIds.includes(c.id))
+        .map((card) => {
+          const { blocks } = fallbackTiles(card);
+          const others = phrases.filter((c) => c.id !== card.id).flatMap((c) => fallbackTiles(c).blocks);
+          const lookAlikes = blocks.flatMap((b) => MOCK_SWAPS.flatMap(([end, other]) => (b.endsWith(end) && b.length > end.length ? [b.slice(0, -end.length) + other] : [])));
+          const decoys = [...new Set([...lookAlikes.slice(0, 2), ...others.sort(() => Math.random() - 0.5)])]
+            .filter((b) => !blocks.includes(b))
+            .slice(0, 4);
+          return [card.id, { blocks, decoys }];
+        }),
+    );
+  }
+
   updateCard(id: number, patch: CardPatch): Card {
     const card = this.card(id);
     const clear = (v: string | undefined, old: string | null) => (v === undefined ? old : v || null);
@@ -164,6 +226,7 @@ export class MockApi {
       ...(patch.examples && { examples: patch.examples }),
       ...(patch.tags && { tags: patch.tags }),
       ...(patch.suspended !== undefined && { suspended: patch.suspended }),
+      ...(patch.register && { register: patch.register }),
       updatedAt: this.now().toISOString(),
     });
     if (patch.speakable !== undefined) card.speakable = patch.speakable && card.readyForSpeech;
@@ -230,7 +293,7 @@ export class MockApi {
     const now = this.now().getTime();
     return this.state.cards
       // No recordings in the mock: listening falls back to the phone's voice for every Hangul card.
-      .filter((c) => !c.queued && !c.suspended && (mode === "speech" ? c.speakable : mode === "listening" ? c.readyForSpeech : true))
+      .filter((c) => !c.queued && !c.suspended && (mode === "speech" ? c.speakable && c.kind === "word" : mode === "listening" ? c.readyForSpeech : true))
       .map((card) => {
         const key = `${card.id}:${mode}`;
         // Saved before listening mode existed: due from the card's creation.
@@ -445,6 +508,9 @@ export class MockApi {
       notes: input.notes ?? null,
       tags: input.tags ?? [],
       roots: input.roots ?? null,
+      kind: input.kind ?? "word",
+      parts: input.parts ?? null,
+      register: input.register ?? null,
       speakable: readyForSpeech && syllables > 0 && syllables <= 12,
       readyForSpeech,
       source,

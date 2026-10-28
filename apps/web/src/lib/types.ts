@@ -31,6 +31,27 @@ export interface Family extends Root {
   total: number;
 }
 
+/** A word, or a set phrase learned whole (안녕히 가세요). */
+export type CardKind = "word" | "phrase";
+
+/** 합쇼체 (formal), 해요체 (polite), 반말 (casual). */
+export type Register = "formal" | "polite" | "casual";
+
+/** A piece of a phrase as written in it, its dictionary form when different, and the user's card for that word. */
+export interface PhrasePart {
+  ko: string;
+  base?: string;
+  meaning: string;
+  /** Only on a single card (GET /api/cards/:id). */
+  cardId?: number;
+}
+
+/** The blocks a phrase is built from, in order, and the wrong ones mixed in (GET /api/reviews/blocks). */
+export interface PhraseTiles {
+  blocks: string[];
+  decoys: string[];
+}
+
 export interface NewCard {
   korean: string;
   meaning: string;
@@ -40,6 +61,9 @@ export interface NewCard {
   notes?: string;
   tags?: string[];
   roots?: Root[];
+  kind?: CardKind;
+  parts?: PhrasePart[];
+  register?: Register;
 }
 
 export interface Card {
@@ -53,6 +77,10 @@ export interface Card {
   tags: string[];
   /** Null until Claude fills them in; [] for a native word. */
   roots: Root[] | null;
+  kind: CardKind;
+  /** A phrase's pieces in order; null for a word. */
+  parts: PhrasePart[] | null;
+  register: Register | null;
   speakable: boolean;
   /** False when `korean` has non-Hangul text; such cards never become speakable. */
   readyForSpeech: boolean;
@@ -127,7 +155,8 @@ export interface Stats {
 /** PATCH /api/cards/:id: any field; "" clears an optional one. */
 export type CardPatch = Partial<Omit<NewCard, "tags">> & { tags?: string[]; speakable?: boolean; suspended?: boolean };
 
-export type CardFilter = "queued" | "paused";
+/** A filter of the cards screen: the new-card queue, paused cards, or phrases only. */
+export type CardFilter = "queued" | "paused" | "phrases";
 
 /** A group of cards picked on the cards screen to review on its own: a search, a tag, the queue. */
 export interface GroupFilter {
@@ -136,6 +165,8 @@ export interface GroupFilter {
   /** A hanja: the word family of that root. */
   root?: string;
   status?: "queued";
+  /** Only phrases. */
+  kind?: "phrase";
 }
 
 export interface CardList {
@@ -144,7 +175,7 @@ export interface CardList {
 }
 
 export interface CardSummary {
-  counts: { all: number; queued: number; paused: number };
+  counts: { all: number; queued: number; paused: number; phrases: number };
   tags: { tag: string; count: number }[];
 }
 

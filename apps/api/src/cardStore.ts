@@ -1,6 +1,6 @@
 import { State } from "ts-fsrs";
 import { and, count, desc, eq, isNull, lt, sql, type SQL } from "drizzle-orm";
-import { isKoreanOnly, isSpeakable, koreanKey, normalizeKorean, type CardPatch, type Example, type NewCard, type Root } from "./cards.js";
+import { isKoreanOnly, isSpeakable, koreanKey, normalizeKorean, type CardKind, type CardPatch, type Example, type NewCard, type PhrasePart, type Register, type Root } from "./cards.js";
 import type { Db } from "./db/client.js";
 import { cards, reviewStates } from "./db/schema.js";
 import { introduce } from "./newCards.js";
@@ -20,6 +20,11 @@ export type CardDto = {
   tags: string[];
   /** Sino-Korean roots; null until someone (usually Claude) fills them in, [] for a native word. */
   roots: Root[] | null;
+  /** A word, or a set phrase learned whole. */
+  kind: CardKind;
+  /** A phrase's pieces in order; null for a word or a phrase not broken down yet. */
+  parts: PhrasePart[] | null;
+  register: Register | null;
   speakable: boolean;
   /** False when `korean` has non-Hangul text: the card can't enter the pronunciation queue. */
   readyForSpeech: boolean;
@@ -43,6 +48,9 @@ export function toCardDto(row: CardRow): CardDto {
     notes: row.notes,
     tags: row.tags,
     roots: row.roots,
+    kind: row.kind,
+    parts: row.parts,
+    register: row.register,
     speakable: row.speakable,
     readyForSpeech: isKoreanOnly(row.korean),
     source: row.source,
@@ -93,6 +101,9 @@ export function createCards(db: Db, userId: number, inputs: NewCard[], source: C
           notes: emptyToNull(input.notes),
           tags: uniqueTags(input.tags),
           roots: input.roots ?? null,
+          kind: input.kind ?? "word",
+          parts: input.parts?.length ? input.parts : null,
+          register: input.register ?? null,
           speakable: (input.speakable ?? isSpeakable(korean)) && isKoreanOnly(korean),
           source,
           createdAt: now,
@@ -128,6 +139,8 @@ export type CardQuery = {
   notReady?: boolean;
   /** Only queued cards (not yet in reviews), or only paused ones. */
   status?: "queued" | "paused";
+  /** Only words, or only phrases. */
+  kind?: CardKind;
   limit?: number;
   /** Id of the last card on the previous page; pages go from newest to oldest. */
   before?: number;
@@ -145,6 +158,7 @@ export function cardConditions(userId: number, query: Omit<CardQuery, "limit" | 
   if (query.rootsUnset) where.push(isNull(cards.roots));
   if (query.status === "queued") where.push(isNull(cards.introducedAt));
   if (query.status === "paused") where.push(eq(cards.suspended, true));
+  if (query.kind) where.push(eq(cards.kind, query.kind));
   return where;
 }
 
@@ -179,17 +193,18 @@ export function listTags(db: Db, userId: number): { tag: string; count: number }
 }
 
 /** Cards in the new-card queue and paused cards, for the filter chips. */
-export function cardCounts(db: Db, userId: number): { all: number; queued: number; paused: number } {
+export function cardCounts(db: Db, userId: number): { all: number; queued: number; paused: number; phrases: number } {
   const row = db
     .select({
       all: count(),
+      phrases: sql<number>`coalesce(sum(${cards.kind} = 'phrase'), 0)`,
       queued: sql<number>`coalesce(sum(${cards.introducedAt} is null), 0)`,
       paused: sql<number>`coalesce(sum(${cards.suspended}), 0)`,
     })
     .from(cards)
     .where(eq(cards.userId, userId))
     .get();
-  return { all: row?.all ?? 0, queued: row?.queued ?? 0, paused: row?.paused ?? 0 };
+  return { all: row?.all ?? 0, queued: row?.queued ?? 0, paused: row?.paused ?? 0, phrases: row?.phrases ?? 0 };
 }
 
 /**
@@ -261,6 +276,9 @@ export function updateCard(
         notes: optional(patch.notes, current.notes),
         tags: patch.tags ? uniqueTags(patch.tags) : current.tags,
         roots: patch.roots ?? current.roots,
+        kind: patch.kind ?? current.kind,
+        parts: patch.parts ? (patch.parts.length ? patch.parts : null) : current.parts,
+        register: patch.register ?? current.register,
         suspended: patch.suspended ?? current.suspended,
         speakable: (patch.speakable ?? (patch.korean === undefined ? current.speakable : isSpeakable(korean))) && isKoreanOnly(korean),
         updatedAt: now,

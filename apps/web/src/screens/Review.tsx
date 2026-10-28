@@ -9,13 +9,15 @@ import { navigate } from "../lib/router";
 import { canRecord, type Recorder } from "../lib/recorder";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
 import { forgetVoice, heard } from "../lib/voices";
-import type { Card, ChoiceOption, GroupFilter, MixKind, QueueItem, QueueMode, RatingName } from "../lib/types";
+import type { Card, ChoiceOption, GroupFilter, MixKind, PhraseTiles, QueueItem, QueueMode, RatingName } from "../lib/types";
 import { CloseIcon, SpeakerIcon, UndoIcon } from "../ui/icons";
 import { LeechBadge } from "../ui/LeechBadge";
 import { useGlide } from "../ui/motion";
 import { useFamily, WordFamily } from "../ui/WordFamily";
 import { ChoiceCard } from "./Choice";
 import { MixSetup } from "./MixSetup";
+import { PhraseCard } from "./Phrase";
+import { PhraseParts, RegisterBadge } from "../ui/PhraseParts";
 import { SpeechCard } from "./Speech";
 import { TypeCard, type TypeAsk } from "./Typing";
 import "../ui/guess.css";
@@ -60,6 +62,8 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
   const [quiet, setQuiet] = useState<ReadonlySet<QueueItem>>(new Set());
   // The ones typed in Hangul instead: speech items by their translation, listening ones by ear.
   const [typed, setTyped] = useState<ReadonlyMap<QueueItem, TypeAsk>>(new Map());
+  // Blocks for the phrases, which are built rather than recalled (Phrase.tsx).
+  const [tiles, setTiles] = useState<Record<number, PhraseTiles>>({});
   // A mixed session starts once its kinds are picked.
   const [kinds, setKinds] = useState<ReadonlySet<MixKind>>();
   // The translation picked when guessing a new word, or null for "не знаю"; reset with each card.
@@ -82,6 +86,11 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
           pick: (i) => (options[i.card.id]?.length ?? 0) > 0,
         });
         const items = all.filter((i) => ways.has(i));
+        const phrases = items.filter((i) => builds(i, ways.get(i) === "dictation"));
+        const { tiles } = phrases.length
+          ? await api.blocks(phrases.map((i) => i.card.id)).catch(() => ({ tiles: {} as Record<number, PhraseTiles> }))
+          : { tiles: {} };
+        setTiles(tiles);
         setOptions(options);
         setQuiet(new Set(items.filter((i) => ways.get(i) === "choice")));
         setTyped(
@@ -102,8 +111,9 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
   const card = item?.card;
   const listening = item?.mode === "listening";
   const typing = item ? typed.get(item) : undefined;
-  // Said, picked or typed: such a card grades itself and takes its own keys.
-  const speaking = item?.mode === "speech" || !!typing;
+  const building = !!item && builds(item, typing === "sound");
+  // Said, picked, typed or built: such a card grades itself and takes its own keys.
+  const speaking = item?.mode === "speech" || !!typing || building;
   // Listening shows no text before the answer, so only meaning reviews ask through an example.
   const cloze = useMemo(() => (item?.mode === "meaning" ? clozeFor(item) : undefined), [item]);
   const families = useFamily(card);
@@ -256,15 +266,19 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
 
       <div aria-live="polite">{error && <p className="notice notice-error">{error}</p>}</div>
 
-      {mode === "mixed" && !kinds && <MixSetup counted={!group} onStart={setKinds} />}
+      {mode === "mixed" && !kinds && <MixSetup counted={!group} phrases={group?.kind === "phrase"} onStart={setKinds} />}
 
       {!queue && !error && (mode !== "mixed" || kinds) && <div className="review-stage" aria-busy="true" />}
 
       {queue && !card && <Finished count={done} />}
 
-      {queue && item && typing && <TypeCard key={step} item={item} ask={typing} onDone={spoken} />}
+      {queue && item && building && (
+        <PhraseCard key={step} item={item} tiles={tiles[item.card.id]} ask={item.mode === "listening" ? "sound" : "meaning"} onDone={spoken} />
+      )}
 
-      {queue && item && speaking && !typing && (quiet.has(item) ? (
+      {queue && item && typing && !building && <TypeCard key={step} item={item} ask={typing} onDone={spoken} />}
+
+      {queue && item && speaking && !typing && !building && (quiet.has(item) ? (
         <ChoiceCard
           key={step}
           item={item}
@@ -360,6 +374,8 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
                   </p>
                 ) : null}
                 <p className="review-meaning">{card.meaning}</p>
+                <RegisterBadge card={card} />
+                <PhraseParts card={card} />
                 {card.examples.length > 0 && (
                   <ul className="review-examples">
                     {card.examples.map((example, i) => (
@@ -434,6 +450,11 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
       )}
     </main>
   );
+}
+
+/** A phrase is built from blocks: from its translation, or from what is heard when typed by ear would be asked. */
+function builds(item: QueueItem, byEar: boolean): boolean {
+  return item.card.kind === "phrase" && (item.mode === "meaning" || (item.mode === "listening" && byEar));
 }
 
 function toggled<T>(set: ReadonlySet<T>, value: T): ReadonlySet<T> {

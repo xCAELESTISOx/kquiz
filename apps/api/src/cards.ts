@@ -31,6 +31,28 @@ export type Root = z.infer<typeof rootSchema>;
 
 export const MAX_ROOTS = 8;
 
+export const CARD_KINDS = ["word", "phrase"] as const;
+export type CardKind = (typeof CARD_KINDS)[number];
+
+/** 합쇼체 (formal), 해요체 (polite), 반말 (casual). */
+export const REGISTERS = ["formal", "polite", "casual"] as const;
+export type Register = (typeof REGISTERS)[number];
+
+/**
+ * One piece of a phrase as it stands in it (가세요), its dictionary form when that differs (가다), and
+ * what it means. In order, the pieces spell the whole phrase; the dictionary form links the piece
+ * to the user's card for that word.
+ */
+export const phrasePartSchema = z.object({
+  ko: z.string().trim().min(1).max(60).regex(/\p{Script=Hangul}/u, "must be Korean"),
+  base: z.string().trim().max(60).optional(),
+  meaning: z.string().trim().min(1).max(120),
+});
+
+export type PhrasePart = z.infer<typeof phrasePartSchema>;
+
+export const MAX_PARTS = 12;
+
 export const newCardSchema = z.object({
   korean: z.string().trim().min(1).max(200),
   meaning: z.string().trim().min(1).max(500),
@@ -43,6 +65,10 @@ export const newCardSchema = z.object({
   roots: z.array(rootSchema).max(MAX_ROOTS).optional(),
   // Defaults to isSpeakable(korean); true is accepted only for Hangul-only text.
   speakable: z.boolean().optional(),
+  // A word when left out.
+  kind: z.enum(CARD_KINDS).optional(),
+  parts: z.array(phrasePartSchema).max(MAX_PARTS).optional(),
+  register: z.enum(REGISTERS).optional(),
 });
 
 export const cardPatchSchema = newCardSchema
