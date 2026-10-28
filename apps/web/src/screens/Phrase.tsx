@@ -22,11 +22,14 @@ export function PhraseCard({
   item,
   tiles,
   ask,
+  practice,
   onDone,
 }: {
   item: QueueItem;
   tiles: PhraseTiles | undefined;
   ask: BuildAsk;
+  /** "Учить": nothing is sent, the schedule and the stats stay as they were. */
+  practice?: boolean;
   onDone: (rating: RatingName) => void;
 }) {
   const { card } = item;
@@ -64,6 +67,7 @@ export function PhraseCard({
       const rating = buildRating(correct, elapsedMs, set.blocks.length);
       setResult({ slots: gaveUp ? set.blocks.map(() => "wrong") : slots, rating, gaveUp });
       if (canSpeak()) speak(card);
+      if (practice) return;
       void submitReview({
         id: crypto.randomUUID(),
         cardId: card.id,
@@ -73,7 +77,7 @@ export function PhraseCard({
         elapsedMs,
       }).catch((e: Error) => setError(e.message));
     },
-    [result, set, picked, card, item.mode],
+    [result, set, picked, card, item.mode, practice],
   );
 
   useEffect(() => {
@@ -135,7 +139,7 @@ export function PhraseCard({
     <>
       <div className="review-stage">
         <div className="review-card phrase-card" data-result={result ? (correct ? "right" : "wrong") : undefined}>
-          {leeches.has(card.id) && <LeechBadge />}
+          {!practice && leeches.has(card.id) && <LeechBadge />}
           <p className="speech-ask">{ask === "sound" ? "Собери, что слышишь" : "Собери фразу по-корейски"}</p>
           {ask === "sound" ? (
             !result && (

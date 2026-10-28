@@ -4,7 +4,7 @@ import { shuffled } from "../lib/choice";
 import { clozeFor } from "../lib/cloze";
 import { guessHints, isFirstShow, splitAt, type GuessHint } from "../lib/guess";
 import { useLeechIds } from "../lib/leeches";
-import { mixWays, serverModes } from "../lib/mix";
+import { everyKind, mixWays, serverModes } from "../lib/mix";
 import { navigate } from "../lib/router";
 import { canRecord, type Recorder } from "../lib/recorder";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
@@ -43,7 +43,16 @@ type Swipe = RatingName | "back";
  * A new word asked for its meaning the first time, when it shares a root with words already well
  * learned, is guessed first from those words among a few translations; the answer and grading follow.
  */
-export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meaning" | "listening" | "mixed">; group?: GroupFilter }) {
+export function ReviewScreen({
+  mode,
+  group,
+  all,
+}: {
+  mode: Extract<QueueMode, "meaning" | "listening" | "mixed">;
+  group?: GroupFilter;
+  /** Mixed: every way at once ("Повторить" for a group), without asking what to mix. */
+  all?: boolean;
+}) {
   const [queue, setQueue] = useState<QueueItem[]>();
   const [total, setTotal] = useState(0);
   const [done, setDone] = useState(0);
@@ -65,7 +74,7 @@ export function ReviewScreen({ mode, group }: { mode: Extract<QueueMode, "meanin
   // Blocks for the phrases, which are built rather than recalled (Phrase.tsx).
   const [tiles, setTiles] = useState<Record<number, PhraseTiles>>({});
   // A mixed session starts once its kinds are picked.
-  const [kinds, setKinds] = useState<ReadonlySet<MixKind>>();
+  const [kinds, setKinds] = useState<ReadonlySet<MixKind> | undefined>(() => (all ? everyKind(group?.kind === "phrase") : undefined));
   // The translation picked when guessing a new word, or null for "не знаю"; reset with each card.
   const [guess, setGuess] = useState<{ step: number; meaning: string | null }>();
 

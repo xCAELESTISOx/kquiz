@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { api, remembered } from "../lib/api";
+import { GROUP_SIZE } from "../lib/learn";
 import { cardsCount, cardsWord, phrasesWord } from "../lib/plural";
 import { groupHash } from "../lib/router";
 import type { Card, CardFilter, CardSummary, GroupFilter, Settings, Stats } from "../lib/types";
-import { CloseIcon, DownloadIcon, HeadphonesIcon, MicIcon, MinusIcon, PlusIcon, SearchIcon, ShuffleIcon } from "../ui/icons";
+import { CloseIcon, DownloadIcon, LearnIcon, MinusIcon, PlusIcon, SearchIcon, ShuffleIcon } from "../ui/icons";
 import { EmptyState } from "../ui/EmptyState";
 import { Spinner } from "../ui/Spinner";
 import "../ui/family.css";
@@ -256,40 +257,42 @@ function RootBanner({ root, cards, filter }: { root: string; cards: Card[] | und
 }
 
 /**
- * Reviews just what the list shows: a search, a tag, the queue. All of it, due or not, in random
- * order; the ratings go into the usual schedule.
+ * Just what the list shows: a search, a tag, the queue. "Учить" takes it step by step, GROUP_SIZE
+ * words at a time, without touching the schedule (Learn.tsx). "Повторить" reviews all of it, due or
+ * not, in every way at once and in random order; those ratings go into the usual schedule.
  */
+/** Nominative: 1 карточка, 2 карточки, 5 карточек; 1 фраза, 2 фразы, 5 фраз. */
+function groupWord(n: number, phrases: boolean): string {
+  const word = cardsWord(n);
+  if (!phrases) return word === "карточку" ? "карточка" : word;
+  return word === "карточку" ? "фраза" : phrasesWord(n);
+}
+
 function GroupBar({ group, cards, more }: { group: GroupFilter; cards: Card[]; more: boolean }) {
   const active = cards.filter((c) => !c.suspended);
   if (!active.length) return null;
   const queued = active.some((c) => c.queued);
   const count = more ? `${active.length}+` : String(active.length);
+  const phrases = group.kind === "phrase";
   return (
     <section className="group-bar" aria-label="Учить выбранные">
       <p className="group-bar-title">
-        Учить эти <span className="group-bar-count">{count}</span>{" "}
-        {group.kind === "phrase" ? (more ? "фраз" : phrasesWord(active.length)) : more ? "карточек" : cardsWord(active.length)}
+        В группе <span className="group-bar-count">{count}</span> {groupWord(more ? 5 : active.length, phrases)}
       </p>
       <div className="group-bar-actions">
-        <a className="button primary" href={groupHash("review", group)}>
-          {group.kind === "phrase" ? "Собрать" : "Перевод"}
+        <a className="button primary" href={groupHash("learn", group)}>
+          <LearnIcon />
+          Учить
         </a>
-        <a className="button" href={groupHash("mix", group)}>
+        <a className="button" href={groupHash("mix", group, { all: true })}>
           <ShuffleIcon />
-          Вперемешку
-        </a>
-        {group.kind !== "phrase" && (
-          <a className="button" href={groupHash("speech", group)}>
-            <MicIcon />
-            Вслух
-          </a>
-        )}
-        <a className="button" href={groupHash("listen", group)}>
-          <HeadphonesIcon />
-          На слух
+          Повторить
         </a>
       </div>
-      {queued && <p className="muted small">Карточки из очереди войдут в повторение сразу, вне дневного лимита.</p>}
+      <p className="muted small">
+        {more || active.length > GROUP_SIZE ? `Учить — по ${GROUP_SIZE} за раз, без оценок. ` : "Учить — по шагам, без оценок. "}
+        Повторить — все режимы вперемешку{queued ? ", карточки из очереди войдут в повторение сразу." : "."}
+      </p>
     </section>
   );
 }

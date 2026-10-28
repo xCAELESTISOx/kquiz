@@ -1219,11 +1219,6 @@ p {
   white-space: nowrap;
 }
 
-/* Three ways (phrases have no "aloud"): the main one takes the whole row. */
-.group-bar-actions > :first-child:nth-last-child(3) {
-  grid-column: 1 / -1;
-}
-
 .group-bar-actions .button svg {
   width: 18px;
   height: 18px;
