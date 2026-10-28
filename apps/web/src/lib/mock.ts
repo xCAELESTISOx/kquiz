@@ -139,7 +139,10 @@ export class MockApi {
       if (seen.has(root.hanja)) return [];
       seen.add(root.hanja);
       const others = this.cards({ root: root.hanja, limit: Infinity }).cards.filter((c) => c.id !== id);
-      return [{ ...root, cards: others.slice(0, 5).map(({ id, korean, meaning }) => ({ id, korean, meaning })), total: others.length }];
+      return [{ ...root, cards: others
+            .map(({ id, korean, meaning }) => ({ id, korean, meaning, known: (this.state.reps[`${id}:meaning`] ?? 0) >= 2 }))
+            .sort((a, b) => Number(b.known) - Number(a.known))
+            .slice(0, 5), total: others.length }];
     });
   }
 

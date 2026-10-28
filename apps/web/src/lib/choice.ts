@@ -1,7 +1,10 @@
 import type { RatingName } from "./types";
 
-/** A right pick this slow was more search than recall. */
-const SLOW_MS = 10_000;
+/** The options stay hidden this long, so the word is recalled before it can be recognised. */
+export const REVEAL_MS = 3_000;
+
+/** A right pick this long after the options showed was more search than recall. */
+const SLOW_MS = 7_000;
 
 export function shuffled<T>(items: T[], random = Math.random): T[] {
   const out = [...items];
@@ -12,8 +15,11 @@ export function shuffled<T>(items: T[], random = Math.random): T[] {
   return out;
 }
 
-/** The rating a pick earns: wrong is again, right is good, or hard when it took long. */
-export function choiceRating(correct: boolean, elapsedMs: number): RatingName {
+/**
+ * The rating a pick earns: wrong is again, right is good, or hard when it took long. Counted from
+ * when the options showed, so the recall pause before them (waited out or skipped) costs nothing.
+ */
+export function choiceRating(correct: boolean, pickMs: number): RatingName {
   if (!correct) return "again";
-  return elapsedMs > SLOW_MS ? "hard" : "good";
+  return pickMs > SLOW_MS ? "hard" : "good";
 }
