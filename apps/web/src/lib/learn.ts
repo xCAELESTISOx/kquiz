@@ -96,7 +96,22 @@ export function groupSteps(cards: Card[], can: (card: Card) => LearnAbilities, r
     }
   }
   if (pending) meet.push(pending);
-  return apart([...meet, ...later.flatMap((round) => (round ? shuffled(round, random) : []))]);
+  const rounds = [meet, ...later.filter(Boolean).map((round) => shuffled(round, random))];
+  // A word comes once a round, so only where two rounds meet can it follow itself: then another word
+  // of the round starts it, or, when the round has just that one, the round before ends otherwise.
+  for (let i = 1; i < rounds.length; i++) {
+    const prev = rounds[i - 1]!;
+    const cur = rounds[i]!;
+    if (cur[0]!.cardId !== prev.at(-1)!.cardId) continue;
+    const k = cur.findIndex((s) => s.cardId !== prev.at(-1)!.cardId);
+    if (k > 0) [cur[0], cur[k]] = [cur[k]!, cur[0]!];
+    else if (i > 1) {
+      const before = rounds[i - 2]!.at(-1)!.cardId;
+      const m = prev.findIndex((s, n) => n < prev.length - 1 && s.cardId !== cur[0]!.cardId && (n > 0 || prev.at(-1)!.cardId !== before));
+      if (m >= 0) [prev[m], prev[prev.length - 1]] = [prev.at(-1)!, prev[m]!];
+    }
+  }
+  return rounds.flat();
 }
 
 /** "Закрепить" for a group: each word's typing steps again, all in one shuffled round. */
@@ -110,8 +125,13 @@ export function apart(steps: LearnStep[]): LearnStep[] {
   const out = [...steps];
   for (let i = 1; i < out.length; i++) {
     if (out[i]!.cardId !== out[i - 1]!.cardId) continue;
+    // The nearest one that fits, so a step stays in its own round wherever it can.
     const j = out.findIndex(
-      (s, k) => k > i + 1 && s.cardId !== out[i - 1]!.cardId && out[k - 1]!.cardId !== out[i]!.cardId && out[k + 1]?.cardId !== out[i]!.cardId,
+      (s, k) =>
+        k > i &&
+        s.cardId !== out[i - 1]!.cardId &&
+        (k === i + 1 || out[k - 1]!.cardId !== out[i]!.cardId) &&
+        out[k + 1]?.cardId !== out[i]!.cardId,
     );
     if (j > 0) [out[i], out[j]] = [out[j]!, out[i]!];
   }
