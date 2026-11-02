@@ -18,7 +18,7 @@
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.4",
     "hono": "^4.13.13",
-    "ts-fsrs": "^5.4.2",
+    "ts-fsrs": "^6.0.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
