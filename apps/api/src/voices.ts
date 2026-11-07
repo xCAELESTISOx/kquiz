@@ -83,21 +83,3 @@ export function getVoiceAudio(db: Db, text: string, voice: ExtraVoice) {
   return row && { data: row.data, mime: row.mime, etag: `"${voice}-${row.createdAt.getTime()}-${row.data.length}"` };
 }
 
-/** Drops voices of words no card or drill has any more. Returns how many went. */
-export function pruneVoiceAudio(db: Db): number {
-  const wanted = new Set(wantedVoiceTexts(db));
-  const stale = [
-    ...new Set(
-      db
-        .select({ text: voiceAudio.text })
-        .from(voiceAudio)
-        .all()
-        .map((r) => r.text)
-        .filter((text) => !wanted.has(text)),
-    ),
-  ];
-  for (let i = 0; i < stale.length; i += 500) {
-    db.delete(voiceAudio).where(inArray(voiceAudio.text, stale.slice(i, i + 500))).run();
-  }
-  return stale.length;
-}

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { audioWorker, BadTextError, httpSpeaker, type Speaker } from "./cardAudio.js";
 import { createCards } from "./cardStore.js";
-import { users } from "./db/schema.js";
+import { cards, users } from "./db/schema.js";
 import { testApp } from "./testing.js";
 import { OWNER_ID } from "./users.js";
 
@@ -80,6 +80,25 @@ describe("card audio", () => {
 
     await t.request(`/cards/${t.ids[0]}`, { method: "DELETE" });
     expect(await worker.runOnce()).toBe(0);
+  });
+
+  it("outlives its card, so the same word added again reuses it", async () => {
+    const t = await withCards("물", "불");
+    const { speaker, calls } = fakeSpeaker();
+    const worker = audioWorker(t.db, speaker, () => t.clock.now, []);
+    await worker.runOnce();
+    await t.request(`/cards/${t.ids[0]}`, { method: "PATCH", body: { korean: "냉수" } });
+    await worker.runOnce();
+    expect(calls).toEqual(["물", "불", "냉수"]);
+
+    // A card deleted through the app, and every card wiped straight in the database.
+    await t.request(`/cards/${t.ids[1]}`, { method: "DELETE" });
+    t.db.delete(cards).run();
+    for (const k of ["물", "불", "냉수"]) await t.request("/cards", { body: { korean: k, meaning: "что-то" } });
+    expect(await worker.runOnce()).toBe(0);
+    expect(calls).toHaveLength(3);
+    const ids = t.db.select({ id: cards.id }).from(cards).all().map((c) => c.id);
+    for (const id of ids) expect((await t.request(`/cards/${id}/audio`)).status).toBe(200);
   });
 
   it("stops a pass while the scorer is down and skips texts it refuses", async () => {
