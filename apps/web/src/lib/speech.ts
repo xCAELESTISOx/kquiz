@@ -1,10 +1,21 @@
 import { resume, shortClip } from "./audioSession";
+import { whenVisible } from "./resume";
 
-// Reference audio: the server's recording of the card (Supertonic, apps/api/src/cardAudio.ts),
-// or the system ko-KR voice while there is none yet or it fails to load. Listening may ask for the
-// word in another voice (lib/voices.ts); without that recording yet, the default one plays.
+// Reference audio: the server's recording of the card (Supertonic, apps/api/src/cardAudio.ts).
+// The system ko-KR voice speaks only when the server really has no recording (404), never because
+// a load was slow, cut off or interrupted: those are retried. Listening may ask for the word in
+// another voice (lib/voices.ts); without that recording yet, the default one plays.
 type SpeechCard = { id: number; korean: string; voice?: string };
-type Clip = { audio: HTMLAudioElement; korean: string; failed: boolean; objectUrl?: string };
+type ClipState = "loading" | "ready" | "missing" | "broken";
+type Clip = {
+  audio: HTMLAudioElement;
+  korean: string;
+  state: ClipState;
+  /** When the server last said it has no recording, to ask again a little later. */
+  missingAt: number;
+  loaded: Promise<void>;
+  objectUrl?: string;
+};
 
 const hasAudio = () => typeof Audio !== "undefined";
 const hasSystemVoice = () => typeof speechSynthesis !== "undefined";
@@ -17,6 +28,10 @@ export function canSpeak(): boolean {
 const MAX_CLIPS = 20;
 const clips = new Map<string, Clip>();
 const clipKey = (card: SpeechCard) => `${card.id}:${card.voice ?? ""}`;
+// A new card's recording is made within seconds (the worker runs every 10 s), so a 404 is asked again.
+const MISSING_RECHECK_MS = 15_000;
+// Network hiccups, the app frozen by iOS mid-request, the server restarting for an update.
+const RETRY_DELAYS_MS = [700, 2000, 5000];
 
 // MP3s are also kept in Cache Storage, so a card heard once plays at once next time, even after
 // the app was closed. The key carries the Korean: when it changes, so does the audio.
@@ -36,18 +51,46 @@ async function openAudioCache(): Promise<Cache | undefined> {
   }
 }
 
-/** The card's MP3 from the cache or the server; undefined while the server has none (404). */
-async function loadAudio(card: SpeechCard): Promise<Blob | undefined> {
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * The card's MP3 from the cache or the server; "missing" when the server has none (404), "broken"
+ * when it couldn't be fetched even after a few tries.
+ */
+export async function loadAudio(card: SpeechCard, delays: readonly number[] = RETRY_DELAYS_MS): Promise<Blob | "missing" | "broken"> {
   const cache = await openAudioCache();
   const hit = await cache?.match(cacheKey(card)).catch(() => undefined);
-  if (hit) return hit.blob();
-  const res = await fetch(audioUrl(card), { credentials: "same-origin" });
-  if (!res.ok) return undefined;
-  if (cache) {
-    await cache.put(cacheKey(card), res.clone()).catch(() => {});
-    void pruneAudioCache(cache, card);
+  if (hit) {
+    const blob = await hit.blob().catch(() => undefined);
+    if (blob?.size) return blob;
   }
-  return res.blob();
+  for (let attempt = 0; ; attempt++) {
+    await whenVisible();
+    let res: Response | undefined;
+    try {
+      res = await fetch(audioUrl(card), { credentials: "same-origin" });
+    } catch {
+      res = undefined;
+    }
+    if (res?.ok) {
+      const blob = await res
+        .clone()
+        .blob()
+        .catch(() => undefined);
+      if (blob?.size) {
+        if (cache) {
+          await cache.put(cacheKey(card), res).catch(() => {});
+          void pruneAudioCache(cache, card);
+        }
+        return blob;
+      }
+    }
+    if (res?.status === 404) return "missing";
+    // Signed out: trying again won't help.
+    if (res?.status === 401 || res?.status === 403) return "broken";
+    if (attempt >= delays.length) return "broken";
+    await wait(delays[attempt]!);
+  }
 }
 
 /** Drops the card's audio for its earlier Korean, in every voice, and the oldest clips past MAX_CACHED. */
@@ -64,23 +107,43 @@ async function pruneAudioCache(cache: Cache, card: SpeechCard) {
   }
 }
 
+/** (Re)loads the clip's MP3 into its own element, which keeps the permission a tap gave it on iOS. */
+function fill(clip: Clip, card: SpeechCard): Promise<void> {
+  clip.state = "loading";
+  clip.loaded = loadAudio(card).then((result) => {
+    if (result === "missing") {
+      clip.state = "missing";
+      clip.missingAt = Date.now();
+    } else if (result === "broken") {
+      clip.state = "broken";
+    } else {
+      if (clip.objectUrl) URL.revokeObjectURL(clip.objectUrl);
+      clip.objectUrl = URL.createObjectURL(result);
+      // A tap before the load finished has already pointed the clip at the server.
+      if (!clip.audio.getAttribute("src") || clip.audio.error) clip.audio.src = clip.objectUrl;
+      clip.audio.dataset.src = clip.objectUrl;
+      clip.state = "ready";
+    }
+  });
+  return clip.loaded;
+}
+
 function clipFor(card: SpeechCard): Clip {
   const key = clipKey(card);
   const cached = clips.get(key);
-  if (cached && cached.korean === card.korean) return cached;
+  if (cached && cached.korean === card.korean) {
+    // Not there a while ago, or the network failed: ask the server again.
+    const stale =
+      (cached.state === "missing" && Date.now() - cached.missingAt > MISSING_RECHECK_MS) || cached.state === "broken";
+    if (stale) void fill(cached, card);
+    clips.delete(key);
+    clips.set(key, cached);
+    return cached;
+  }
   const audio = shortClip(new Audio());
   audio.preload = "auto";
-  const clip: Clip = { audio, korean: card.korean, failed: false };
-  // 404 until the server has made it.
-  audio.addEventListener("error", () => (clip.failed = true));
-  loadAudio(card).then(
-    (blob) => {
-      if (!blob) clip.failed = true;
-      // A tap before the load finished has already pointed the clip at the server.
-      else if (!audio.src) audio.src = clip.objectUrl = URL.createObjectURL(blob);
-    },
-    () => (clip.failed = true),
-  );
+  const clip: Clip = { audio, korean: card.korean, state: "loading", missingAt: 0, loaded: Promise.resolve() };
+  void fill(clip, card);
   if (cached?.objectUrl) URL.revokeObjectURL(cached.objectUrl);
   clips.delete(key);
   clips.set(key, clip);
@@ -113,20 +176,43 @@ function speakWithSystemVoice(text: string) {
   speechSynthesis.speak(utterance);
 }
 
+// Only the latest speak() may sound: an earlier one that is still loading or retrying stays silent.
+let latest = 0;
+
+/** play() was cut short by our own pause() or the next speak(), or refused outside a tap. */
+const harmless = (e: unknown) => e instanceof DOMException && (e.name === "AbortError" || e.name === "NotAllowedError");
+
 export function speak(card: SpeechCard): void {
+  const turn = ++latest;
   if (hasSystemVoice()) speechSynthesis.cancel();
   for (const other of clips.values()) other.audio.pause();
   const clip = hasAudio() ? clipFor(card) : undefined;
-  const fallback = (): void => (card.voice ? speak({ ...card, voice: undefined }) : speakWithSystemVoice(card.korean));
-  if (!clip || clip.failed) return fallback();
-  resume(clip.audio);
-  if (!clip.audio.getAttribute("src")) clip.audio.src = audioUrl(card);
-  clip.audio.currentTime = 0;
-  clip.audio.play().catch((e: unknown) => {
-    // Played without a tap and the browser said no: the phone's voice would be refused too,
-    // and the recording itself is fine for the next tap.
-    if (e instanceof DOMException && e.name === "NotAllowedError") return;
-    clip.failed = true;
-    fallback();
+  const fallback = (): void => {
+    if (turn !== latest) return;
+    if (card.voice) speak({ ...card, voice: undefined });
+    else speakWithSystemVoice(card.korean);
+  };
+  if (!clip) return fallback();
+  // Known to be absent, and asked recently: the other voice, or the phone's.
+  if (clip.state === "missing") return fallback();
+  const start = () => {
+    resume(clip.audio);
+    // Still loading: stream it from the server, inside the tap.
+    if (!clip.audio.getAttribute("src") || clip.audio.error) clip.audio.src = clip.objectUrl ?? audioUrl(card);
+    clip.audio.currentTime = 0;
+    return clip.audio.play();
+  };
+  start().catch(async (e: unknown) => {
+    if (harmless(e) || turn !== latest) return;
+    // The stream failed (cut off, not made yet, server restarting): load it again and play that.
+    await (clip.state === "loading" ? clip.loaded : fill(clip, card));
+    if (turn !== latest) return;
+    if (clip.state === "ready") {
+      clip.audio.src = clip.objectUrl!;
+      start().catch((again: unknown) => {
+        if (!harmless(again)) fallback();
+      });
+    } else if (clip.state === "missing") fallback();
+    // Still broken after the retries: the phone's voice would only mislead; the next tap tries again.
   });
 }
