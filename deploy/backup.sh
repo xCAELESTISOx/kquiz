@@ -25,3 +25,6 @@ if [ -n "${BACKUP_REMOTE:-}" ]; then
   rsync -a --delete -e "ssh -p ${BACKUP_REMOTE_PORT:-23} -o BatchMode=yes" --include 'kquiz-*.db.gz' --exclude '*' \
     "$DEST/" "$BACKUP_REMOTE/"
 fi
+
+# One-time move to a new server (deploy/migrate-out.sh); a no-op once done or on the new server.
+"$(dirname "$0")/migrate-out.sh" schedule || true
