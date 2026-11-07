@@ -1,6 +1,7 @@
 import { isKoreanOnly, normalizeKorean } from "./korean";
 import { fallbackTiles } from "./phrase";
 import type {
+  Lesson,
   AddCardResult,
   AddCardsResult,
   Card,
@@ -47,6 +48,12 @@ export interface KeyValueStorage {
 }
 
 const KEY = "kquiz.mock.v5";
+
+/** A moment's date on this device, YYYY-MM-DD: the lesson a card added then belongs to. */
+const localDay = (iso: string) => {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
 
@@ -134,12 +141,13 @@ export class MockApi {
       ? (JSON.parse(saved) as MockState)
       : { nextId: 1, cards: [], due: {}, reps: {}, reviewIds: [], reviewedToday: { day: "", count: 0 }, newPerDay: 15 };
     if (!saved) {
-      for (const card of SEED) this.insert(card, "app");
+      // The sample deck is already learned; the queued sample is a lesson still to learn.
+      for (const card of SEED) this.insert(card, "app", true);
       for (const card of SEED_QUEUED) this.insert(card, "claude");
     }
   }
 
-  cards(query: { q?: string; tag?: string; root?: string; status?: CardFilter; kind?: CardKind; before?: number; limit?: number }): CardList {
+  cards(query: { q?: string; tag?: string; root?: string; status?: CardFilter; kind?: CardKind; lesson?: string; before?: number; limit?: number }): CardList {
     const limit = query.limit ?? 50;
     const q = query.q?.toLocaleLowerCase();
     const found = [...this.state.cards]
@@ -152,6 +160,7 @@ export class MockApi {
           (query.status !== "queued" || c.queued) &&
           (query.status !== "paused" || c.suspended) &&
           (!query.kind || c.kind === query.kind) &&
+          (!query.lesson || localDay(c.createdAt) === query.lesson) &&
           (!query.before || c.id < query.before),
       );
     const page = found.slice(0, limit);
@@ -256,6 +265,34 @@ export class MockApi {
     this.state.due[`${id}:listening`] = at;
     this.save();
     return card;
+  }
+
+  learned(ids: number[], missed: number[]): { introduced: number[] } {
+    const introduced: number[] = [];
+    const tomorrow = new Date(this.now());
+    tomorrow.setHours(24, 0, 0, 0);
+    for (const card of this.state.cards) {
+      if (!ids.includes(card.id) || !card.queued) continue;
+      card.queued = false;
+      const at = (missed.includes(card.id) ? new Date(Math.min(this.now().getTime() + 2 * 3_600_000, tomorrow.getTime())) : tomorrow).toISOString();
+      for (const mode of ["meaning", "speech", "listening"]) this.state.due[`${card.id}:${mode}`] = at;
+      introduced.push(card.id);
+    }
+    this.save();
+    return { introduced };
+  }
+
+  private newCards(): Stats["newCards"] {
+    const queued = this.state.cards.filter((c) => c.queued);
+    const lessons: Lesson[] = [];
+    for (const card of [...queued].sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
+      if (card.suspended) continue;
+      const day = localDay(card.createdAt);
+      const last = lessons.at(-1);
+      if (last?.day === day) last.count++;
+      else lessons.push({ day, count: 1 });
+    }
+    return { queued: queued.length, lessons };
   }
 
   settings(): Settings {
@@ -390,7 +427,7 @@ export class MockApi {
         listening: this.queue("listening", Infinity).length,
       },
       reviewedToday: this.state.reviewedToday.day === day ? this.state.reviewedToday.count : 0,
-      newCards: { introduced: 0, limit: this.state.newPerDay, queued: this.state.cards.filter((c) => c.queued).length },
+      newCards: this.newCards(),
     };
   }
 
@@ -498,7 +535,7 @@ export class MockApi {
     };
   }
 
-  private insert(input: NewCard, source: CardSource): AddCardResult {
+  private insert(input: NewCard, source: CardSource, learned = false): AddCardResult {
     const korean = normalizeKorean(input.korean);
     const existing = this.state.cards.find((c) => dedupeKey(c.korean) === dedupeKey(korean));
     if (existing) return { status: "duplicate", existingId: existing.id };
@@ -522,7 +559,7 @@ export class MockApi {
       readyForSpeech,
       source,
       suspended: false,
-      queued: source === "claude",
+      queued: !learned,
       createdAt: at,
       updatedAt: at,
     };

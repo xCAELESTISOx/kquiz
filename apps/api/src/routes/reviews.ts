@@ -5,7 +5,6 @@ import { CARD_KINDS } from "../cards.js";
 import { distractors } from "../choices.js";
 import type { Db } from "../db/client.js";
 import { findLeeches } from "../leeches.js";
-import { introduceDailyCards } from "../newCards.js";
 import { phraseTiles } from "../phrases.js";
 import { RETENTION_RANGE, setDesiredRetention } from "../fsrs.js";
 import { fsrsStatus } from "../fsrsOptimizer.js";
@@ -56,7 +55,6 @@ export function reviewRoutes(db: Db, now: () => Date, timeZone: string) {
       .safeParse(c.req.query());
     if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
     const userId = c.get("user").id;
-    introduceDailyCards(db, userId, now(), timeZone);
     return c.json({ items: dueQueue(db, userId, queueModeOf(query.data.mode, query.data.modes), now(), query.data.limit) });
   });
 
@@ -104,7 +102,6 @@ export function reviewRoutes(db: Db, now: () => Date, timeZone: string) {
 
   app.get("/stats", (c) => {
     const userId = c.get("user").id;
-    introduceDailyCards(db, userId, now(), timeZone);
     return c.json(getStats(db, userId, now(), timeZone));
   });
 

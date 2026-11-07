@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { api, remembered } from "../lib/api";
 import { GROUP_SIZE } from "../lib/learn";
-import { cardsCount, cardsWord, phrasesWord } from "../lib/plural";
+import { lessonDate } from "../lib/lessons";
+import { cardsCount, cardsWord, phrasesWord, wordsWord } from "../lib/plural";
 import { groupHash } from "../lib/router";
-import type { Card, CardFilter, CardSummary, GroupFilter, Settings, Stats } from "../lib/types";
-import { CloseIcon, DownloadIcon, LearnIcon, MinusIcon, PlusIcon, SearchIcon, ShuffleIcon } from "../ui/icons";
+import type { Card, CardFilter, CardSummary, GroupFilter, Stats } from "../lib/types";
+import { CloseIcon, DownloadIcon, LearnIcon, SearchIcon, ShuffleIcon } from "../ui/icons";
 import { EmptyState } from "../ui/EmptyState";
 import { Spinner } from "../ui/Spinner";
 import "../ui/family.css";
@@ -96,7 +97,7 @@ export function CardsScreen({ filter, root }: { filter?: CardFilter; root?: stri
   const counts = summary?.counts;
   const filters: { id: CardFilter | undefined; label: string; count?: number }[] = [
     { id: undefined, label: "Все", count: counts?.all },
-    { id: "queued", label: "Очередь", count: counts?.queued },
+    { id: "queued", label: "Новые", count: counts?.queued },
     { id: "phrases", label: "Фразы", count: counts?.phrases },
     { id: "paused", label: "Пауза", count: counts?.paused },
   ];
@@ -151,7 +152,7 @@ export function CardsScreen({ filter, root }: { filter?: CardFilter; root?: stri
 
       {root && <RootBanner root={root} cards={cards} filter={filter} />}
 
-      {filter === "queued" && <QueuePanel onChange={refreshSummary} />}
+      {filter === "queued" && <LessonsPanel />}
 
       {cards && (query.trim() || tag || root || filter === "queued" || filter === "phrases") && filter !== "paused" && (
         <GroupBar
@@ -176,7 +177,7 @@ export function CardsScreen({ filter, root }: { filter?: CardFilter; root?: stri
           {query || tag || root ? (
             "Ничего не нашлось. Попробуй другое слово или сними фильтр."
           ) : filter === "queued" ? (
-            "Очередь пуста: все новые карточки уже в повторении."
+            "Новых слов нет: все карточки уже выучены и в повторении."
           ) : filter === "phrases" ? (
             "Фраз пока нет. Попроси Claude добавить фразы, которые хочешь выучить целиком."
           ) : filter === "paused" ? (
@@ -201,7 +202,7 @@ export function CardsScreen({ filter, root }: { filter?: CardFilter; root?: stri
                 {(card.suspended || (card.queued && filter !== "queued") || card.kind === "phrase" || !card.speakable) && (
                   <span className="card-row-badges">
                     {card.kind === "phrase" && filter !== "phrases" && <span className="badge badge-phrase">фраза</span>}
-                    {card.queued && filter !== "queued" && <span className="badge">в очереди</span>}
+                    {card.queued && filter !== "queued" && <span className="badge">новое</span>}
                     {card.suspended && <span className="badge">пауза</span>}
                     {!card.speakable && card.kind === "word" && <span className="badge badge-faint">без произношения</span>}
                   </span>
@@ -209,7 +210,7 @@ export function CardsScreen({ filter, root }: { filter?: CardFilter; root?: stri
               </a>
               {filter === "queued" && (
                 <button type="button" className="row-action" onClick={() => void introduce(card)}>
-                  Учить сейчас
+                  В повторение
                 </button>
               )}
             </li>
@@ -291,62 +292,39 @@ function GroupBar({ group, cards, more }: { group: GroupFilter; cards: Card[]; m
       </div>
       <p className="muted small">
         {more || active.length > GROUP_SIZE ? `Учить — по ${GROUP_SIZE} за раз, без оценок. ` : "Учить — по шагам, без оценок. "}
-        Повторить — все режимы вперемешку{queued ? ", карточки из очереди войдут в повторение сразу." : "."}
+        Повторить — все режимы вперемешку{queued ? ", новые слова войдут в повторение сразу, без обучения." : "."}
       </p>
     </section>
   );
 }
 
-/** The daily allowance of the new-card queue, set right where the queue is seen. */
-function QueuePanel({ onChange }: { onChange: () => void }) {
-  const [settings, setSettings] = useState<Settings | undefined>(remembered.settings);
+/** The lessons of new words, oldest first: each is learned whole before its words are reviewed. */
+function LessonsPanel() {
   const [stats, setStats] = useState<Stats | undefined>(remembered.stats);
-  const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-
   useEffect(() => {
-    api.settings().then(setSettings, () => undefined);
     api.stats().then(setStats, () => undefined);
   }, []);
-
-  function change(delta: number) {
-    if (!settings) return;
-    const newPerDay = Math.min(Math.max(settings.newPerDay + delta, 0), 200);
-    setSettings({ newPerDay });
-    // Tapping +/- several times sends one request.
-    clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      api.updateSettings({ newPerDay }).then(() => {
-        api.stats().then(setStats, () => undefined);
-        onChange();
-      }, () => undefined);
-    }, 500);
-  }
-
-  const today = stats?.newCards;
+  const lessons = stats?.newCards.lessons ?? [];
   return (
-    <section className="queue-panel" aria-label="Новые в день">
-      <div className="queue-panel-row">
-        <div>
-          <p className="queue-panel-title">Новых в день</p>
-          <p className="muted small">
-            {today ? `Сегодня вошло ${today.introduced} из ${today.limit}` : " "}
-          </p>
-        </div>
-        <div className="stepper">
-          <button type="button" className="icon-button" aria-label="Меньше" disabled={!settings || settings.newPerDay <= 0} onClick={() => change(-1)}>
-            <MinusIcon />
-          </button>
-          <output className="stepper-value" aria-live="polite">
-            {settings?.newPerDay ?? "–"}
-          </output>
-          <button type="button" className="icon-button" aria-label="Больше" disabled={!settings} onClick={() => change(1)}>
-            <PlusIcon />
-          </button>
-        </div>
-      </div>
+    <section className="queue-panel" aria-label="Уроки новых слов">
+      {lessons.length > 0 && (
+        <ol className="lesson-list">
+          {lessons.map((lesson, i) => (
+            <li key={lesson.day} className="lesson-row">
+              <span>
+                <span className="queue-panel-title">{lessonDate(lesson.day)}</span>
+                <span className="muted small"> · {lesson.count} {wordsWord(lesson.count)}</span>
+              </span>
+              <a className={`chip-button${i === 0 ? " chip-button-accent" : ""}`} href={groupHash("learn", { status: "queued", lesson: lesson.day })}>
+                Учить
+              </a>
+            </li>
+          ))}
+        </ol>
+      )}
       <p className="muted small">
-        Сюда попадают карточки от Claude и входят в повторение вперемешку, понемногу каждый день. «Учить сейчас» берёт карточку
-        вне лимита. Добавленные в приложении попадают в повторение сразу.
+        Новые слова сначала учатся, потом входят в повторение. Слова, добавленные в один день, — один урок; уроки идут по порядку.
+        «В повторение» берёт карточку сразу, без обучения.
       </p>
     </section>
   );

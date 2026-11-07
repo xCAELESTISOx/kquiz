@@ -5,7 +5,7 @@ import { getCardAudio } from "../cardAudio.js";
 import { cardCounts, cardFamily, createCards, deleteCard, getCard, listCards, listTags, updateCard } from "../cardStore.js";
 import { CARD_KINDS, newCardSchema, parseBulk } from "../cards.js";
 import type { Db } from "../db/client.js";
-import { introduceEarly } from "../newCards.js";
+import { dayRange, introduceEarly, introduceLearned } from "../newCards.js";
 import { linkParts } from "../phrases.js";
 import { isExtraVoice } from "../voices.js";
 
@@ -25,6 +25,13 @@ const listQuery = z.object({
   before: z.coerce.number().int().positive().optional(),
   status: z.enum(["queued", "paused"]).optional(),
   kind: z.enum(CARD_KINDS).optional(),
+  /** A lesson: the cards added on this day (YYYY-MM-DD, in the owner's time zone). */
+  lesson: z.iso.date().optional(),
+});
+
+const learnedBody = z.object({
+  cardIds: z.array(z.number().int().positive()).min(1).max(200),
+  missed: z.array(z.number().int().positive()).max(200).default([]),
 });
 
 // Pausing is the owner's call, so `suspended` is only in the app's patch, not in Claude's.
@@ -38,13 +45,14 @@ const bulkBody = z.union([
   z.object({ cards: z.array(z.unknown()).min(1).max(MAX_BATCH) }),
 ]);
 
-export function cardRoutes(db: Db, now: () => Date) {
+export function cardRoutes(db: Db, now: () => Date, timeZone: string) {
   const app = new Hono<{ Variables: AuthVariables }>();
 
   app.get("/", (c) => {
     const query = listQuery.safeParse(c.req.query());
     if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
-    return c.json(listCards(db, c.get("user").id, query.data));
+    const { lesson, ...rest } = query.data;
+    return c.json(listCards(db, c.get("user").id, { ...rest, ...(lesson && { added: dayRange(lesson, timeZone) }) }));
   });
 
   // For the filter chips of the cards screen.
@@ -131,7 +139,16 @@ export function cardRoutes(db: Db, now: () => Date) {
     return c.json(result, 404);
   });
 
-  // Pulls a card out of the new-card queue into reviews now, past the daily allowance.
+  // Words just learned ("Учить") enter reviews: tomorrow, or later today the ones missed on the way.
+  // Cards already in reviews are left alone.
+  app.post("/learned", async (c) => {
+    const body = learnedBody.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "invalid_request", issues: body.error.issues }, 400);
+    const ids = introduceLearned(db, c.get("user").id, body.data.cardIds, body.data.missed, now(), timeZone);
+    return c.json({ introduced: ids });
+  });
+
+  // Pulls a card in from the new words into reviews now, unlearned.
   app.post("/:id/introduce", (c) => {
     const id = idParam.safeParse(c.req.param("id"));
     const userId = c.get("user").id;

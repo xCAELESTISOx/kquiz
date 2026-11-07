@@ -17,7 +17,7 @@ pnpm db:generate    # after editing src/db/schema.ts; migrations in drizzle/ app
 | `MCP_REDIRECT_URIS` | Claude's callbacks | Comma-separated OAuth redirect URIs a client may register |
 | `ORIGIN_SECRET` | — | Required in production. Cloudflare adds it as header `x-kquiz-origin` (Transform Rule); requests without it get 403 |
 | `SETUP_CODE` | random, printed to the log | Code for binding the first passkey; useless once one is bound |
-| `TIME_ZONE` | `Asia/Seoul` | Where "today" starts: reviewed today and the daily new-card allowance |
+| `TIME_ZONE` | `Asia/Seoul` | Where "today" starts: reviewed today and which day (lesson) a new word belongs to |
 | `SCORER_URL` | `http://127.0.0.1:8788` | services/scorer; it listens on localhost only |
 | `HOST` / `PORT` | `127.0.0.1` / `8787` | Only Caddy on the same host talks to the API |
 
@@ -55,15 +55,16 @@ All JSON. Everything except health and `/auth/status|login|register` needs the s
 - `POST /bulk` `{ text }` (lines `한국어 — перевод`) or `{ cards: [...] }`, ≤ 50 → `{ created, duplicates, rejected }`
 - `POST /bulk/preview` `{ text }` → parsed lines without saving
 - `GET /:id`, `PATCH /:id` (partial; `""` clears an optional field; `suspended` pauses), `DELETE /:id`
-- `POST /:id/introduce` → `{ card }`: takes a queued card into reviews now, outside the daily allowance; `409 not_queued`
+- `POST /learned { cardIds, missed? }` → `{ introduced }`: new words just learned enter reviews, due at the next `TIME_ZONE` midnight, the `missed` ones 2 hours from now (not later than that midnight); cards already in reviews are left alone
+- `POST /:id/introduce` → `{ card }`: takes a new word into reviews now, unlearned; `409 not_queued`
 
 Card: `{ id, korean, meaning, pronunciation, romanization, examples, notes, tags, roots, kind, parts, register, speakable, readyForSpeech, source, suspended, queued, createdAt, updatedAt }`, where `examples` is up to 3 `{ ko, ru }` sentences (Claude must always send exactly 3 through MCP). `roots` are the Sino-Korean roots `[{ ko, hanja, meaning }]` (학 學 «учёба»): `null` until filled in (Claude does it; MCP `set_roots` for older cards, which is not an edit and keeps a hard card on its list), `[]` for a native word. Cards sharing a hanja are one word family; the hanja is the key, since one syllable has unrelated roots. Duplicates are detected ignoring spaces and punctuation. `readyForSpeech` is false when `korean` has non-Hangul text; such cards never become `speakable`.
 
 **Phrases** (`src/phrases.ts`). `kind` is `word` (default) or `phrase`: a set phrase learned whole (안녕히 가세요). A phrase has no examples; `parts` breaks it into its pieces in order, `[{ ko, base?, meaning }]` (`ko` as written in the phrase, `base` its dictionary form), and `register` is `formal` (합쇼체), `polite` (해요체) or `casual` (반말). `GET /cards/:id` adds `cardId` to each part the user has a word card for. Phrases are reviewed in the `meaning` schedule by building them from blocks after the Russian, and in `listening` by ear; they stay out of the `speech` queue for now. `GET /cards?kind=phrase` and the group `kind` filter narrow to phrases; `/cards/summary` counts them.
 
-**New-card queue** (`src/newCards.ts`). Cards Claude adds through MCP don't enter reviews at once: they are `queued` and come in `newPerDay` a day (default 15), picked at random, the first time the queue or stats are read that day (`TIME_ZONE` midnight). Cards added in the app, one or in bulk, skip the queue. A paused (`suspended`) card is in no review queue and isn't picked from the new-card queue.
+**New words** (`src/newCards.ts`). No card enters reviews when it is added, from Claude or in the app: it is `queued` until learned ("Учить" in the app, then `POST /cards/learned`). The cards added on one day (`TIME_ZONE`) are one lesson; `newCards` in `/reviews/stats` is `{ queued, lessons: [{ day, count }] }`, oldest first, and `GET /cards?lesson=YYYY-MM-DD` lists a lesson's cards. A paused (`suspended`) card is in no review queue and no lesson. Migration 0014 sent cards that had never been reviewed back to wait.
 
-**Settings** (`/api/settings`): `GET` → `{ newPerDay }`, `PATCH { newPerDay: 0–200 }`.
+**Settings** (`/api/settings`): `GET` → `{ newPerDay }`, `PATCH { newPerDay: 0–200 }` (no longer used since lessons replaced the daily allowance).
 
 **Export** (`/api/export`): `GET` → a JSON download (`kquiz-YYYY-MM-DD.json`): `{ app, version, exportedAt, settings, cards (with reviewStates), reviewLog, attempts }`.
 

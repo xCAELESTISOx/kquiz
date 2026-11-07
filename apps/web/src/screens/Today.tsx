@@ -1,9 +1,11 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { api, auth, lastToday, pendingReviewCount, remembered, rememberToday } from "../lib/api";
+import { lessonDate } from "../lib/lessons";
 import { cardsWord } from "../lib/plural";
+import { groupHash } from "../lib/router";
 import { hideSplash } from "../lib/splash";
 import type { QueueItem, Stats } from "../lib/types";
-import { HeadphonesIcon, MicIcon, ShuffleIcon } from "../ui/icons";
+import { HeadphonesIcon, LearnIcon, MicIcon, ShuffleIcon } from "../ui/icons";
 import { PracticeLinks } from "../ui/PracticeLinks";
 import { ScheduleSettings } from "./ScheduleSettings";
 
@@ -46,6 +48,10 @@ export function TodayScreen() {
   const restDue = speechDue + listenDue;
   // Worth offering once at least two kinds of review wait.
   const mixable = [due, speechDue, listenDue].filter((n) => n > 0).length > 1;
+  // The oldest lesson of new words is learned first; its words come into reviews after that.
+  const lessons = stats?.newCards.lessons ?? [];
+  const lesson = lessons[0];
+  const nothingDue = due === 0 && restDue === 0;
   const pending = pendingReviewCount();
   const today = new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
 
@@ -88,7 +94,9 @@ export function TodayScreen() {
                   ]
                     .filter(Boolean)
                     .join(", ")}.`
-                : "На сейчас всё повторено. Новые слова можно добавить в любой момент."}
+                : lesson
+                  ? "На сейчас всё повторено. Можно выучить новые слова, завтра они придут в повторение."
+                  : "На сейчас всё повторено. Новые слова можно добавить в любой момент."}
             </span>
           </p>
         )}
@@ -116,12 +124,15 @@ export function TodayScreen() {
         </dl>
       )}
 
-      {stats && stats.newCards.queued > 0 && (
+      {lesson && (
         <a className="queue-link" href="#/cards/queued">
           <span>
-            В очереди новых: <strong>{stats.newCards.queued}</strong>
+            Новых слов: <strong>{lesson.count}</strong>
           </span>
-          <span className="muted">по {stats.newCards.limit} в день</span>
+          <span className="muted">
+            урок {lessonDate(lesson.day)}
+            {lessons.length > 1 && `, ещё ${lessons.length - 1} ${lessonsWord(lessons.length - 1)}`}
+          </span>
         </a>
       )}
 
@@ -189,7 +200,14 @@ export function TodayScreen() {
             Нельзя вслух? Выбрать слово из вариантов
           </a>
         )}
-        {due === 0 && restDue === 0 && (
+        {lesson && (
+          <a className={`button${nothingDue ? " primary" : ""}`} href={groupHash("learn", { status: "queued", lesson: lesson.day })}>
+            <LearnIcon />
+            Учить новые слова
+            <span className="button-count">{lesson.count}</span>
+          </a>
+        )}
+        {nothingDue && !lesson && (
           <a className="button" href="#/add">
             Добавить слова
           </a>
@@ -197,6 +215,11 @@ export function TodayScreen() {
       </div>
     </main>
   );
+}
+
+/** 1 урок, 2 урока, 5 уроков. */
+function lessonsWord(n: number): string {
+  return { карточку: "урок", карточки: "урока", карточек: "уроков" }[cardsWord(n)]!;
 }
 
 /** A check that draws itself once: the one celebratory moment of an empty queue. */

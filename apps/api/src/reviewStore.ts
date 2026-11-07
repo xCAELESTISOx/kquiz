@@ -3,7 +3,7 @@ import { isKoreanOnly } from "./cards.js";
 import { cardConditions, toCardDto, type CardDto, type CardQuery } from "./cardStore.js";
 import type { Db } from "./db/client.js";
 import { cardAudio, cards, reviewLog, reviewStates } from "./db/schema.js";
-import { introduce, newCardsToday, startOfDay, type NewCardsToday } from "./newCards.js";
+import { introduce, newCards, startOfDay, type NewCards } from "./newCards.js";
 import { getFsrsSetup, schedulerFor } from "./fsrs.js";
 import { applyRating, fromStateRow, toStateRow, type RatingName, type ReviewMode } from "./review.js";
 import { voicesFor, type ExtraVoice } from "./voices.js";
@@ -227,9 +227,9 @@ function applyOne(
   return { id: review.id, status: "applied", due: next.due.toISOString() };
 }
 
-export type Stats = { cards: number; due: Record<ReviewMode, number>; reviewedToday: number; newCards: NewCardsToday };
+export type Stats = { cards: number; due: Record<ReviewMode, number>; reviewedToday: number; newCards: NewCards };
 
-/** `timeZone` sets where "today" starts for reviewedToday and the new-card allowance. */
+/** `timeZone` sets where "today" starts for reviewedToday and which day each lesson is. */
 export function getStats(db: Db, userId: number, now = new Date(), timeZone = "UTC"): Stats {
   const total = db.select({ n: count() }).from(cards).where(eq(cards.userId, userId)).get()?.n ?? 0;
   const dueRows = db
@@ -255,5 +255,5 @@ export function getStats(db: Db, userId: number, now = new Date(), timeZone = "U
       .innerJoin(cards, eq(cards.id, reviewLog.cardId))
       .where(and(eq(cards.userId, userId), sql`${reviewLog.reviewedAt} >= ${dayStart.getTime()}`))
       .get()?.n ?? 0;
-  return { cards: total, due, reviewedToday, newCards: newCardsToday(db, userId, now, timeZone) };
+  return { cards: total, due, reviewedToday, newCards: newCards(db, userId, timeZone) };
 }

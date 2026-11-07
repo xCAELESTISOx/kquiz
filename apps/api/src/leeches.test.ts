@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { createCards, updateCard } from "./cardStore.js";
+import { createReviewing } from "./testing.js";
 import { openDb } from "./db/client.js";
 import { cards } from "./db/schema.js";
 import { findLeeches, LEECH_THRESHOLD } from "./leeches.js";
@@ -14,7 +15,7 @@ const start = new Date("2026-10-01T09:00:00Z");
 
 function setup() {
   const db = openDb(":memory:");
-  const { created } = createCards(db, OWNER_ID, [{ korean: "어렵다", meaning: "трудный", tags: [] }, { korean: "쉽다", meaning: "лёгкий", tags: [] }], "app", start);
+  const { created } = createReviewing(db, OWNER_ID, [{ korean: "어렵다", meaning: "трудный", tags: [] }, { korean: "쉽다", meaning: "лёгкий", tags: [] }], "app", start);
   return { db, hard: created[0]!.id, easy: created[1]!.id };
 }
 

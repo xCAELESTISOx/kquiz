@@ -1186,29 +1186,25 @@ p {
   font-weight: 650;
 }
 
-.stepper {
+.lesson-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lesson-row {
   display: flex;
   align-items: center;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--bg);
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.stepper .icon-button {
-  color: var(--accent-hi);
-}
-
-.stepper .icon-button svg {
-  width: 18px;
-  height: 18px;
-}
-
-.stepper-value {
-  min-width: 2.5ch;
-  text-align: center;
-  font-size: var(--fs-lg);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+.chip-button-accent {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--on-accent);
 }
 
 /* Reviewing just the cards the list shows. */

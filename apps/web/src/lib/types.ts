@@ -138,6 +138,12 @@ export interface ReviewInput {
   elapsedMs?: number;
 }
 
+/** One lesson of new words: the cards added on `day` (YYYY-MM-DD), learned before they are reviewed. */
+export interface Lesson {
+  day: string;
+  count: number;
+}
+
 export interface ReviewResult {
   id: string;
   status: "applied" | "duplicate" | "card_not_found";
@@ -148,8 +154,8 @@ export interface Stats {
   cards: number;
   due: Record<ReviewMode, number>;
   reviewedToday: number;
-  /** New cards let in from the queue today, the daily allowance and what still waits. */
-  newCards: { introduced: number; limit: number; queued: number };
+  /** Words waiting to be learned, and their lessons (the cards added on one day), oldest first. */
+  newCards: { queued: number; lessons: Lesson[] };
 }
 
 /** PATCH /api/cards/:id: any field; "" clears an optional one. */
@@ -167,6 +173,8 @@ export interface GroupFilter {
   status?: "queued";
   /** Only phrases. */
   kind?: "phrase";
+  /** A lesson of new words: the cards added that day (YYYY-MM-DD). */
+  lesson?: string;
 }
 
 export interface CardList {

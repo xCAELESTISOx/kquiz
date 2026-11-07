@@ -12,7 +12,6 @@ import type { OwnerAuth, UserStores } from "../mcp/app.js";
 import type { OAuthStore } from "../mcp/oauth-store.js";
 import type { CardQuery, CardStore, DrillStore, NewDrill } from "../mcp/store.js";
 import { findLeeches } from "../leeches.js";
-import { introduceDailyCards } from "../newCards.js";
 import { addDrills, listDrills } from "../practice.js";
 import { getStats } from "../reviewStore.js";
 import { statsOverview, zoneOffset } from "../statsStore.js";
@@ -20,7 +19,7 @@ import { statsOverview, zoneOffset } from "../statsStore.js";
 export type StoredCard = NewCard & {
   id: string;
   speakable: boolean;
-  /** Waiting in the new-card queue (newCards.ts), not yet in reviews. */
+  /** Waiting to be learned (newCards.ts), not yet in reviews. */
   queued: boolean;
   source: CardSource;
   createdAt: string;
@@ -156,7 +155,6 @@ export class SqliteCardStore implements CardStore {
   }
 
   async stats(now: Date) {
-    introduceDailyCards(this.db, this.userId, now, this.timeZone);
     const stats = getStats(this.db, this.userId, now, this.timeZone);
     const overview = statsOverview(this.db, this.userId, now, zoneOffset(this.timeZone, now));
     const dueNext7Days: Record<string, number> = {};
@@ -172,7 +170,7 @@ export class SqliteCardStore implements CardStore {
       dueSpeech: stats.due.speech,
       dueListening: stats.due.listening,
       queued: stats.newCards.queued,
-      newPerDay: stats.newCards.limit,
+      lessons: stats.newCards.lessons,
       streakDays: streakDays(this.db, this.userId, now),
       dueNext7Days,
       retention30d,

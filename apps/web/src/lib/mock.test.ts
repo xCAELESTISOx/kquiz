@@ -36,6 +36,12 @@ describe("MockApi", () => {
     now = new Date("2026-10-19T11:00:00Z");
     expect(api.review([review]).results[0]?.status).toBe("duplicate");
     expect(api.review([{ ...review, id: "r2", cardId: 999 }]).results[0]?.status).toBe("card_not_found");
+    // New words wait for "Учить", then come in tomorrow.
+    const added = api.addCard({ korean: "새 단어", meaning: "новое слово" });
+    const lesson = api.stats().newCards.lessons.at(-1)!;
+    expect(lesson.count).toBeGreaterThan(0);
+    if (added.status === "created") expect(api.learned([added.card.id], []).introduced).toEqual([added.card.id]);
+    expect(api.queue("meaning").some((item) => item.card.korean === "새 단어")).toBe(false);
     // State survives a reload.
     const reloaded = new MockApi(storage, () => now).stats();
     expect(reloaded).toEqual(api.stats());
@@ -46,6 +52,8 @@ describe("MockApi", () => {
     const api = new MockApi(memoryStorage());
     const r = api.addCard({ korean: "TV 보다", meaning: "смотреть телевизор" });
     expect(r.status === "created" && r.card.readyForSpeech).toBe(false);
+    expect(api.queue("meaning").some((i) => i.card.korean === "TV 보다")).toBe(false);
+    if (r.status === "created") api.introduce(r.card.id);
     expect(api.queue("meaning").some((i) => i.card.korean === "TV 보다")).toBe(true);
     expect(api.queue("speech").some((i) => i.card.korean === "TV 보다")).toBe(false);
   });
@@ -53,7 +61,8 @@ describe("MockApi", () => {
   it("offers Hangul cards for listening on a schedule of their own", () => {
     const now = new Date("2026-10-19T10:00:00Z");
     const api = new MockApi(memoryStorage(), () => now);
-    api.addCard({ korean: "TV 보다", meaning: "смотреть ТВ" });
+    const added = api.addCard({ korean: "TV 보다", meaning: "смотреть ТВ" });
+    if (added.status === "created") api.introduce(added.card.id);
     const listening = api.queue("listening");
     expect(listening.length).toBeGreaterThan(0);
     expect(listening.some((i) => i.card.korean === "TV 보다")).toBe(false);

@@ -43,6 +43,7 @@ export function groupHash(route: GroupRoute, filter: GroupFilter, extra?: { all?
   if (filter.root) params.set("root", filter.root);
   if (filter.status) params.set("status", filter.status);
   if (filter.kind) params.set("kind", filter.kind);
+  if (filter.lesson) params.set("lesson", filter.lesson);
   if (extra?.all) params.set("all", "1");
   return `#/${route}?${params}`;
 }
@@ -59,6 +60,8 @@ function parseGroup(search: string | undefined): GroupFilter | undefined {
   if (root) group.root = root;
   if (params.get("status") === "queued") group.status = "queued";
   if (params.get("kind") === "phrase") group.kind = "phrase";
+  const lesson = params.get("lesson");
+  if (lesson && /^\d{4}-\d{2}-\d{2}$/.test(lesson)) group.lesson = lesson;
   return group;
 }
 
