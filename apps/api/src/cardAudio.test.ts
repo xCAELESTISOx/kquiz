@@ -95,6 +95,12 @@ describe("card audio", () => {
     await t.request(`/cards/${t.ids[1]}`, { method: "DELETE" });
     t.db.delete(cards).run();
     for (const k of ["물", "불", "냉수"]) await t.request("/cards", { body: { korean: k, meaning: "что-то" } });
+    // Heard at once, before the worker's next pass.
+    const fresh = t.db.select({ id: cards.id }).from(cards).all().map((c) => c.id);
+    const early = await t.request(`/cards/${fresh[0]}/audio`);
+    expect(early.status).toBe(200);
+    expect(early.text).toBe("mp3:물");
+    expect((await t.request(`/cards/${fresh[0]}/audio`, { headers: { "if-none-match": early.headers.get("etag")! } })).status).toBe(304);
     expect(await worker.runOnce()).toBe(0);
     expect(calls).toHaveLength(3);
     const ids = t.db.select({ id: cards.id }).from(cards).all().map((c) => c.id);

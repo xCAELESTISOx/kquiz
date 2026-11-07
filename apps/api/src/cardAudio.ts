@@ -2,8 +2,8 @@
 // background worker asks for it once and keeps it in card_audio (examples and drill words go to
 // speech_audio, see practice.ts; other voices of card and drill words to voice_audio, see voices.ts).
 // Nothing is pruned: a recording outlives its card, so re-adding the word reuses it.
-// Until it is there, or when the
-// scorer is down, the web app falls back to the phone's own voice.
+// The web app uses the phone's own voice only while there is no recording at all (404).
+import { createHash } from "node:crypto";
 import { and, asc, eq, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import type { Db } from "./db/client.js";
 import { cardAudio, cards, speechAudio } from "./db/schema.js";
@@ -56,7 +56,12 @@ export function getCardAudio(db: Db, userId: number, cardId: number, voice?: Ext
     .innerJoin(cards, and(eq(cards.id, cardAudio.cardId), eq(cards.korean, cardAudio.text)))
     .where(and(eq(cardAudio.cardId, cardId), eq(cards.userId, userId)))
     .get();
-  return row && { data: row.data, mime: row.mime, etag: `"${cardId}-${row.createdAt.getTime()}"` };
+  if (row) return { data: row.data, mime: row.mime, etag: `"${cardId}-${row.createdAt.getTime()}"` };
+  // A word re-added or reworded to a text the library already has: served at once, before the
+  // worker has copied it to the card, so the app never falls back to the phone's voice for it.
+  const card = db.select({ korean: cards.korean }).from(cards).where(and(eq(cards.id, cardId), eq(cards.userId, userId))).get();
+  const data = card && audioForText(db, card.korean);
+  return data && { data, mime: "audio/mpeg", etag: `"t-${createHash("sha1").update(data).digest("hex").slice(0, 16)}"` };
 }
 
 /**
