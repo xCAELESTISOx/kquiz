@@ -4,6 +4,7 @@ import { cardsWord } from "../lib/plural";
 import { hideSplash } from "../lib/splash";
 import type { QueueItem, Stats, StatsOverview } from "../lib/types";
 import { CardsIcon, CloseIcon, HeadphonesIcon, LearnIcon, MicIcon, MoreIcon, PlusIcon, ShuffleIcon } from "../ui/icons";
+import { FirstWords } from "../ui/FirstWords";
 import { PracticeLinks } from "../ui/PracticeLinks";
 import { ScheduleSettings } from "./ScheduleSettings";
 import "../ui/today.css";
@@ -49,6 +50,8 @@ export function TodayScreen() {
   const queued = stats?.newCards.queued ?? 0;
   // Nothing to learn or review: adding words is the one thing to do.
   const nothing = !!stats && totalDue === 0 && queued === 0;
+  // No cards at all, not even queued or paused: nothing to learn, count or practise yet.
+  const fresh = stats?.cards === 0;
   const [more, setMore] = useState(false);
   const pending = pendingReviewCount();
   const today = new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
@@ -62,8 +65,10 @@ export function TodayScreen() {
         <p className="subtitle">{today}</p>
       </header>
 
+      {fresh && <FirstWords />}
+
       {/* The words themselves are the hero: today's queue as a wall of Hangul. */}
-      <section className="word-wall" aria-label="Слова к повторению" aria-busy={!stats && !error}>
+      <section hidden={fresh} className="word-wall" aria-label="Слова к повторению" aria-busy={!stats && !error}>
         {stats && due > 0 && (
           <p className="word-wall-words" lang="ko">
             {preview.map(({ card }, i) => (
@@ -101,7 +106,7 @@ export function TodayScreen() {
         {!stats && !error && <div className="skeleton" />}
       </section>
 
-      {stats && <TodayStats stats={stats} />}
+      {stats && !fresh && <TodayStats stats={stats} />}
 
       <div aria-live="polite">
         {error && <p className="notice notice-error">Не получилось загрузить данные: {error}. Обнови страницу.</p>}
@@ -114,7 +119,11 @@ export function TodayScreen() {
 
       {/* Wait for the numbers, so the wrong button never flashes while they load. */}
       <div className="bottom-actions" hidden={!stats && !error}>
-        {nothing ? (
+        {fresh ? (
+          <a className="button primary" href="#/add">
+            Добавить первые слова
+          </a>
+        ) : nothing ? (
           <a className="button primary" href="#/add">
             Добавить слова
           </a>
@@ -126,7 +135,7 @@ export function TodayScreen() {
             </span>
           </a>
         )}
-        <button type="button" className="button more-button" aria-haspopup="dialog" onClick={() => setMore(true)}>
+        <button type="button" className="button more-button" hidden={fresh} aria-haspopup="dialog" onClick={() => setMore(true)}>
           <MoreIcon />
           Ещё
         </button>
