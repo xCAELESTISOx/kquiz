@@ -1,4 +1,5 @@
 import { MockApi } from "./mock";
+import { wasHiddenSince, whenVisible } from "./resume";
 import type {
   LearningAnswer,
   LearningItem,
@@ -76,6 +77,18 @@ interface RequestOptions<T> {
   fallback?: (m: MockApi) => T;
   /** Statuses returned to the caller as data instead of thrown. */
   accept?: number[];
+  /**
+   * A change that may be sent again if iOS cut it off while the app was in the background. GETs
+   * always are; a change only when sending it twice does no harm worth an error on screen.
+   */
+  resend?: boolean;
+}
+
+/** The connection, not the server: offline, or cut off by iOS while the app was in the background. */
+export const NO_CONNECTION = "Нет связи с сервером. Попробуй ещё раз";
+
+export function isConnectionError(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 0;
 }
 
 export async function request<T>(method: string, path: string, opts: RequestOptions<T> = {}): Promise<T> {
@@ -84,7 +97,10 @@ export async function request<T>(method: string, path: string, opts: RequestOpti
   return data;
 }
 
-async function send<T>(method: string, path: string, opts: RequestOptions<T>, retried = false): Promise<T> {
+// iOS needs a moment after the app is back before the network is up again.
+const RESEND_DELAY_MS = 400;
+
+async function send<T>(method: string, path: string, opts: RequestOptions<T> & { resent?: boolean }, retried = false): Promise<T> {
   const { body, fallback } = opts;
   // Any change (a rating, new cards) can change the queue.
   if (method !== "GET") recentQueues.clear();
@@ -96,6 +112,7 @@ async function send<T>(method: string, path: string, opts: RequestOptions<T>, re
     }
   }
   let res: Response;
+  const startedAt = Date.now();
   try {
     const headers: Record<string, string> = {};
     const raw = body instanceof Uint8Array;
@@ -110,7 +127,14 @@ async function send<T>(method: string, path: string, opts: RequestOptions<T>, re
   } catch (error) {
     const m = fallback && getMock();
     if (m) return fallback(m);
-    throw error;
+    // Cut off while the app was away (iOS does that to every open request): once it is back, again.
+    if ((method === "GET" || opts.resend) && wasHiddenSince(startedAt) && !opts.resent) {
+      await whenVisible();
+      await new Promise((resolve) => setTimeout(resolve, RESEND_DELAY_MS));
+      return send(method, path, { ...opts, resent: true }, retried);
+    }
+    console.warn("[kquiz] request failed", method, path, error);
+    throw new ApiError(0, NO_CONNECTION);
   }
   if (res.status === 404 || res.status === 502 || res.status === 504) {
     const m = fallback && getMock();
@@ -295,7 +319,8 @@ export const api = {
 
   /** One answer for a word being learned: up its ladder, a step down, or into reviews. */
   answerLearning: (id: number, ok: boolean) =>
-    request<LearningAnswer>("POST", `/cards/${id}/learning`, { body: { ok }, fallback: (m) => m.answerLearning(id, ok) }),
+    // Sent again if cut off on the way out of the app: at worst the word moves one step twice.
+    request<LearningAnswer>("POST", `/cards/${id}/learning`, { body: { ok }, resend: true, fallback: (m) => m.answerLearning(id, ok) }),
 
   /** Words just learned in a group (tomorrow, or later today the `missed` ones); returns those taken in. */
   learned: (cardIds: number[], missed: number[]) =>
