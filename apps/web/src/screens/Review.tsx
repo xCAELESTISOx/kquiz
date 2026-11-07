@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
-import { api, holdReview, releaseHeldReview, takeBackReview } from "../lib/api";
+import { api, holdReview, isConnectionError, releaseHeldReview, takeBackReview } from "../lib/api";
 import { shuffled } from "../lib/choice";
 import { clozeFor } from "../lib/cloze";
 import { guessHints, isFirstShow, splitAt, type GuessHint } from "../lib/guess";
@@ -299,7 +299,9 @@ export function ReviewScreen({
               }
             } else setLearnt((l) => ({ ...l, learned: l.learned + 1 }));
           },
-          (e: Error) => setError(e.message),
+          // No connection even after a second try: the word stays where it was and comes up again
+          // next time, which is not worth a red banner over the session.
+          (e: Error) => !isConnectionError(e) && setError(e.message),
         )
         .finally(() => setAnswering((n) => n - 1));
     },
