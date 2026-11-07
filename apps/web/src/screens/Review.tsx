@@ -287,6 +287,7 @@ export function ReviewScreen({
       // Meeting a word is a screen of the session too, so the count moves from the first tap.
       count();
       if (item.learn.kind === "intro") return;
+      count();
       setLearnt((l) => ({ ...l, steps: l.steps + 1 }));
       setAnswering((n) => n + 1);
       api
