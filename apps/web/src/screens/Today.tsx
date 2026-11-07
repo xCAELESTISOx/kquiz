@@ -4,6 +4,7 @@ import { cardsWord } from "../lib/plural";
 import { hideSplash } from "../lib/splash";
 import type { QueueItem, Stats } from "../lib/types";
 import { HeadphonesIcon, MicIcon, ShuffleIcon } from "../ui/icons";
+import { FirstWords } from "../ui/FirstWords";
 import { PracticeLinks } from "../ui/PracticeLinks";
 import { ScheduleSettings } from "./ScheduleSettings";
 
@@ -46,6 +47,8 @@ export function TodayScreen() {
   const restDue = speechDue + listenDue;
   // Worth offering once at least two kinds of review wait.
   const mixable = [due, speechDue, listenDue].filter((n) => n > 0).length > 1;
+  // No cards at all, not even queued or paused: nothing to review, count or practise yet.
+  const fresh = stats?.cards === 0;
   const pending = pendingReviewCount();
   const today = new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
 
@@ -58,44 +61,48 @@ export function TodayScreen() {
         <p className="subtitle">{today}</p>
       </header>
 
-      {/* The words themselves are the hero: today's queue as a wall of Hangul. */}
-      <section className="word-wall" aria-label="Слова к повторению" aria-busy={!stats && !error}>
-        {stats && due > 0 && (
-          <p className="word-wall-words" lang="ko">
-            {preview.map(({ card }, i) => (
-              <span key={card.id} style={{ opacity: Math.max(1 - i * 0.065, 0.22), "--i": i } as CSSProperties}>
-                {card.korean}
-              </span>
-            ))}
-            {due > preview.length && (
-              <span className="word-wall-more" style={{ "--i": preview.length } as CSSProperties}>
-                +{due - preview.length}
-              </span>
-            )}
-          </p>
-        )}
-        {stats && due === 0 && (
-          <p className="word-wall-empty">
-            <DoneMark />
-            <span lang="ko" className="word-wall-done">
-              다 했어요
-            </span>
-            <span className="muted">
-              {restDue > 0
-                ? `Значения повторены. Осталось ${[
-                    speechDue > 0 && `проговорить вслух: ${speechDue}`,
-                    listenDue > 0 && `узнать на слух: ${listenDue}`,
-                  ]
-                    .filter(Boolean)
-                    .join(", ")}.`
-                : "На сейчас всё повторено. Новые слова можно добавить в любой момент."}
-            </span>
-          </p>
-        )}
-        {!stats && !error && <div className="skeleton" />}
-      </section>
+      {fresh && <FirstWords />}
 
-      {stats && (
+      {/* The words themselves are the hero: today's queue as a wall of Hangul. */}
+      {!fresh && (
+        <section className="word-wall" aria-label="Слова к повторению" aria-busy={!stats && !error}>
+          {stats && due > 0 && (
+            <p className="word-wall-words" lang="ko">
+              {preview.map(({ card }, i) => (
+                <span key={card.id} style={{ opacity: Math.max(1 - i * 0.065, 0.22), "--i": i } as CSSProperties}>
+                  {card.korean}
+                </span>
+              ))}
+              {due > preview.length && (
+                <span className="word-wall-more" style={{ "--i": preview.length } as CSSProperties}>
+                  +{due - preview.length}
+                </span>
+              )}
+            </p>
+          )}
+          {stats && due === 0 && (
+            <p className="word-wall-empty">
+              <DoneMark />
+              <span lang="ko" className="word-wall-done">
+                다 했어요
+              </span>
+              <span className="muted">
+                {restDue > 0
+                  ? `Значения повторены. Осталось ${[
+                      speechDue > 0 && `проговорить вслух: ${speechDue}`,
+                      listenDue > 0 && `узнать на слух: ${listenDue}`,
+                    ]
+                      .filter(Boolean)
+                      .join(", ")}.`
+                  : "На сейчас всё повторено. Новые слова можно добавить в любой момент."}
+              </span>
+            </p>
+          )}
+          {!stats && !error && <div className="skeleton" />}
+        </section>
+      )}
+
+      {stats && !fresh && (
         <dl className="facts">
           <div style={{ "--i": 0 } as CSSProperties}>
             <dt>К повторению</dt>
@@ -132,9 +139,9 @@ export function TodayScreen() {
         </a>
       )}
 
-      {stats && <PracticeLinks />}
+      {stats && !fresh && <PracticeLinks />}
 
-      {stats && <ScheduleSettings />}
+      {stats && !fresh && <ScheduleSettings />}
 
       {stats && owner && (
         <a className="queue-link" href="#/access">
@@ -189,10 +196,17 @@ export function TodayScreen() {
             Нельзя вслух? Выбрать слово из вариантов
           </a>
         )}
-        {due === 0 && restDue === 0 && (
-          <a className="button" href="#/add">
-            Добавить слова
+        {fresh ? (
+          <a className="button primary" href="#/add">
+            Добавить первые слова
           </a>
+        ) : (
+          due === 0 &&
+          restDue === 0 && (
+            <a className="button" href="#/add">
+              Добавить слова
+            </a>
+          )
         )}
       </div>
     </main>

@@ -1,0 +1,82 @@
+/* Today with no cards at all: a ghost of the word wall, a Korean title, the ways to add words. */
+
+.first-words {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 24px;
+  padding-top: 8px;
+}
+
+/* Where the queue will stand: real-looking words, but dim and fading toward the bottom-right. */
+.first-words-wall {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 14px;
+  font-size: clamp(28px, 9.5vw, 44px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  word-break: keep-all;
+  user-select: none;
+  pointer-events: none;
+  color: rgb(148 160 200 / 0.11);
+  mask-image: linear-gradient(170deg, #000 20%, transparent 92%);
+}
+
+.first-words-wall > span {
+  display: inline-block;
+  animation: ghost-in 700ms var(--ease-out) backwards;
+  animation-delay: calc(60ms + var(--i, 0) * 45ms);
+}
+
+/* One word glows softly in the accent, like the first card waiting to be made. */
+.first-words-wall > span:nth-child(2) {
+  color: rgb(124 140 255 / 0.5);
+  text-shadow: 0 0 32px rgb(124 140 255 / 0.35);
+}
+
+@keyframes ghost-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.4em);
+  }
+}
+
+.first-words-intro {
+  display: grid;
+  gap: 10px;
+  max-width: 34ch;
+}
+
+.first-words-title {
+  margin: 0;
+  font-size: 52px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: var(--text);
+  animation: answer-in var(--dur-3) var(--ease-out) 200ms backwards;
+}
+
+.first-words-text {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.45;
+  animation: answer-in var(--dur-3) var(--ease-out) 280ms backwards;
+}
+
+.first-words-ways a {
+  animation-delay: calc(340ms + var(--i, 0) * 60ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .first-words-wall > span,
+  .first-words-title,
+  .first-words-text {
+    animation: none;
+  }
+}
