@@ -45,6 +45,8 @@ export function App() {
   if (route === "listen") return <ReviewScreen key={`listening${groupKey}`} mode="listening" group={group} />;
   if (route === "learn")
     return param ? <LearnScreen key={param} id={Number(param)} /> : <LearnScreen key={`group${groupKey}`} group={group} />;
+  // "Учить" on Today: five minutes of new words and reviews together.
+  if (route === "session") return <ReviewScreen key="session" mode="mixed" all session />;
   if (route === "mix") return <ReviewScreen key={`mixed${groupKey}${all ? ":all" : ""}`} mode="mixed" group={group} all={all} />;
   if (route === "speech") return <SpeechScreen key={`speech${groupKey}`} group={group} />;
   if (route === "choose") return <ChoiceScreen key={`choose${groupKey}`} group={group} />;

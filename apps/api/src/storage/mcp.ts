@@ -170,7 +170,6 @@ export class SqliteCardStore implements CardStore {
       dueSpeech: stats.due.speech,
       dueListening: stats.due.listening,
       queued: stats.newCards.queued,
-      lessons: stats.newCards.lessons,
       streakDays: streakDays(this.db, this.userId, now),
       dueNext7Days,
       retention30d,

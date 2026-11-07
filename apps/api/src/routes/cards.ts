@@ -5,7 +5,7 @@ import { getCardAudio } from "../cardAudio.js";
 import { cardCounts, cardFamily, createCards, deleteCard, getCard, listCards, listTags, updateCard } from "../cardStore.js";
 import { CARD_KINDS, newCardSchema, parseBulk } from "../cards.js";
 import type { Db } from "../db/client.js";
-import { dayRange, introduceEarly, introduceLearned } from "../newCards.js";
+import { answerLearning, introduceEarly, introduceLearned, learningWords } from "../newCards.js";
 import { linkParts } from "../phrases.js";
 import { isExtraVoice } from "../voices.js";
 
@@ -25,8 +25,6 @@ const listQuery = z.object({
   before: z.coerce.number().int().positive().optional(),
   status: z.enum(["queued", "paused"]).optional(),
   kind: z.enum(CARD_KINDS).optional(),
-  /** A lesson: the cards added on this day (YYYY-MM-DD, in the owner's time zone). */
-  lesson: z.iso.date().optional(),
 });
 
 const learnedBody = z.object({
@@ -51,9 +49,11 @@ export function cardRoutes(db: Db, now: () => Date, timeZone: string) {
   app.get("/", (c) => {
     const query = listQuery.safeParse(c.req.query());
     if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
-    const { lesson, ...rest } = query.data;
-    return c.json(listCards(db, c.get("user").id, { ...rest, ...(lesson && { added: dayRange(lesson, timeZone) }) }));
+    return c.json(listCards(db, c.get("user").id, query.data));
   });
+
+  // The new words for a session: due for their check, then being learned, filled up from the pool.
+  app.get("/learning", (c) => c.json(learningWords(db, c.get("user").id, now())));
 
   // For the filter chips of the cards screen.
   app.get("/summary", (c) => {
@@ -139,7 +139,18 @@ export function cardRoutes(db: Db, now: () => Date, timeZone: string) {
     return c.json(result, 404);
   });
 
-  // Words just learned ("Учить") enter reviews: tomorrow, or later today the ones missed on the way.
+  // One answer for a word being learned: up the ladder, one step down, or into reviews (newCards.ts).
+  app.post("/:id/learning", async (c) => {
+    const id = idParam.safeParse(c.req.param("id"));
+    const body = z.object({ ok: z.boolean() }).safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "invalid_request", issues: body.error.issues }, 400);
+    const result = id.success ? answerLearning(db, c.get("user").id, id.data, body.data.ok, now(), timeZone) : { status: "not_found" as const };
+    if (result.status === "not_found") return c.json({ error: "not_found" }, 404);
+    if (result.status === "not_queued") return c.json({ error: "not_queued" }, 409);
+    return c.json(result);
+  });
+
+  // Words just learned in "Учить" for a group enter reviews: tomorrow, or later today the ones missed on the way.
   // Cards already in reviews are left alone.
   app.post("/learned", async (c) => {
     const body = learnedBody.safeParse(await c.req.json().catch(() => null));

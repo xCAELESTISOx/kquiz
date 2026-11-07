@@ -38,8 +38,7 @@ describe("MockApi", () => {
     expect(api.review([{ ...review, id: "r2", cardId: 999 }]).results[0]?.status).toBe("card_not_found");
     // New words wait for "Учить", then come in tomorrow.
     const added = api.addCard({ korean: "새 단어", meaning: "новое слово" });
-    const lesson = api.stats().newCards.lessons.at(-1)!;
-    expect(lesson.count).toBeGreaterThan(0);
+    expect(api.stats().newCards.queued).toBeGreaterThan(0);
     if (added.status === "created") expect(api.learned([added.card.id], []).introduced).toEqual([added.card.id]);
     expect(api.queue("meaning").some((item) => item.card.korean === "새 단어")).toBe(false);
     // State survives a reload.

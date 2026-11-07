@@ -1,5 +1,5 @@
 import { State } from "ts-fsrs";
-import { and, count, desc, eq, gte, isNull, lt, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, isNull, lt, sql, type SQL } from "drizzle-orm";
 import { isKoreanOnly, isSpeakable, koreanKey, normalizeKorean, type CardKind, type CardPatch, type Example, type NewCard, type PhrasePart, type Register, type Root } from "./cards.js";
 import type { Db } from "./db/client.js";
 import { cards, reviewStates } from "./db/schema.js";
@@ -136,8 +136,6 @@ export type CardQuery = {
   status?: "queued" | "paused";
   /** Only words, or only phrases. */
   kind?: CardKind;
-  /** Only cards added in this span: one lesson of new words (newCards.ts). */
-  added?: { start: Date; end: Date };
   limit?: number;
   /** Id of the last card on the previous page; pages go from newest to oldest. */
   before?: number;
@@ -156,7 +154,6 @@ export function cardConditions(userId: number, query: Omit<CardQuery, "limit" | 
   if (query.status === "queued") where.push(isNull(cards.introducedAt));
   if (query.status === "paused") where.push(eq(cards.suspended, true));
   if (query.kind) where.push(eq(cards.kind, query.kind));
-  if (query.added) where.push(gte(cards.createdAt, query.added.start), lt(cards.createdAt, query.added.end));
   return where;
 }
 

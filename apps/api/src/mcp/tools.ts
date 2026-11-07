@@ -15,7 +15,7 @@ const instructions = `KQuiz is the user's personal Korean flashcard deck; each p
 - notes (optional): grammar, usage or anything else worth remembering.
 - tags: lowercase topics such as "еда" or "глаголы".
 - roots: the Sino-Korean roots of the word, one per syllable that comes from hanja, as {"ko", "hanja", "meaning"}: the syllable, its character and a short Russian gloss of the character, e.g. 학교 → [{"ko":"학","hanja":"學","meaning":"учёба"},{"ko":"교","hanja":"校","meaning":"школа"}]. Use the traditional character the word is really written with, and the same gloss for the same character across cards, so the app can link a word to others with that root (its word family). A native Korean word (사랑, 먹다) or a loanword gets []. For a mixed word list only the hanja syllables (공부하다 → 공 工, 부 夫). Give roots for every card you add.
-Cards added here don't enter reviews at once: they wait as new words until the user learns them in the app, a lesson at a time. The cards added on one day form one lesson (the user's tutor gives a set of words per lesson), and lessons are learned in order, oldest first. So add a lesson's words together on the day, and adding many words at once is fine.
+Cards added here don't enter reviews at once: they wait in a pool of new words and the app teaches them a few at a time, in the order added; a word enters reviews only once the user has learned it. So adding many words at once is fine.
 Call find_cards before adding words the user may already have; add_cards also reports duplicates. To fix a card, use update_card instead of adding a new one: any field can be changed, and an empty string clears pronunciation, romanization or notes. Cards cannot be deleted from here.
 When the user asks to fix hard cards, call get_leeches and rework each with update_card: a clearer meaning, a mnemonic or the confusing neighbour in notes, ${EXAMPLES_PER_CARD} fresh examples. A card that mixes two senses can be split: narrow it with update_card and add the other sense with add_cards. If a card should go, tell the user; only they can delete it in the app.
 Older cards may have no roots yet: when the user asks to fill them in, page through find_cards with without_roots and send them with set_roots, 50 at a time, until none are left.
@@ -128,7 +128,7 @@ export function createMcpServer(store: CardStore, drills?: DrillStore): McpServe
     "add_cards",
     {
       title: "Add cards",
-      description: `Adds up to ${MAX_CARDS_PER_CALL} Korean flashcards as new words: they wait to be learned in the app, the cards added on one day forming one lesson, and enter reviews once learned. Every card needs exactly ${EXAMPLES_PER_CARD} examples. Returns created cards, duplicates of existing cards and rejected ones with the reason.`,
+      description: `Adds up to ${MAX_CARDS_PER_CALL} Korean flashcards to the pool of new words: the app teaches them a few at a time, in the order added, and they enter reviews once learned. Every card needs exactly ${EXAMPLES_PER_CARD} examples. Returns created cards, duplicates of existing cards and rejected ones with the reason.`,
       inputSchema: { cards: z.array(newCardInput).min(1).max(MAX_CARDS_PER_CALL) },
       annotations: { destructiveHint: false, idempotentHint: true },
     },

@@ -255,5 +255,5 @@ export function getStats(db: Db, userId: number, now = new Date(), timeZone = "U
       .innerJoin(cards, eq(cards.id, reviewLog.cardId))
       .where(and(eq(cards.userId, userId), sql`${reviewLog.reviewedAt} >= ${dayStart.getTime()}`))
       .get()?.n ?? 0;
-  return { cards: total, due, reviewedToday, newCards: newCards(db, userId, timeZone) };
+  return { cards: total, due, reviewedToday, newCards: newCards(db, userId) };
 }

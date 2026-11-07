@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { api, remembered } from "../lib/api";
 import { GROUP_SIZE } from "../lib/learn";
-import { lessonDate } from "../lib/lessons";
-import { cardsCount, cardsWord, phrasesWord, wordsWord } from "../lib/plural";
+import { cardsCount, cardsWord, phrasesWord } from "../lib/plural";
 import { groupHash } from "../lib/router";
 import type { Card, CardFilter, CardSummary, GroupFilter, Stats } from "../lib/types";
 import { CloseIcon, DownloadIcon, LearnIcon, SearchIcon, ShuffleIcon } from "../ui/icons";
@@ -152,7 +151,7 @@ export function CardsScreen({ filter, root }: { filter?: CardFilter; root?: stri
 
       {root && <RootBanner root={root} cards={cards} filter={filter} />}
 
-      {filter === "queued" && <LessonsPanel />}
+      {filter === "queued" && <PoolNote />}
 
       {cards && (query.trim() || tag || root || filter === "queued" || filter === "phrases") && filter !== "paused" && (
         <GroupBar
@@ -298,33 +297,14 @@ function GroupBar({ group, cards, more }: { group: GroupFilter; cards: Card[]; m
   );
 }
 
-/** The lessons of new words, oldest first: each is learned whole before its words are reviewed. */
-function LessonsPanel() {
-  const [stats, setStats] = useState<Stats | undefined>(remembered.stats);
-  useEffect(() => {
-    api.stats().then(setStats, () => undefined);
-  }, []);
-  const lessons = stats?.newCards.lessons ?? [];
+/** How the new words come in: learned a few at a time in "Учить" on Today, oldest first. */
+function PoolNote() {
   return (
-    <section className="queue-panel" aria-label="Уроки новых слов">
-      {lessons.length > 0 && (
-        <ol className="lesson-list">
-          {lessons.map((lesson, i) => (
-            <li key={lesson.day} className="lesson-row">
-              <span>
-                <span className="queue-panel-title">{lessonDate(lesson.day)}</span>
-                <span className="muted small"> · {lesson.count} {wordsWord(lesson.count)}</span>
-              </span>
-              <a className={`chip-button${i === 0 ? " chip-button-accent" : ""}`} href={groupHash("learn", { status: "queued", lesson: lesson.day })}>
-                Учить
-              </a>
-            </li>
-          ))}
-        </ol>
-      )}
+    <section className="queue-panel" aria-label="Новые слова">
+      <p className="queue-panel-title">Новые слова учатся по порядку</p>
       <p className="muted small">
-        Новые слова сначала учатся, потом входят в повторение. Слова, добавленные в один день, — один урок; уроки идут по порядку.
-        «В повторение» берёт карточку сразу, без обучения.
+        «Учить» на главном экране берёт по 5 слов отсюда, сверху вниз от самых старых. Выученное слово уходит в повторение, его место
+        занимает следующее. «В повторение» берёт карточку сразу, без обучения.
       </p>
     </section>
   );

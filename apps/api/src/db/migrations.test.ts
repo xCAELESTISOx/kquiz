@@ -51,7 +51,8 @@ describe("migrations", () => {
     const { created } = createReviewing(db, OWNER_ID, [{ korean: "물", meaning: "вода", tags: [] }, { korean: "불", meaning: "огонь", tags: [] }], "app");
     const [seen, fresh] = created.map((c) => c.id);
     db.update(reviewStates).set({ reps: 1 }).where(and(eq(reviewStates.cardId, seen!), eq(reviewStates.mode, "speech"))).run();
-    db.$client.exec(readFileSync(new URL("../../drizzle/0014_learn_new_words.sql", import.meta.url), "utf8"));
+    // The columns are there already (openDb migrates); the data part is what is tested.
+    db.$client.exec(readFileSync(new URL("../../drizzle/0014_learn_new_words.sql", import.meta.url), "utf8").split("--> statement-breakpoint").slice(3).join("\n"));
     const rows = db.select({ id: cards.id, at: cards.introducedAt, how: cards.introduction }).from(cards).all();
     expect(rows.find((r) => r.id === fresh)).toMatchObject({ at: null, how: null });
     expect(rows.find((r) => r.id === seen)?.at).not.toBeNull();

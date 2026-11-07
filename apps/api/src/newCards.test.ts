@@ -30,52 +30,75 @@ describe("startOfDay", () => {
 });
 
 describe("new words", () => {
-  it("wait to be learned, in lessons by the day they were added", async () => {
+  it("wait in the pool, a few learned at a time, oldest first", async () => {
     const t = testApp({}, { learnNewWords: false });
     await t.signIn();
-    fromClaude(t, 3);
-    // The same day in Seoul, later on.
-    t.clock.now = new Date(t.clock.now.getTime() + 4 * HOUR);
+    const claude = fromClaude(t, 6);
+    t.clock.now = new Date(t.clock.now.getTime() + HOUR);
     await t.request("/cards", { body: { korean: "물", meaning: "вода" } });
-    t.clock.now = new Date(t.clock.now.getTime() + 24 * HOUR);
-    await t.request("/cards/bulk", { body: { text: "불 — огонь\n산 — гора" } });
 
     const stats = (await t.request("/reviews/stats")).json;
     expect(stats.due).toEqual({ meaning: 0, speech: 0, listening: 0 });
-    expect(stats.newCards).toEqual({
-      queued: 6,
-      lessons: [
-        { day: "2026-10-19", count: 4 },
-        { day: "2026-10-20", count: 2 },
-      ],
-    });
+    expect(stats.newCards).toEqual({ queued: 7 });
     expect((await t.request("/reviews/queue?mode=meaning")).json.items).toHaveLength(0);
-    const first = (await t.request("/cards?status=queued&lesson=2026-10-19")).json.cards;
-    expect(first.map((c: any) => c.korean)).toContain("물");
-    expect(first).toHaveLength(4);
-    expect((await t.request("/cards?lesson=2026-10-20")).json.cards).toHaveLength(2);
-    expect((await t.request("/cards?lesson=19-10-2026")).status).toBe(400);
+
+    const learning = (await t.request("/cards/learning")).json;
+    expect(learning.items.map((i: any) => i.card.id)).toEqual(claude.slice(0, 5).map((c) => c.id));
+    expect(learning.items.every((i: any) => i.step === 0)).toBe(true);
+    expect(learning.pool).toBe(2);
+    // Asking again gives the same words.
+    expect((await t.request("/cards/learning")).json.items.map((i: any) => i.card.id)).toEqual(learning.items.map((i: any) => i.card.id));
   });
 
-  it("enter reviews once learned: tomorrow, or later today if missed", async () => {
+  it("climb the ladder, a miss one step down, then wait for a check and enter reviews", async () => {
     const t = testApp({}, { learnNewWords: false });
     await t.signIn();
-    const [a, b, c] = fromClaude(t, 3);
+    const words = fromClaude(t, 6);
+    const id = words[0]!.id;
+    await t.request("/cards/learning");
+    const answer = (ok: boolean, card = id) => t.request(`/cards/${card}/learning`, { body: { ok } }).then((r) => r.json);
+
+    expect(await answer(true)).toEqual({ status: "climbed", step: 1 });
+    expect(await answer(false)).toEqual({ status: "missed", step: 0 });
+    expect(await answer(false)).toEqual({ status: "missed", step: 0 });
+    expect(await answer(true)).toEqual({ status: "climbed", step: 1 });
+    expect(await answer(true)).toEqual({ status: "climbed", step: 2 });
+    const passed = await answer(true);
+    // At the top it makes room: the sixth word comes in.
+    expect(passed).toMatchObject({ status: "passed", next: { card: { id: words[5]!.id }, step: 0 } });
+    let session = (await t.request("/cards/learning")).json;
+    expect(session.items.map((i: any) => i.card.id)).not.toContain(id);
+    expect(session.pool).toBe(0);
+
+    // Three hours on, it is checked; a miss puts it back on the last step, not the bottom.
+    t.clock.now = new Date(t.clock.now.getTime() + 3 * HOUR);
+    session = (await t.request("/cards/learning")).json;
+    expect(session.items[0]).toMatchObject({ card: { id }, step: "check" });
+    expect(await answer(false)).toEqual({ status: "missed", step: 2 });
+    expect((await t.request("/cards/learning")).json.items.find((i: any) => i.card.id === id).step).toBe(2);
+    expect((await answer(true)).status).toBe("passed");
+    t.clock.now = new Date(t.clock.now.getTime() + 3 * HOUR);
+    // 01:00 in Seoul now: learned, it is due at the next midnight.
+    expect(await answer(true)).toEqual({ status: "learned", due: "2026-10-20T15:00:00.000Z" });
+    expect((await t.request(`/cards/${id}`)).json.card.queued).toBe(false);
+    expect((await answer(true)).status).toBeUndefined();
+    expect((await t.request(`/cards/${id}/learning`, { body: { ok: true } })).status).toBe(409);
+    expect((await t.request("/cards/999/learning", { body: { ok: true } })).status).toBe(404);
+    expect((await t.request(`/cards/${id}/learning`, { body: {} })).status).toBe(400);
+    t.clock.now = new Date("2026-10-20T15:00:00Z");
+    expect((await t.request("/reviews/stats")).json.due.meaning).toBe(1);
+  });
+
+  it("enter reviews after learning a group: tomorrow, or later today if missed", async () => {
+    const t = testApp({}, { learnNewWords: false });
+    await t.signIn();
+    const [a, b] = fromClaude(t, 3);
     const res = await t.request("/cards/learned", { body: { cardIds: [a!.id, b!.id], missed: [b!.id] } });
     expect(res.json.introduced.sort()).toEqual([a!.id, b!.id].sort());
-    // Learning again changes nothing.
     expect((await t.request("/cards/learned", { body: { cardIds: [a!.id] } })).json.introduced).toEqual([]);
-    expect((await t.request("/reviews/stats")).json.newCards).toEqual({ queued: 1, lessons: [{ day: "2026-10-19", count: 1 }] });
-    expect((await t.request("/reviews/stats")).json.due.meaning).toBe(0);
-
-    // 19:00 in Seoul now; the missed word is back at 21:00, the other one after midnight.
+    expect((await t.request("/reviews/stats")).json.newCards).toEqual({ queued: 1 });
     t.clock.now = new Date(t.clock.now.getTime() + 2 * HOUR);
-    const missed = (await t.request("/reviews/queue?mode=meaning")).json.items;
-    expect(missed.map((i: any) => i.card.id)).toEqual([b!.id]);
-    expect(missed[0].reps).toBe(0);
-    t.clock.now = new Date("2026-10-19T15:00:00Z");
-    expect((await t.request("/reviews/stats")).json.due).toEqual({ meaning: 2, speech: 2, listening: 0 });
-    expect((await t.request(`/cards/${c!.id}`)).json.card.queued).toBe(true);
+    expect((await t.request("/reviews/queue?mode=meaning")).json.items.map((i: any) => i.card.id)).toEqual([b!.id]);
     expect((await t.request("/cards/learned", { body: { cardIds: [] } })).status).toBe(400);
   });
 

@@ -1,5 +1,7 @@
 import { MockApi } from "./mock";
 import type {
+  LearningAnswer,
+  LearningItem,
   AccessInfo,
   AddCardResult,
   AddCardsResult,
@@ -142,7 +144,7 @@ function lastAnswer<T>(path: string): T | undefined {
   return lastAnswers.get(path) as T | undefined;
 }
 
-type CardsQuery = { q?: string; tag?: string; root?: string; status?: CardFilter; kind?: "phrase"; lesson?: string; before?: number; limit?: number };
+type CardsQuery = { q?: string; tag?: string; root?: string; status?: CardFilter; kind?: "phrase"; before?: number; limit?: number };
 
 function cardsPath(query: CardsQuery): string {
   const params = new URLSearchParams();
@@ -288,7 +290,14 @@ export const api = {
   },
 
   /** Takes a queued card into reviews now, outside the daily allowance. */
-  /** Words just learned enter reviews (tomorrow, or later today the `missed` ones); returns those taken in. */
+  /** The new words for a session: due for their check, then being learned (filled up from the pool). */
+  learning: () => request<{ items: LearningItem[]; pool: number }>("GET", "/cards/learning", { fallback: (m) => m.learning() }),
+
+  /** One answer for a word being learned: up its ladder, a step down, or into reviews. */
+  answerLearning: (id: number, ok: boolean) =>
+    request<LearningAnswer>("POST", `/cards/${id}/learning`, { body: { ok }, fallback: (m) => m.answerLearning(id, ok) }),
+
+  /** Words just learned in a group (tomorrow, or later today the `missed` ones); returns those taken in. */
   learned: (cardIds: number[], missed: number[]) =>
     request<{ introduced: number[] }>("POST", "/cards/learned", { body: { cardIds, missed }, fallback: (m) => m.learned(cardIds, missed) }),
 

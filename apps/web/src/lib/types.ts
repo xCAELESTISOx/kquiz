@@ -102,6 +102,8 @@ export interface QueueItem {
   lapses: number;
   /** Listening only: other voices the word can be heard in besides the default one (lib/voices.ts). */
   voices?: string[];
+  /** In a session only: a step of learning a new word, not a review (lib/session.ts). */
+  learn?: { kind: "intro" | "build" | "dictation" | "write"; check?: boolean };
 }
 
 /** A wrong option on the "pick the Korean word" screen: another of the user's words. */
@@ -138,11 +140,16 @@ export interface ReviewInput {
   elapsedMs?: number;
 }
 
-/** One lesson of new words: the cards added on `day` (YYYY-MM-DD), learned before they are reviewed. */
-export interface Lesson {
-  day: string;
-  count: number;
+/** A new word being learned: its ladder step (0–2), or "check" once it has waited (apps/api newCards.ts). */
+export interface LearningItem {
+  card: Card;
+  step: number | "check";
 }
+
+export type LearningAnswer =
+  | { status: "climbed" | "missed"; step: number }
+  | { status: "passed"; next: LearningItem | null }
+  | { status: "learned"; due: string };
 
 export interface ReviewResult {
   id: string;
@@ -154,8 +161,8 @@ export interface Stats {
   cards: number;
   due: Record<ReviewMode, number>;
   reviewedToday: number;
-  /** Words waiting to be learned, and their lessons (the cards added on one day), oldest first. */
-  newCards: { queued: number; lessons: Lesson[] };
+  /** New words waiting to be learned (in the pool, being learned or waiting for their check). */
+  newCards: { queued: number };
 }
 
 /** PATCH /api/cards/:id: any field; "" clears an optional one. */
@@ -173,8 +180,6 @@ export interface GroupFilter {
   status?: "queued";
   /** Only phrases. */
   kind?: "phrase";
-  /** A lesson of new words: the cards added that day (YYYY-MM-DD). */
-  lesson?: string;
 }
 
 export interface CardList {

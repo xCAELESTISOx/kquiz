@@ -39,7 +39,6 @@ const abilities = (card: Card): LearnAbilities => ({
 /** Where the close button goes: the card, or the list the group was picked from. */
 function backHash(id: number | undefined, group: GroupFilter | undefined): string {
   if (id !== undefined) return `#/cards/${id}`;
-  if (group?.lesson) return "#/";
   const path = group?.status === "queued" ? "#/cards/queued" : group?.kind === "phrase" ? "#/cards/phrases" : "#/cards";
   return group?.root ? `${path}?root=${encodeURIComponent(group.root)}` : path;
 }
@@ -48,8 +47,7 @@ function backHash(id: number | undefined, group: GroupFilter | undefined): strin
  * "Учить": one word from a card's menu, or a group picked on the cards screen, GROUP_SIZE words at a
  * time, taken from meeting them to producing them (lib/learn.ts). Phrases are built from their blocks.
  * No rating is sent: the stats stay as they were. New words (not yet in reviews) enter reviews once
- * their portion has been gone through: the next day, or later today the ones missed on the way. A
- * lesson (the new words added on one day, from Today) is learned this way, portion by portion.
+ * their portion has been gone through: the next day, or later today the ones missed on the way.
  */
 export function LearnScreen({ id, group }: { id?: number; group?: GroupFilter }) {
   // The whole group, and where the portion being learned starts in it.
@@ -92,8 +90,7 @@ export function LearnScreen({ id, group }: { id?: number; group?: GroupFilter })
       ? api.card(id).then(({ card }) => [card])
       : api
           .cards({ ...group, limit: 200 })
-          // A lesson goes in the order its words were added; the list comes newest first.
-          .then(({ cards }) => (group?.lesson ? [...cards].reverse() : cards).filter((c) => !c.suspended))
+          .then(({ cards }) => cards.filter((c) => !c.suspended))
     ).then(setAll, (e: Error) => setError(e.message === "not_found" ? "Такой карточки нет. Может, её уже удалили." : e.message));
     // A new group is a new screen (App keys it).
   }, [id]);
@@ -278,7 +275,7 @@ export function LearnScreen({ id, group }: { id?: number; group?: GroupFilter })
               </button>
             )}
             <a className="button" href={back}>
-              {single ? "К карточке" : group?.lesson ? "На главную" : "К карточкам"}
+              {single ? "К карточке" : "К карточкам"}
             </a>
           </div>
         </div>
@@ -288,7 +285,7 @@ export function LearnScreen({ id, group }: { id?: number; group?: GroupFilter })
 }
 
 /** The whole card at once, heard first: the word is met before anything is asked about it. */
-function IntroCard({ card, onDone }: { card: Card; onDone: () => void }) {
+export function IntroCard({ card, onDone }: { card: Card; onDone: () => void }) {
   const families = useFamily(card);
   useEffect(() => {
     if (canSpeak()) speak(card);
@@ -334,7 +331,7 @@ function IntroCard({ card, onDone }: { card: Card; onDone: () => void }) {
 }
 
 /** The word put together from its syllables and a few decoys, by its translation and sound. */
-function BuildCard({ card, options, onDone }: { card: Card; options: ChoiceOption[]; onDone: (ok: boolean) => void }) {
+export function BuildCard({ card, options, onDone }: { card: Card; options: ChoiceOption[]; onDone: (ok: boolean) => void }) {
   const tiles = useMemo(() => buildTiles(card, options), [card, options]);
   const answer = useMemo(() => [...card.korean.replace(/\s/g, "")], [card]);
   // Indexes into `tiles`, in the order tapped.

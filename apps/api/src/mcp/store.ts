@@ -36,8 +36,6 @@ export interface Stats {
   dueListening: number;
   /** Cards from Claude still waiting to enter reviews, and how many enter per day. */
   queued: number;
-  /** Words waiting to be learned, by the day they were added, oldest first. */
-  lessons: { day: string; count: number }[];
   streakDays: number;
   /** Reviews coming due in the next 7 days (UTC), per mode, new cards left out. */
   dueNext7Days?: Record<string, number>;
@@ -170,7 +168,6 @@ export class MemoryCardStore implements CardStore {
       dueSpeech: live.filter((card) => card.speakable).length,
       dueListening: 0,
       queued: all.length - live.length,
-      lessons: [],
       streakDays: 0,
     };
   }

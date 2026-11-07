@@ -67,6 +67,11 @@ export const cards = sqliteTable(
     // directly or let in by the old daily allowance.
     introducedAt: timestamp("introduced_at"),
     introduction: text("introduction", { enum: ["direct", "daily", "early", "learned"] }),
+    // Learning a new word (newCards.ts): picked from the pool into the few being learned, the ladder
+    // steps passed in a row, and when the ladder was done (the word then waits for its later check).
+    learningAt: timestamp("learning_at"),
+    learnStep: integer("learn_step").notNull().default(0),
+    learnPassedAt: timestamp("learn_passed_at"),
     createdAt: timestamp("created_at").notNull(),
     updatedAt: timestamp("updated_at").notNull(),
   },
