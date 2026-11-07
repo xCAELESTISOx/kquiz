@@ -4,8 +4,10 @@ import { join } from "node:path";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { and, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { createCards } from "../cardStore.js";
+import { createReviewing } from "../testing.js";
 import { openDb } from "./client.js";
 import { cards, reviewStates, users } from "./schema.js";
 import { OWNER_ID } from "../users.js";
@@ -27,7 +29,7 @@ function migrateUpTo(sqlite: Database.Database, dir: string, idx: number) {
 describe("migrations", () => {
   it("0004 gives cards made before listening mode a fresh listening schedule", () => {
     const db = openDb(":memory:");
-    createCards(db, OWNER_ID, [{ korean: "물", meaning: "вода", tags: [] }], "app");
+    createReviewing(db, OWNER_ID, [{ korean: "물", meaning: "вода", tags: [] }], "app");
     db.$client.exec("delete from review_states where mode = 'listening'");
     db.$client.exec(readFileSync(new URL("../../drizzle/0004_listening.sql", import.meta.url), "utf8"));
     const modes = db.select({ mode: reviewStates.mode, reps: reviewStates.reps }).from(reviewStates).all();
@@ -42,6 +44,21 @@ describe("migrations", () => {
     db.$client.exec(readFileSync(new URL("../../drizzle/0005_card_queue.sql", import.meta.url), "utf8").split("--> statement-breakpoint").at(-1)!);
     const row = db.select({ at: cards.introducedAt, how: cards.introduction, created: cards.createdAt }).from(cards).get();
     expect(row).toMatchObject({ how: "direct", at: row?.created });
+  });
+
+  it("0014 sends words never reviewed back to wait to be learned, and keeps the rest", () => {
+    const db = openDb(":memory:");
+    const { created } = createReviewing(db, OWNER_ID, [{ korean: "물", meaning: "вода", tags: [] }, { korean: "불", meaning: "огонь", tags: [] }], "app");
+    const [seen, fresh] = created.map((c) => c.id);
+    db.update(reviewStates).set({ reps: 1 }).where(and(eq(reviewStates.cardId, seen!), eq(reviewStates.mode, "speech"))).run();
+    // The columns are there already (openDb migrates); the data part is what is tested.
+    db.$client.exec(readFileSync(new URL("../../drizzle/0014_learn_new_words.sql", import.meta.url), "utf8").split("--> statement-breakpoint").slice(3).join("\n"));
+    const rows = db.select({ id: cards.id, at: cards.introducedAt, how: cards.introduction }).from(cards).all();
+    expect(rows.find((r) => r.id === fresh)).toMatchObject({ at: null, how: null });
+    expect(rows.find((r) => r.id === seen)?.at).not.toBeNull();
+    const states = db.select({ cardId: reviewStates.cardId }).from(reviewStates).all();
+    expect(states.every((s) => s.cardId === seen)).toBe(true);
+    expect(states).toHaveLength(3);
   });
 });
 

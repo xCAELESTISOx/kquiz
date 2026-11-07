@@ -6,7 +6,7 @@ export type CardSource = "app" | "claude" | "bulk";
 export interface StoredCard extends NewCard {
   id: string;
   speakable: boolean;
-  /** Waiting in the new-card queue, not yet in reviews. */
+  /** Waiting to be learned, not yet in reviews. */
   queued: boolean;
   source: CardSource;
   createdAt: string;
@@ -36,7 +36,6 @@ export interface Stats {
   dueListening: number;
   /** Cards from Claude still waiting to enter reviews, and how many enter per day. */
   queued: number;
-  newPerDay: number;
   streakDays: number;
   /** Reviews coming due in the next 7 days (UTC), per mode, new cards left out. */
   dueNext7Days?: Record<string, number>;
@@ -100,7 +99,7 @@ export class MemoryCardStore implements CardStore {
         korean,
         id: randomUUID(),
         speakable: isSpeakable(korean),
-        queued: source === "claude",
+        queued: true,
         source,
         createdAt: now,
         updatedAt: now,
@@ -169,7 +168,6 @@ export class MemoryCardStore implements CardStore {
       dueSpeech: live.filter((card) => card.speakable).length,
       dueListening: 0,
       queued: all.length - live.length,
-      newPerDay: 15,
       streakDays: 0,
     };
   }

@@ -8,7 +8,7 @@ import { getFsrsSetup, schedulerFor, setDesiredRetention } from "./fsrs.js";
 import { MIN_REVIEWS, optimizeMode, reviewDay, trainingItems } from "./fsrsOptimizer.js";
 import { applyRating, newReviewState, type RatingName } from "./review.js";
 import { applyReviews } from "./reviewStore.js";
-import { testApp } from "./testing.js";
+import { createReviewing, testApp } from "./testing.js";
 import { OWNER_ID } from "./users.js";
 
 const TZ = "Asia/Seoul";
@@ -18,7 +18,7 @@ const start = new Date("2026-01-05T01:00:00Z");
 function simulate(db: Db, cardCount: number, reviewsPerCard: number) {
   let seed = 42;
   const random = () => ((seed = (seed * 1_103_515_245 + 12_345) % 2 ** 31) / 2 ** 31);
-  const { created } = createCards(db, OWNER_ID,
+  const { created } = createReviewing(db, OWNER_ID,
     Array.from({ length: cardCount }, (_, i) => ({ korean: `단어${String.fromCharCode(0xac00 + i)}`, meaning: `слово ${i}`, examples: [], tags: [] })),
     "app",
     start,

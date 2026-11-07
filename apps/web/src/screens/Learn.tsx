@@ -46,8 +46,8 @@ function backHash(id: number | undefined, group: GroupFilter | undefined): strin
 /**
  * "Учить": one word from a card's menu, or a group picked on the cards screen, GROUP_SIZE words at a
  * time, taken from meeting them to producing them (lib/learn.ts). Phrases are built from their blocks.
- * Nothing is sent anywhere: the schedule and the stats stay as they were, and the words come up in
- * reviews as before.
+ * No rating is sent: the stats stay as they were. New words (not yet in reviews) enter reviews once
+ * their portion has been gone through: the next day, or later today the ones missed on the way.
  */
 export function LearnScreen({ id, group }: { id?: number; group?: GroupFilter }) {
   // The whole group, and where the portion being learned starts in it.
@@ -66,6 +66,8 @@ export function LearnScreen({ id, group }: { id?: number; group?: GroupFilter })
   const [pass, setPass] = useState(0);
   const [shown, setShown] = useState(0);
   const [error, setError] = useState<string>();
+  // New words of this portion taken into reviews when it was finished.
+  const [learned, setLearned] = useState<number[]>();
   const recorder = useRef<Recorder>(undefined);
   const back = backHash(id, group);
   const single = id !== undefined;
@@ -86,7 +88,9 @@ export function LearnScreen({ id, group }: { id?: number; group?: GroupFilter })
     document.title = "Учить · KQuiz";
     (id !== undefined
       ? api.card(id).then(({ card }) => [card])
-      : api.cards({ ...group, limit: 200 }).then(({ cards }) => cards.filter((c) => !c.suspended))
+      : api
+          .cards({ ...group, limit: 200 })
+          .then(({ cards }) => cards.filter((c) => !c.suspended))
     ).then(setAll, (e: Error) => setError(e.message === "not_found" ? "Такой карточки нет. Может, её уже удалили." : e.message));
     // A new group is a new screen (App keys it).
   }, [id]);
@@ -165,6 +169,18 @@ export function LearnScreen({ id, group }: { id?: number; group?: GroupFilter })
   const next = all?.slice(from + GROUP_SIZE, from + 2 * GROUP_SIZE) ?? [];
   const finished = ready && !current && total > 0;
 
+  // The first time through a portion, its new words go into reviews; "Закрепить" changes nothing.
+  useEffect(() => {
+    if (!finished || pass !== 0 || learned) return;
+    const fresh = cards.filter((c) => c.queued).map((c) => c.id);
+    setLearned([]);
+    if (!fresh.length) return;
+    api.learned(fresh, fresh.filter((cardId) => shaky.has(cardId))).then(
+      ({ introduced }) => setLearned(introduced),
+      (e: Error) => setError(`Не получилось отправить слова в повторение: ${e.message}`),
+    );
+  }, [finished, pass, learned, cards, shaky]);
+
   return (
     <main className="review learn">
       <header className="review-top">
@@ -236,14 +252,25 @@ export function LearnScreen({ id, group }: { id?: number; group?: GroupFilter })
             )}
             <p className="finished-text">
               {missed.size === 0 ? "Всё с первого раза." : `С первого раза: ${asked - missed.size} из ${asked}.`}
-              {shaky.size > 0 && cards.length > 1 && " Отмечены слова, где были ошибки."} Расписание и статистика не изменились,
-              {cards.length === 1 ? " слово придёт" : " слова придут"} в повторение как обычно.
+              {shaky.size > 0 && cards.length > 1 && " Отмечены слова, где были ошибки."}{" "}
+              {learned?.length
+                ? learned.length === cards.length
+                  ? `${cards.length === 1 ? "Слово придёт" : "Слова придут"} в повторение завтра${shaky.size > 0 ? ", с ошибками — ещё сегодня" : ""}.`
+                  : `Новые слова (${learned.length}) придут в повторение завтра${shaky.size > 0 ? ", с ошибками — ещё сегодня" : ""}.`
+                : `Статистика не изменилась, ${cards.length === 1 ? "слово придёт" : "слова придут"} в повторение как обычно.`}
             </p>
             <button type="button" className="button primary" onClick={again}>
               {shaky.size > 0 && shaky.size < cards.length ? "Закрепить трудные" : "Закрепить"}
             </button>
             {next.length > 0 && (
-              <button type="button" className="button" onClick={() => setFrom((f) => f + GROUP_SIZE)}>
+              <button
+                type="button"
+                className="button"
+                onClick={() => {
+                  setLearned(undefined);
+                  setFrom((f) => f + GROUP_SIZE);
+                }}
+              >
                 Учить ещё {next.length} {next.every((c) => c.kind === "phrase") ? phrasesWord(next.length) : wordsWord(next.length)}
               </button>
             )}
@@ -258,7 +285,7 @@ export function LearnScreen({ id, group }: { id?: number; group?: GroupFilter })
 }
 
 /** The whole card at once, heard first: the word is met before anything is asked about it. */
-function IntroCard({ card, onDone }: { card: Card; onDone: () => void }) {
+export function IntroCard({ card, onDone }: { card: Card; onDone: () => void }) {
   const families = useFamily(card);
   useEffect(() => {
     if (canSpeak()) speak(card);
@@ -304,7 +331,7 @@ function IntroCard({ card, onDone }: { card: Card; onDone: () => void }) {
 }
 
 /** The word put together from its syllables and a few decoys, by its translation and sound. */
-function BuildCard({ card, options, onDone }: { card: Card; options: ChoiceOption[]; onDone: (ok: boolean) => void }) {
+export function BuildCard({ card, options, onDone }: { card: Card; options: ChoiceOption[]; onDone: (ok: boolean) => void }) {
   const tiles = useMemo(() => buildTiles(card, options), [card, options]);
   const answer = useMemo(() => [...card.korean.replace(/\s/g, "")], [card]);
   // Indexes into `tiles`, in the order tapped.

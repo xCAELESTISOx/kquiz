@@ -56,7 +56,7 @@ export function createApp({ db, config, setupCode, webauthn, scorer, now = () =>
   app.use("/export", requireSession(db, config.secureCookies, now));
   app.use("/practice/*", requireSession(db, config.secureCookies, now));
   app.use("/users/*", requireSession(db, config.secureCookies, now));
-  app.route("/cards", cardRoutes(db, now));
+  app.route("/cards", cardRoutes(db, now, config.timeZone));
   app.route("/reviews", reviewRoutes(db, now, config.timeZone));
   app.route("/settings", settingsRoutes(db));
   app.route("/export", exportRoutes(db, now));

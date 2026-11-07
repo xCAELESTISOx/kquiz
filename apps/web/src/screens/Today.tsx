@@ -2,10 +2,11 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { api, auth, lastToday, pendingReviewCount, remembered, rememberToday } from "../lib/api";
 import { cardsWord } from "../lib/plural";
 import { hideSplash } from "../lib/splash";
-import type { QueueItem, Stats } from "../lib/types";
-import { HeadphonesIcon, MicIcon, ShuffleIcon } from "../ui/icons";
+import type { QueueItem, Stats, StatsOverview } from "../lib/types";
+import { CloseIcon, HeadphonesIcon, MicIcon, ShuffleIcon } from "../ui/icons";
 import { PracticeLinks } from "../ui/PracticeLinks";
 import { ScheduleSettings } from "./ScheduleSettings";
+import "../ui/today.css";
 
 const PREVIEW = 14;
 
@@ -44,8 +45,11 @@ export function TodayScreen() {
   const speechDue = stats?.due.speech ?? 0;
   const listenDue = stats?.due.listening ?? 0;
   const restDue = speechDue + listenDue;
-  // Worth offering once at least two kinds of review wait.
-  const mixable = [due, speechDue, listenDue].filter((n) => n > 0).length > 1;
+  const totalDue = due + restDue;
+  const queued = stats?.newCards.queued ?? 0;
+  // Nothing to learn or review: adding words is the one thing to do.
+  const nothing = !!stats && totalDue === 0 && queued === 0;
+  const [more, setMore] = useState(false);
   const pending = pendingReviewCount();
   const today = new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
 
@@ -88,60 +92,16 @@ export function TodayScreen() {
                   ]
                     .filter(Boolean)
                     .join(", ")}.`
-                : "На сейчас всё повторено. Новые слова можно добавить в любой момент."}
+                : queued > 0
+                  ? `Повторять нечего. Новых слов ждут ${queued}: «Учить» возьмёт по 5.`
+                  : "На сейчас всё повторено. Новые слова можно добавить в любой момент."}
             </span>
           </p>
         )}
         {!stats && !error && <div className="skeleton" />}
       </section>
 
-      {stats && (
-        <dl className="facts">
-          <div style={{ "--i": 0 } as CSSProperties}>
-            <dt>К повторению</dt>
-            <dd>{due}</dd>
-          </div>
-          <div style={{ "--i": 1 } as CSSProperties}>
-            <dt>Вслух</dt>
-            <dd>{stats.due.speech}</dd>
-          </div>
-          <div style={{ "--i": 2 } as CSSProperties}>
-            <dt>На слух</dt>
-            <dd>{stats.due.listening}</dd>
-          </div>
-          <div style={{ "--i": 3 } as CSSProperties}>
-            <dt>Повторено</dt>
-            <dd>{stats.reviewedToday}</dd>
-          </div>
-        </dl>
-      )}
-
-      {stats && stats.newCards.queued > 0 && (
-        <a className="queue-link" href="#/cards/queued">
-          <span>
-            В очереди новых: <strong>{stats.newCards.queued}</strong>
-          </span>
-          <span className="muted">по {stats.newCards.limit} в день</span>
-        </a>
-      )}
-
-      {leeches > 0 && (
-        <a className="leech-link" href="#/leeches">
-          Трудные карточки
-          <span className="button-count">{leeches}</span>
-        </a>
-      )}
-
-      {stats && <PracticeLinks />}
-
-      {stats && <ScheduleSettings />}
-
-      {stats && owner && (
-        <a className="queue-link" href="#/access">
-          <span>Доступ для друзей</span>
-          <span className="muted">пригласить</span>
-        </a>
-      )}
+      {stats && <TodayStats stats={stats} />}
 
       <div aria-live="polite">
         {error && <p className="notice notice-error">Не получилось загрузить данные: {error}. Обнови страницу.</p>}
@@ -154,48 +114,149 @@ export function TodayScreen() {
 
       {/* Wait for the numbers, so the wrong button never flashes while they load. */}
       <div className="bottom-actions" hidden={!stats && !error}>
-        {due > 0 && (
-          <a className="button primary" href="#/review">
-            Повторить {due} {cardsWord(due)}
-          </a>
-        )}
-        {mixable && (
-          <a className="button" href="#/mix">
-            <ShuffleIcon />
-            Всё вперемешку
-            <span className="button-count">{due + restDue}</span>
-          </a>
-        )}
-        {restDue > 0 && (
-          <div className="action-pair">
-            {speechDue > 0 && (
-              <a className={`button${due > 0 || listenDue > 0 ? "" : " primary"}`} href="#/speech">
-                <MicIcon />
-                Вслух
-                <span className="button-count">{speechDue}</span>
-              </a>
-            )}
-            {listenDue > 0 && (
-              <a className={`button${due > 0 || speechDue > 0 ? "" : " primary"}`} href="#/listen">
-                <HeadphonesIcon />
-                На слух
-                <span className="button-count">{listenDue}</span>
-              </a>
-            )}
-          </div>
-        )}
-        {speechDue > 0 && (
-          <a className="alt-link" href="#/choose">
-            Нельзя вслух? Выбрать слово из вариантов
-          </a>
-        )}
-        {due === 0 && restDue === 0 && (
-          <a className="button" href="#/add">
+        {nothing ? (
+          <a className="button primary" href="#/add">
             Добавить слова
           </a>
+        ) : (
+          <a className="button primary session-button" href="#/session">
+            <span>Учить</span>
+            <span className="session-button-sub">
+              5 минут
+              {totalDue > 0 && ` · повторить ${totalDue}`}
+              {queued > 0 && ` · новых ${queued}`}
+            </span>
+          </a>
         )}
+        <button type="button" className="button" aria-haspopup="dialog" onClick={() => setMore(true)}>
+          Ещё
+        </button>
       </div>
+
+      {more && stats && (
+        <MoreSheet onClose={() => setMore(false)} due={due} speechDue={speechDue} listenDue={listenDue} leeches={leeches} owner={owner} />
+      )}
     </main>
+  );
+}
+
+const DAYS = 14;
+
+/** A glance at how it goes: the streak, today, and the last two weeks of reviews as bars. */
+function TodayStats({ stats }: { stats: Stats }) {
+  const [overview, setOverview] = useState<StatsOverview | undefined>(remembered.statsOverview);
+  useEffect(() => {
+    api.statsOverview().then(setOverview, () => undefined);
+  }, [stats]);
+  const days = overview?.activity.slice(-DAYS) ?? [];
+  const top = Math.max(...days.map((d) => d.reviews), 1);
+  const streak = overview?.streak.current ?? 0;
+  return (
+    <a className="today-stats" href="#/stats" aria-label="Статистика">
+      <dl className="today-stats-facts">
+        <div>
+          <dt>Серия</dt>
+          <dd>
+            {streak} <span className="muted">{daysWord(streak)}</span>
+          </dd>
+        </div>
+        <div>
+          <dt>Сегодня</dt>
+          <dd>{stats.reviewedToday}</dd>
+        </div>
+        <div>
+          <dt>Новых</dt>
+          <dd>{stats.newCards.queued}</dd>
+        </div>
+      </dl>
+      <div className="today-stats-chart" aria-hidden="true">
+        {days.map((d, i) => (
+          <span
+            key={d.day}
+            className="today-stats-bar"
+            data-today={i === days.length - 1 || undefined}
+            style={{ "--h": d.reviews ? Math.max(d.reviews / top, 0.08) : 0, "--i": i } as CSSProperties}
+          />
+        ))}
+      </div>
+      <p className="today-stats-caption muted small">Повторения за две недели ›</p>
+    </a>
+  );
+}
+
+function daysWord(n: number): string {
+  return { карточку: "день", карточки: "дня", карточек: "дней" }[cardsWord(n)]!;
+}
+
+/** Everything besides "Учить": each kind of review on its own, practice, and the settings. */
+function MoreSheet({
+  onClose,
+  due,
+  speechDue,
+  listenDue,
+  leeches,
+  owner,
+}: {
+  onClose: () => void;
+  due: number;
+  speechDue: number;
+  listenDue: number;
+  leeches: number;
+  owner: boolean;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, [onClose]);
+  const mixable = [due, speechDue, listenDue].filter((n) => n > 0).length > 1;
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label="Ещё" onClick={(e) => e.stopPropagation()}>
+        <header className="sheet-header">
+          <p className="sheet-title">Ещё</p>
+          <button type="button" className="icon-button" aria-label="Закрыть" onClick={onClose}>
+            <CloseIcon />
+          </button>
+        </header>
+        <nav className="sheet-links" onClick={onClose}>
+          {due > 0 && (
+            <a href="#/review">
+              Повторить значения <span className="button-count">{due}</span>
+            </a>
+          )}
+          {mixable && (
+            <a href="#/mix">
+              <ShuffleIcon />
+              Вперемешку, выбрать способы
+            </a>
+          )}
+          {speechDue > 0 && (
+            <a href="#/speech">
+              <MicIcon />
+              Вслух <span className="button-count">{speechDue}</span>
+            </a>
+          )}
+          {speechDue > 0 && <a href="#/choose">Выбрать слово из вариантов</a>}
+          {listenDue > 0 && (
+            <a href="#/listen">
+              <HeadphonesIcon />
+              На слух <span className="button-count">{listenDue}</span>
+            </a>
+          )}
+          {leeches > 0 && (
+            <a href="#/leeches">
+              Трудные карточки <span className="button-count">{leeches}</span>
+            </a>
+          )}
+          <a href="#/cards/queued">Новые слова</a>
+          <a href="#/add">Добавить слова</a>
+          {owner && <a href="#/access">Доступ для друзей</a>}
+        </nav>
+        <PracticeLinks />
+        <ScheduleSettings />
+      </div>
+    </div>
   );
 }
 

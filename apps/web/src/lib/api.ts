@@ -1,5 +1,7 @@
 import { MockApi } from "./mock";
 import type {
+  LearningAnswer,
+  LearningItem,
   AccessInfo,
   AddCardResult,
   AddCardsResult,
@@ -288,6 +290,17 @@ export const api = {
   },
 
   /** Takes a queued card into reviews now, outside the daily allowance. */
+  /** The new words for a session: due for their check, then being learned (filled up from the pool). */
+  learning: () => request<{ items: LearningItem[]; pool: number }>("GET", "/cards/learning", { fallback: (m) => m.learning() }),
+
+  /** One answer for a word being learned: up its ladder, a step down, or into reviews. */
+  answerLearning: (id: number, ok: boolean) =>
+    request<LearningAnswer>("POST", `/cards/${id}/learning`, { body: { ok }, fallback: (m) => m.answerLearning(id, ok) }),
+
+  /** Words just learned in a group (tomorrow, or later today the `missed` ones); returns those taken in. */
+  learned: (cardIds: number[], missed: number[]) =>
+    request<{ introduced: number[] }>("POST", "/cards/learned", { body: { cardIds, missed }, fallback: (m) => m.learned(cardIds, missed) }),
+
   async introduceCard(id: number) {
     const res = await request<{ card: Card }>("POST", `/cards/${id}/introduce`, { body: {}, fallback: (m) => ({ card: m.introduce(id) }) });
     rememberCard(id, res.card);

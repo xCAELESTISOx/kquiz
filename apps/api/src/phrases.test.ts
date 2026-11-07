@@ -4,7 +4,7 @@ import { createCards } from "./cardStore.js";
 import { openDb } from "./db/client.js";
 import { decoyCount, grammarVariants, linkParts, phraseBlocks, phraseTiles } from "./phrases.js";
 import { dueQueue } from "./reviewStore.js";
-import { testApp } from "./testing.js";
+import { createReviewing, testApp } from "./testing.js";
 import { OWNER_ID } from "./users.js";
 
 const now = new Date("2026-10-28T09:00:00Z");
@@ -73,7 +73,7 @@ describe("phrases", () => {
 
   it("keeps phrases out of the speech queue", () => {
     const db = openDb(":memory:");
-    createCards(db, OWNER_ID, [{ korean: "안녕히 가세요", meaning: "До свидания", kind: "phrase", tags: [] }], "app", now);
+    createReviewing(db, OWNER_ID, [{ korean: "안녕히 가세요", meaning: "До свидания", kind: "phrase", tags: [] }], "app", now);
     expect(dueQueue(db, OWNER_ID, "meaning", now).map((i) => i.card.kind)).toEqual(["phrase"]);
     expect(dueQueue(db, OWNER_ID, "speech", now)).toEqual([]);
   });
