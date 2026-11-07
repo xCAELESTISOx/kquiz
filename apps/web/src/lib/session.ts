@@ -4,8 +4,8 @@
 // then checked once more from its translation. Reviews due in any mode fill the rest.
 import type { Card, LearningItem, QueueItem } from "./types";
 
-/** How long a session runs; the card on screen when it ends is still finished. */
-export const SESSION_MS = 5 * 60_000;
+/** How many answers a session runs to (about five minutes); "Ещё" adds as many again. */
+export const SESSION_TASKS = 20;
 
 /** Other cards between two steps of one word, so it isn't answered from the screen just seen. */
 export const LEARN_GAP = 3;
@@ -52,10 +52,4 @@ export function interleave(reviews: QueueItem[], learning: QueueItem[], every = 
 export function insertAfter(queue: QueueItem[], item: QueueItem, gap = LEARN_GAP): QueueItem[] {
   const at = Math.min(gap + 1, queue.length);
   return [...queue.slice(0, at), item, ...queue.slice(at)];
-}
-
-/** "4:05": what is left of a session. */
-export function timeLeft(ms: number): string {
-  const s = Math.max(Math.ceil(ms / 1000), 0);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }

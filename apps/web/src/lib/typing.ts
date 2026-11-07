@@ -102,3 +102,19 @@ export function typingRating(check: TypingCheck): RatingName {
 export function wrongKeyboard(typed: string): boolean {
   return /[a-z]/i.test(typed) && !/\p{Script=Hangul}/u.test(typed);
 }
+
+/**
+ * Marks for showing: neighbouring syllables that went wrong become one highlight, so their
+ * backgrounds don't overlap. A run with any wrong syllable shows as wrong, otherwise as missing.
+ */
+export function joinMarks(marks: TypingCheck["marks"]): TypingCheck["marks"] {
+  const out: TypingCheck["marks"] = [];
+  for (const mark of marks) {
+    const last = out.at(-1);
+    if (last && last.status !== "ok" && mark.status !== "ok") {
+      last.text += mark.text;
+      if (mark.status === "wrong") last.status = "wrong";
+    } else out.push({ ...mark });
+  }
+  return out;
+}

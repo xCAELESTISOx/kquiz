@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { firstTasks, insertAfter, interleave, learnTask, timeLeft } from "./session";
+import { firstTasks, insertAfter, interleave, learnTask } from "./session";
 import type { Card, QueueItem } from "./types";
 
 const card = (id: number) => ({ id, korean: `단어${id}`, meaning: `слово ${id}` }) as Card;
@@ -32,12 +32,6 @@ describe("session", () => {
     expect(interleave([], learning).map((i) => i.card.id)).toEqual([10, 11]);
     expect(insertAfter(mixed, review(9)).map((i) => i.card.id)).toEqual([10, 1, 2, 11, 9, 3]);
     expect(insertAfter([review(1)], review(9)).map((i) => i.card.id)).toEqual([1, 9]);
-  });
-
-  it("shows the time left", () => {
-    expect(timeLeft(5 * 60_000)).toBe("5:00");
-    expect(timeLeft(61_500)).toBe("1:02");
-    expect(timeLeft(-5)).toBe("0:00");
   });
 });
 
