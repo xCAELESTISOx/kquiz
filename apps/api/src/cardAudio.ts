@@ -1,14 +1,15 @@
 // Reference audio for cards: services/scorer's /tts (Supertonic) makes an MP3 per card, a
 // background worker asks for it once and keeps it in card_audio (examples and drill words go to
 // speech_audio, see practice.ts; other voices of card and drill words to voice_audio, see voices.ts).
+// Nothing is pruned: a recording outlives its card, so re-adding the word reuses it.
 // Until it is there, or when the
 // scorer is down, the web app falls back to the phone's own voice.
 import { and, asc, eq, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import type { Db } from "./db/client.js";
-import { cardAudio, cards } from "./db/schema.js";
-import { nextTextWithoutAudio, pruneSpeechAudio, saveSpeechAudio } from "./practice.js";
+import { cardAudio, cards, speechAudio } from "./db/schema.js";
+import { nextTextWithoutAudio, saveSpeechAudio } from "./practice.js";
 import { OWNER_ID } from "./users.js";
-import { EXTRA_VOICES, getVoiceAudio, nextVoiceJob, pruneVoiceAudio, saveVoiceAudio, type ExtraVoice } from "./voices.js";
+import { EXTRA_VOICES, getVoiceAudio, nextVoiceJob, saveVoiceAudio, type ExtraVoice } from "./voices.js";
 
 export interface Speaker {
   /** MP3 of `text` read aloud, in the scorer's default voice unless `voice` is given. */
@@ -73,9 +74,15 @@ export function nextCardWithoutAudio(db: Db, skip: number[] = []): { id: number;
     .get();
 }
 
-/** Audio another card already has for exactly this Korean (two people learning the same word). */
+/**
+ * Audio already made for exactly this Korean: another card's (two people learning the same word),
+ * or the library's, which keeps recordings of deleted and reworded cards and of examples.
+ */
 export function audioForText(db: Db, text: string): Uint8Array | undefined {
-  return db.select({ data: cardAudio.data }).from(cardAudio).where(eq(cardAudio.text, text)).limit(1).get()?.data;
+  return (
+    db.select({ data: cardAudio.data }).from(cardAudio).where(eq(cardAudio.text, text)).limit(1).get()?.data ??
+    db.select({ data: speechAudio.data }).from(speechAudio).where(eq(speechAudio.text, text)).get()?.data
+  );
 }
 
 export function saveCardAudio(db: Db, cardId: number, text: string, data: Uint8Array, now: Date) {
@@ -144,11 +151,8 @@ export function audioWorker(
         const t = now().getTime();
         for (const [key, until] of badText) if (until <= t) badText.delete(key);
         const job = nextJob();
-        if (!job) {
-          pruneSpeechAudio(db);
-          pruneVoiceAudio(db);
-          break;
-        }
+        // Audio of texts no card uses any more stays: it is a library by text (0012_audio_library.sql).
+        if (!job) break;
         if (job.ready) {
           job.save(job.ready);
           continue;

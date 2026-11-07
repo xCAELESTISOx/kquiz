@@ -63,7 +63,7 @@ describe("other voices", () => {
     expect((await t.request(`/cards/${theirs!.id}/audio?voice=M1`)).status).toBe(404);
   });
 
-  it("come with listening items and drills, and go with the word", async () => {
+  it("come with listening items and drills, and stay after the word changes", async () => {
     const t = await setup();
     const worker = audioWorker(t.db, fakeSpeaker().speaker, () => t.clock.now, ["M1"]);
     // Only the default voice so far.
@@ -81,6 +81,6 @@ describe("other voices", () => {
     expect((await t.request(`/cards/${t.id}/audio?voice=M1`)).status).toBe(404);
     while ((await worker.runOnce()) > 0);
     expect((await t.request(`/cards/${t.id}/audio?voice=M1`)).text).toBe("mp3:M1:냉수");
-    expect((await t.request(`/practice/audio?text=${encodeURIComponent("물")}&voice=M1`)).status).toBe(404);
+    expect((await t.request(`/practice/audio?text=${encodeURIComponent("물")}&voice=M1`)).status).toBe(200);
   });
 });

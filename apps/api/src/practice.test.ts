@@ -53,7 +53,7 @@ describe("practice audio", () => {
     expect((await t.request(`/practice/audio?text=${encodeURIComponent("물 주세요.")}`)).status).toBe(401);
   });
 
-  it("is dropped when the example changes", async () => {
+  it("stays when the example changes, as a library by text", async () => {
     const t = await setup();
     const { speaker, calls } = fakeSpeaker();
     const worker = audioWorker(t.db, speaker, () => t.clock.now, []);
@@ -63,7 +63,7 @@ describe("practice audio", () => {
     expect(await worker.runOnce()).toBe(1);
     expect(await worker.runOnce()).toBe(0);
     expect(calls.at(-1)).toBe("물을 많이 마셔요.");
-    expect((await t.request(`/practice/audio?text=${encodeURIComponent("물을 마셔요.")}`)).status).toBe(404);
+    expect((await t.request(`/practice/audio?text=${encodeURIComponent("물을 마셔요.")}`)).status).toBe(200);
   });
 });
 

@@ -49,21 +49,6 @@ export function getSpeechAudio(db: Db, text: string) {
   return row && { data: row.data, mime: row.mime, etag: `"t-${row.createdAt.getTime()}-${row.data.length}"` };
 }
 
-/** Drops audio of examples and drill words that no longer exist. Returns how many went. */
-export function pruneSpeechAudio(db: Db): number {
-  const wanted = new Set(wantedSpeechTexts(db));
-  const stale = db
-    .select({ text: speechAudio.text })
-    .from(speechAudio)
-    .all()
-    .map((r) => r.text)
-    .filter((text) => !wanted.has(text));
-  for (let i = 0; i < stale.length; i += 500) {
-    db.delete(speechAudio).where(inArray(speechAudio.text, stale.slice(i, i + 500))).run();
-  }
-  return stale.length;
-}
-
 // ---- Shadowing ----
 
 export type ShadowItem = { cardId: number; word: string; meaning: string; ko: string; ru: string };
