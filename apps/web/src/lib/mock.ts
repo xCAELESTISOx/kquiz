@@ -87,6 +87,13 @@ const SEED: NewCard[] = [
       { ko: "잘", meaning: "хорошо" },
       { ko: "먹겠습니다", base: "먹다", meaning: "буду есть" },
     ] },
+  { korean: "죄송합니다, 저는 아직 한국어를 배우고 있습니다", meaning: "Извините, я ещё только учу корейский", kind: "phrase", register: "formal", parts: [
+      { ko: "죄송합니다", base: "죄송하다", meaning: "извините" },
+      { ko: "저는", base: "저", meaning: "я (+는)" },
+      { ko: "아직", meaning: "ещё, пока" },
+      { ko: "한국어를", base: "한국어", meaning: "корейский язык (+를)" },
+      { ko: "배우고 있습니다", base: "배우다", meaning: "учу (сейчас)" },
+    ] },
   { korean: "어떻게 지내요?", meaning: "Как поживаешь?", kind: "phrase", register: "polite", parts: [
       { ko: "어떻게", meaning: "как" },
       { ko: "지내요", base: "지내다", meaning: "поживать" },

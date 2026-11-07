@@ -193,7 +193,7 @@ export function CardsScreen({ filter, root }: { filter?: CardFilter; root?: stri
         <ul className="card-list">
           {cards.map((card, i) => (
             <li key={card.id} className="card-row" style={{ "--i": Math.min(i, 12) } as CSSProperties}>
-              <a className="card-row-link" href={`#/cards/${card.id}`}>
+              <a className={`card-row-link${isLong(card) ? " card-row-link-long" : ""}`} href={`#/cards/${card.id}`}>
                 <span className="card-row-korean" lang="ko">
                   {card.korean}
                 </span>
@@ -350,4 +350,9 @@ function QueuePanel({ onChange }: { onChange: () => void }) {
       </p>
     </section>
   );
+}
+
+/** Фразы и длинные записи идут в два ряда: корейский сверху, перевод под ним. */
+function isLong(card: { kind?: string; korean: string }): boolean {
+  return card.kind === "phrase" || card.korean.length > 12;
 }
