@@ -1,6 +1,8 @@
 import { isKoreanOnly, normalizeKorean } from "./korean";
 import { fallbackTiles } from "./phrase";
 import type {
+  LearningAnswer,
+  LearningItem,
   AddCardResult,
   AddCardsResult,
   Card,
@@ -39,6 +41,8 @@ interface MockState {
   reviewIds: string[];
   reviewedToday: { day: string; count: number };
   newPerDay: number;
+  /** New words being learned (apps/api newCards.ts): since when, the ladder step, when it was climbed. */
+  learn?: Record<number, { at: string | null; step: number; passedAt: string | null }>;
 }
 
 export interface KeyValueStorage {
@@ -47,6 +51,10 @@ export interface KeyValueStorage {
 }
 
 const KEY = "kquiz.mock.v5";
+
+const ACTIVE_WORDS = 5;
+const LADDER_STEPS = 3;
+const CHECK_AFTER = 3 * 3_600_000;
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
 
@@ -134,7 +142,8 @@ export class MockApi {
       ? (JSON.parse(saved) as MockState)
       : { nextId: 1, cards: [], due: {}, reps: {}, reviewIds: [], reviewedToday: { day: "", count: 0 }, newPerDay: 15 };
     if (!saved) {
-      for (const card of SEED) this.insert(card, "app");
+      // The sample deck is already learned; the queued sample is a lesson still to learn.
+      for (const card of SEED) this.insert(card, "app", true);
       for (const card of SEED_QUEUED) this.insert(card, "claude");
     }
   }
@@ -256,6 +265,71 @@ export class MockApi {
     this.state.due[`${id}:listening`] = at;
     this.save();
     return card;
+  }
+
+  learned(ids: number[], missed: number[]): { introduced: number[] } {
+    const introduced: number[] = [];
+    const tomorrow = new Date(this.now());
+    tomorrow.setHours(24, 0, 0, 0);
+    for (const card of this.state.cards) {
+      if (!ids.includes(card.id) || !card.queued) continue;
+      card.queued = false;
+      const at = (missed.includes(card.id) ? new Date(Math.min(this.now().getTime() + 2 * 3_600_000, tomorrow.getTime())) : tomorrow).toISOString();
+      for (const mode of ["meaning", "speech", "listening"]) this.state.due[`${card.id}:${mode}`] = at;
+      introduced.push(card.id);
+    }
+    this.save();
+    return { introduced };
+  }
+
+  learning(): { items: LearningItem[]; pool: number } {
+    const learn = (this.state.learn ??= {});
+    const waiting = this.state.cards.filter((c) => c.queued && !c.suspended).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id - b.id);
+    const now = this.now().getTime();
+    const checks = waiting.filter((c) => learn[c.id]?.passedAt && now - Date.parse(learn[c.id]!.passedAt!) >= CHECK_AFTER);
+    const active = waiting.filter((c) => learn[c.id]?.at && !learn[c.id]!.passedAt);
+    for (const card of waiting) {
+      if (active.length >= ACTIVE_WORDS) break;
+      if (learn[card.id]) continue;
+      learn[card.id] = { at: this.now().toISOString(), step: 0, passedAt: null };
+      active.push(card);
+    }
+    this.save();
+    return {
+      items: [...checks.map((card) => ({ card, step: "check" as const })), ...active.map((card) => ({ card, step: learn[card.id]!.step }))],
+      pool: waiting.filter((c) => !learn[c.id]).length,
+    };
+  }
+
+  answerLearning(id: number, ok: boolean): LearningAnswer {
+    const learn = (this.state.learn ??= {});
+    const at = this.now().toISOString();
+    const word = (learn[id] ??= { at, step: 0, passedAt: null });
+    let answer: LearningAnswer;
+    if (!ok) {
+      word.step = word.passedAt ? LADDER_STEPS - 1 : Math.max(word.step - 1, 0);
+      word.passedAt = null;
+      word.at ??= at;
+      answer = { status: "missed", step: word.step };
+    } else if (word.passedAt) {
+      delete learn[id];
+      this.learned([id], []);
+      answer = { status: "learned", due: this.state.due[`${id}:meaning`]! };
+    } else if (word.step + 1 < LADDER_STEPS) {
+      word.step++;
+      answer = { status: "climbed", step: word.step };
+    } else {
+      word.step++;
+      word.passedAt = at;
+      word.at = null;
+      const next = this.state.cards
+        .filter((c) => c.queued && !c.suspended && !learn[c.id])
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id - b.id)[0];
+      if (next) learn[next.id] = { at, step: 0, passedAt: null };
+      answer = { status: "passed", next: next ? { card: next, step: 0 } : null };
+    }
+    this.save();
+    return answer;
   }
 
   settings(): Settings {
@@ -390,7 +464,7 @@ export class MockApi {
         listening: this.queue("listening", Infinity).length,
       },
       reviewedToday: this.state.reviewedToday.day === day ? this.state.reviewedToday.count : 0,
-      newCards: { introduced: 0, limit: this.state.newPerDay, queued: this.state.cards.filter((c) => c.queued).length },
+      newCards: { queued: this.state.cards.filter((c) => c.queued).length },
     };
   }
 
@@ -498,7 +572,7 @@ export class MockApi {
     };
   }
 
-  private insert(input: NewCard, source: CardSource): AddCardResult {
+  private insert(input: NewCard, source: CardSource, learned = false): AddCardResult {
     const korean = normalizeKorean(input.korean);
     const existing = this.state.cards.find((c) => dedupeKey(c.korean) === dedupeKey(korean));
     if (existing) return { status: "duplicate", existingId: existing.id };
@@ -522,7 +596,7 @@ export class MockApi {
       readyForSpeech,
       source,
       suspended: false,
-      queued: source === "claude",
+      queued: !learned,
       createdAt: at,
       updatedAt: at,
     };

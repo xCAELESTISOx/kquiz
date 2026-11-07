@@ -44,6 +44,7 @@ describe("parseHash", () => {
     expect(parseHash("#/mix")).toEqual({ route: "mix" });
     expect(parseHash(groupHash("mix", { tag: "еда" }, { all: true }))).toEqual({ route: "mix", group: { tag: "еда" }, all: true });
     expect(parseHash(groupHash("learn", { q: "먹" }))).toEqual({ route: "learn", group: { q: "먹" } });
+    expect(parseHash("#/session")).toEqual({ route: "session" });
     expect(parseHash("#/cards/queued?x=1")).toEqual({ route: "cards", param: "queued" });
   });
 });

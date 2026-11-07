@@ -4,6 +4,8 @@ import type { Scorer } from "./scorer.js";
 import { createServer } from "./server.js";
 import { loadConfig } from "./config.js";
 import { openDb } from "./db/client.js";
+import { createCards } from "./cardStore.js";
+import { introduceEarly } from "./newCards.js";
 
 export const ORIGIN = "https://kquiz.test";
 export const SETUP_CODE = "setup-code-0123456789";
@@ -42,7 +44,12 @@ export function fakeWebAuthn(): WebAuthn {
   };
 }
 
-export function testApp(env: Record<string, string> = {}, deps: { scorer?: Scorer } = {}) {
+/**
+ * `learnNewWords: false` keeps cards added through the app waiting to be learned, as in production.
+ * By default the tests that don't care about new words get them straight into reviews, as if pulled
+ * in by hand right after adding (newCards.ts).
+ */
+export function testApp(env: Record<string, string> = {}, deps: { scorer?: Scorer; learnNewWords?: boolean } = {}) {
   const config = loadConfig({ ORIGIN, NODE_ENV: "test", ...env });
   const db = openDb(":memory:");
   const clock = { now: new Date("2026-10-19T10:00:00Z") };
@@ -73,6 +80,13 @@ export function testApp(env: Record<string, string> = {}, deps: { scorer?: Score
         json = JSON.parse(text);
       } catch {}
       if (typeof json?.csrfToken === "string") csrfToken = json.csrfToken;
+      if (deps.learnNewWords !== false && res.status < 300 && (init.method ?? "POST") === "POST" && (path === "/cards" || path === "/cards/bulk")) {
+        const added: { id: number; queued: boolean }[] = json?.card ? [json.card] : (json?.created ?? []);
+        for (const card of added) {
+          await request(`/cards/${card.id}/introduce`, { body: {} });
+          card.queued = false;
+        }
+      }
       return { status: res.status, headers: res.headers, json: json ?? {}, text };
     }
 
@@ -101,4 +115,12 @@ export function testApp(env: Record<string, string> = {}, deps: { scorer?: Score
 
   const { request, signIn, jar } = browser();
   return { app, db, config, clock, request, signIn, jar, browser };
+}
+
+/** Adds cards and takes them straight into reviews, for tests about reviewing rather than new words. */
+export function createReviewing(...args: Parameters<typeof createCards>): ReturnType<typeof createCards> {
+  const result = createCards(...args);
+  const [db, userId, , , now = new Date()] = args;
+  for (const card of result.created) introduceEarly(db, userId, card.id, now);
+  return { ...result, created: result.created.map((card) => ({ ...card, queued: false })) };
 }

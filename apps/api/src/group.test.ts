@@ -53,7 +53,7 @@ describe("reviewing a chosen group", () => {
     createCards(t.db, OWNER_ID, [{ korean: "고양이", meaning: "кошка", tags: ["животные"], examples: [] }, { korean: "개", meaning: "собака", tags: [], examples: [] }], "claude", t.clock.now);
     const res = await group(t, { mode: "meaning", tag: "животные" });
     expect(res.json.items.map((i: any) => i.card.korean)).toEqual(["고양이"]);
-    expect((await t.request("/reviews/stats")).json.newCards).toMatchObject({ introduced: 0, queued: 1 });
+    expect((await t.request("/reviews/stats")).json.newCards).toMatchObject({ queued: 1 });
   });
 
   it("rejects a bad request", async () => {

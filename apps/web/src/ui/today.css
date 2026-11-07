@@ -1,0 +1,260 @@
+/* Today: a glance at the numbers, one button to learn, everything else behind "Ещё". */
+
+.today-stats {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: linear-gradient(to bottom, var(--surface-raised), var(--surface));
+  box-shadow: var(--shadow-1);
+  color: var(--text);
+  text-decoration: none;
+  animation: answer-in var(--dur-3) var(--ease-out) 160ms backwards;
+}
+
+.today-stats-facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 0;
+}
+
+.today-stats-facts div {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+}
+
+.today-stats-facts div + div {
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+}
+
+.today-stats-facts dt {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+.today-stats-facts dd {
+  margin: 0;
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.today-stats-facts dd .muted {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+/* Two weeks of reviews, today brightest. */
+.today-stats-chart {
+  display: grid;
+  grid-template-columns: repeat(14, 1fr);
+  align-items: end;
+  gap: 4px;
+  height: 64px;
+}
+
+.today-stats-bar {
+  height: max(calc(var(--h, 0) * 100%), 3px);
+  border-radius: 4px 4px 2px 2px;
+  background: var(--accent);
+  opacity: calc(0.28 + var(--h, 0) * 0.5);
+  transform-origin: bottom;
+  animation: bar-grow var(--dur-3) var(--ease-out) backwards;
+  animation-delay: calc(220ms + var(--i, 0) * 25ms);
+}
+
+.today-stats-bar[data-today] {
+  background: linear-gradient(to top, var(--accent), var(--accent-hi));
+  opacity: 1;
+}
+
+@keyframes bar-grow {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+.today-stats-caption {
+  margin: 0;
+}
+
+/* The one big button: what it does in a line under it. */
+.button.session-button {
+  flex-direction: column;
+  gap: 0;
+  min-height: 68px;
+  padding: 10px 16px;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.session-button-sub {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 1.3;
+  opacity: 0.7;
+}
+
+/* "Ещё" is the quiet way to the rest: lower and without a fill, so "Учить" reads first. */
+.button.more-button {
+  min-height: 48px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.button.more-button svg {
+  width: 18px;
+  height: 18px;
+  color: currentColor;
+}
+
+.screen > .bottom-actions:has(.session-button) {
+  gap: 8px;
+}
+
+/* "Ещё": a sheet from the bottom with the rest. */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgb(2 4 12 / 0.6);
+  animation: appear var(--dur-2) var(--ease-out);
+}
+
+.sheet {
+  display: grid;
+  gap: 16px;
+  width: min(100%, 520px);
+  max-height: 86dvh;
+  overflow-y: auto;
+  padding: 12px 16px calc(var(--safe-bottom) + 20px);
+  border-radius: 24px 24px 0 0;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  animation: sheet-in var(--dur-3) var(--ease-spring);
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(40%);
+    opacity: 0;
+  }
+}
+
+.sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sheet-title {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+.sheet-links {
+  display: grid;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.sheet-links a {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  min-height: var(--tap);
+  padding: 12px 16px;
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.sheet-links a + a {
+  border-top: 1px solid var(--border);
+}
+
+.sheet-links a:active {
+  background: var(--surface-hover);
+}
+
+.sheet-icon {
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+}
+
+.sheet-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .today-stats,
+  .today-stats-bar,
+  .sheet,
+  .sheet-backdrop {
+    animation: none;
+  }
+}
+
+/* The end of a session: what it did, as numbers, then five more minutes. */
+.session-done {
+  gap: 20px;
+}
+
+.session-facts {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  width: 100%;
+  margin: 0;
+  padding: 16px 0;
+  border-block: 1px solid var(--border);
+  animation: answer-in var(--dur-3) var(--ease-out) 120ms backwards;
+}
+
+.session-facts div {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 4px;
+}
+
+.session-facts div + div {
+  border-left: 1px solid var(--border);
+}
+
+.session-facts dt {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+.session-facts dd {
+  margin: 0;
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.session-done-actions {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}

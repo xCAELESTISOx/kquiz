@@ -5,7 +5,7 @@ import { getCardAudio } from "../cardAudio.js";
 import { cardCounts, cardFamily, createCards, deleteCard, getCard, listCards, listTags, updateCard } from "../cardStore.js";
 import { CARD_KINDS, newCardSchema, parseBulk } from "../cards.js";
 import type { Db } from "../db/client.js";
-import { introduceEarly } from "../newCards.js";
+import { answerLearning, introduceEarly, introduceLearned, learningWords } from "../newCards.js";
 import { linkParts } from "../phrases.js";
 import { isExtraVoice } from "../voices.js";
 
@@ -27,6 +27,11 @@ const listQuery = z.object({
   kind: z.enum(CARD_KINDS).optional(),
 });
 
+const learnedBody = z.object({
+  cardIds: z.array(z.number().int().positive()).min(1).max(200),
+  missed: z.array(z.number().int().positive()).max(200).default([]),
+});
+
 // Pausing is the owner's call, so `suspended` is only in the app's patch, not in Claude's.
 const appPatchSchema = newCardSchema
   .extend({ tags: newCardSchema.shape.tags.unwrap(), suspended: z.boolean() })
@@ -38,7 +43,7 @@ const bulkBody = z.union([
   z.object({ cards: z.array(z.unknown()).min(1).max(MAX_BATCH) }),
 ]);
 
-export function cardRoutes(db: Db, now: () => Date) {
+export function cardRoutes(db: Db, now: () => Date, timeZone: string) {
   const app = new Hono<{ Variables: AuthVariables }>();
 
   app.get("/", (c) => {
@@ -46,6 +51,9 @@ export function cardRoutes(db: Db, now: () => Date) {
     if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
     return c.json(listCards(db, c.get("user").id, query.data));
   });
+
+  // The new words for a session: due for their check, then being learned, filled up from the pool.
+  app.get("/learning", (c) => c.json(learningWords(db, c.get("user").id, now())));
 
   // For the filter chips of the cards screen.
   app.get("/summary", (c) => {
@@ -131,7 +139,27 @@ export function cardRoutes(db: Db, now: () => Date) {
     return c.json(result, 404);
   });
 
-  // Pulls a card out of the new-card queue into reviews now, past the daily allowance.
+  // One answer for a word being learned: up the ladder, one step down, or into reviews (newCards.ts).
+  app.post("/:id/learning", async (c) => {
+    const id = idParam.safeParse(c.req.param("id"));
+    const body = z.object({ ok: z.boolean() }).safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "invalid_request", issues: body.error.issues }, 400);
+    const result = id.success ? answerLearning(db, c.get("user").id, id.data, body.data.ok, now(), timeZone) : { status: "not_found" as const };
+    if (result.status === "not_found") return c.json({ error: "not_found" }, 404);
+    if (result.status === "not_queued") return c.json({ error: "not_queued" }, 409);
+    return c.json(result);
+  });
+
+  // Words just learned in "Учить" for a group enter reviews: tomorrow, or later today the ones missed on the way.
+  // Cards already in reviews are left alone.
+  app.post("/learned", async (c) => {
+    const body = learnedBody.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "invalid_request", issues: body.error.issues }, 400);
+    const ids = introduceLearned(db, c.get("user").id, body.data.cardIds, body.data.missed, now(), timeZone);
+    return c.json({ introduced: ids });
+  });
+
+  // Pulls a card in from the new words into reviews now, unlearned.
   app.post("/:id/introduce", (c) => {
     const id = idParam.safeParse(c.req.param("id"));
     const userId = c.get("user").id;

@@ -3,6 +3,7 @@ import { openDb } from "../db/client.js";
 import { reviewLog } from "../db/schema.js";
 import { phoneStats } from "../db/schema.js";
 import { SqliteCardStore, SqliteOAuthStore, streakDays } from "./mcp.js";
+import { introduceEarly } from "../newCards.js";
 import { OWNER_ID } from "../users.js";
 
 const card = (korean: string, meaning: string) => ({ korean, meaning, tags: [] as string[] });
@@ -51,7 +52,8 @@ describe("SqliteCardStore", () => {
   it("counts due cards, streak and weak sounds", async () => {
     const db = openDb(":memory:");
     const store = new SqliteCardStore(db, OWNER_ID);
-    const [water] = await store.insert([card("물", "вода"), card("TV", "телевизор")], "claude");
+    const [water, tv] = await store.insert([card("물", "вода"), card("TV", "телевизор")], "claude");
+    for (const c of [water!, tv!]) introduceEarly(db, OWNER_ID, Number(c.id), new Date());
     // Cards get the real clock as their creation time, so "now" must not be a fixed date.
     const now = new Date();
     const day = 86_400_000;

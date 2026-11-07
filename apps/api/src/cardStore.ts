@@ -3,7 +3,6 @@ import { and, count, desc, eq, isNull, lt, sql, type SQL } from "drizzle-orm";
 import { isKoreanOnly, isSpeakable, koreanKey, normalizeKorean, type CardKind, type CardPatch, type Example, type NewCard, type PhrasePart, type Register, type Root } from "./cards.js";
 import type { Db } from "./db/client.js";
 import { cards, reviewStates } from "./db/schema.js";
-import { introduce } from "./newCards.js";
 import { cardsLeft, QuotaError } from "./users.js";
 
 export type CardSource = "app" | "claude" | "bulk";
@@ -111,12 +110,8 @@ export function createCards(db: Db, userId: number, inputs: NewCard[], source: C
         })
         .returning()
         .get();
-      if (source === "claude") {
-        created.push(toCardDto(row));
-        continue;
-      }
-      introduce(tx, [row.id], "direct", now);
-      created.push(toCardDto({ ...row, introducedAt: now, introduction: "direct" }));
+      // Every new word waits to be learned first (newCards.ts), wherever it was added.
+      created.push(toCardDto(row));
     }
     return { created, duplicates };
   });

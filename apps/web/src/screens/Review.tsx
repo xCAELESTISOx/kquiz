@@ -5,6 +5,7 @@ import { clozeFor } from "../lib/cloze";
 import { guessHints, isFirstShow, splitAt, type GuessHint } from "../lib/guess";
 import { useLeechIds } from "../lib/leeches";
 import { everyKind, mixWays, serverModes } from "../lib/mix";
+import { firstTasks, insertAfter, interleave, introTask, learnTask, SESSION_MS, timeLeft } from "../lib/session";
 import { navigate } from "../lib/router";
 import { canRecord, type Recorder } from "../lib/recorder";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
@@ -15,12 +16,15 @@ import { LeechBadge } from "../ui/LeechBadge";
 import { useGlide } from "../ui/motion";
 import { useFamily, WordFamily } from "../ui/WordFamily";
 import { ChoiceCard } from "./Choice";
+import { BuildCard, IntroCard } from "./Learn";
 import { MixSetup } from "./MixSetup";
 import { PhraseCard } from "./Phrase";
 import { PhraseParts, RegisterBadge } from "../ui/PhraseParts";
 import { SpeechCard } from "./Speech";
 import { TypeCard, type TypeAsk } from "./Typing";
 import "../ui/guess.css";
+import "../ui/learn.css";
+import "../ui/today.css";
 
 const RATINGS: { name: RatingName; label: string; key: string }[] = [
   { name: "again", label: "Снова", key: "1" },
@@ -42,16 +46,22 @@ type Swipe = RatingName | "back";
  * What goes into the mix is picked first (MixSetup).
  * A new word asked for its meaning the first time, when it shares a root with words already well
  * learned, is guessed first from those words among a few translations; the answer and grading follow.
+ * A session ("Учить" on Today, lib/session.ts) is mixed with every way at once, runs SESSION_MS and
+ * brings new words from the pool in among the reviews, each step of learning them answered to the
+ * server; when time is up the card on screen is finished and a summary offers five minutes more.
  */
 export function ReviewScreen({
   mode,
   group,
   all,
+  session,
 }: {
   mode: Extract<QueueMode, "meaning" | "listening" | "mixed">;
   group?: GroupFilter;
   /** Mixed: every way at once ("Повторить" for a group), without asking what to mix. */
   all?: boolean;
+  /** "Учить": five minutes of new words and reviews together. */
+  session?: boolean;
 }) {
   const [queue, setQueue] = useState<QueueItem[]>();
   const [total, setTotal] = useState(0);
@@ -77,15 +87,37 @@ export function ReviewScreen({
   const [kinds, setKinds] = useState<ReadonlySet<MixKind> | undefined>(() => (all ? everyKind(group?.kind === "phrase") : undefined));
   // The translation picked when guessing a new word, or null for "не знаю"; reset with each card.
   const [guess, setGuess] = useState<{ step: number; meaning: string | null }>();
+  // A session: when this stretch began, whether it is over, what it did, and answers still on their way.
+  const [startedAt, setStartedAt] = useState(() => Date.now());
+  const [over, setOver] = useState(false);
+  const [round, setRound] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+  const [learnt, setLearnt] = useState({ learned: 0, climbed: 0, fresh: 0, steps: 0 });
+  const [answering, setAnswering] = useState(0);
 
   useEffect(() => {
-    document.title = mode === "mixed" ? "Вперемешку · KQuiz" : mode === "listening" ? "На слух · KQuiz" : "Повторение · KQuiz";
+    document.title = session
+      ? "Учить · KQuiz"
+      : mode === "mixed"
+        ? "Вперемешку · KQuiz"
+        : mode === "listening"
+          ? "На слух · KQuiz"
+          : "Повторение · KQuiz";
     if (mode === "mixed" && !kinds) return;
     const modes = kinds && serverModes(kinds);
-    (group ? api.group(mode, group, modes) : api.queue(mode, mode === "mixed" ? 200 : undefined, modes)).then(
-      async ({ items: all }) => {
+    Promise.all([
+      group ? api.group(mode, group, modes) : api.queue(mode, mode === "mixed" ? 200 : undefined, modes),
+      session ? api.learning() : { items: [], pool: 0 },
+    ]).then(
+      async ([{ items: all }, learning]) => {
+        const fresh = firstTasks(learning.items, canSpeak());
         // Look-alikes give the wrong options for picking a word, and their translations for guessing a new one.
-        const ids = [...new Set(all.filter((i) => i.mode === "speech" || isFirstShow(i)).map((i) => i.card.id))];
+        const ids = [
+          ...new Set([
+            ...all.filter((i) => i.mode === "speech" || isFirstShow(i)).map((i) => i.card.id),
+            ...fresh.map((i) => i.card.id),
+          ]),
+        ];
         const { options } = ids.length
           ? await api.choices(ids).catch(() => ({ options: {} as Record<number, ChoiceOption[]> }))
           : { options: {} };
@@ -94,8 +126,8 @@ export function ReviewScreen({
           record: canRecord(),
           pick: (i) => (options[i.card.id]?.length ?? 0) > 0,
         });
-        const items = all.filter((i) => ways.has(i));
-        const phrases = items.filter((i) => builds(i, ways.get(i) === "dictation"));
+        const items = interleave(all.filter((i) => ways.has(i)), fresh);
+        const phrases = items.filter((i) => i.learn ? i.card.kind === "phrase" : builds(i, ways.get(i) === "dictation"));
         const { tiles } = phrases.length
           ? await api.blocks(phrases.map((i) => i.card.id)).catch(() => ({ tiles: {} as Record<number, PhraseTiles> }))
           : { tiles: {} };
@@ -114,15 +146,23 @@ export function ReviewScreen({
       (e: Error) => setError(e.message),
     );
     // A new group is a new screen (App keys it), so `group` never changes here.
-  }, [mode, kinds]);
+  }, [mode, kinds, round]);
+
+  // The clock in the header, once a second.
+  useEffect(() => {
+    if (!session || over) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [session, over]);
 
   const item = queue?.[0];
   const card = item?.card;
+  const learning = !!item?.learn;
   const listening = item?.mode === "listening";
   const typing = item ? typed.get(item) : undefined;
   const building = !!item && builds(item, typing === "sound");
-  // Said, picked, typed or built: such a card grades itself and takes its own keys.
-  const speaking = item?.mode === "speech" || !!typing || building;
+  // Said, picked, typed or built: such a card grades itself and takes its own keys. So does learning.
+  const speaking = item?.mode === "speech" || !!typing || building || learning;
   // Listening shows no text before the answer, so only meaning reviews ask through an example.
   const cloze = useMemo(() => (item?.mode === "meaning" ? clozeFor(item) : undefined), [item]);
   const families = useFamily(card);
@@ -190,8 +230,9 @@ export function ReviewScreen({
       setRevealed(false);
       setStep((n) => n + 1);
       shownAt.current = performance.now();
+      if (session && Date.now() - startedAt >= SESSION_MS) setOver(true);
     },
-    [item, card, revealed, step, queue, done, speaking],
+    [item, card, revealed, step, queue, done, speaking, session, startedAt],
   );
 
   /** A card said aloud has sent its own rating; the session moves on. */
@@ -210,9 +251,71 @@ export function ReviewScreen({
       setRevealed(false);
       setStep((n) => n + 1);
       shownAt.current = performance.now();
+      if (session && Date.now() - startedAt >= SESSION_MS) setOver(true);
     },
-    [queue],
+    [queue, session, startedAt],
   );
+
+  /** Look-alikes and blocks for a new word that joins the session midway. */
+  const prepare = useCallback((joining: Card) => {
+    preloadSpeech(joining);
+    api.choices([joining.id]).then(({ options: o }) => setOptions((all) => ({ ...all, ...o })), () => undefined);
+    if (joining.kind === "phrase") api.blocks([joining.id]).then(({ tiles: t }) => setTiles((all) => ({ ...all, ...t })), () => undefined);
+  }, []);
+
+  /**
+   * A step of learning a new word is done. Meeting it puts its first task a few cards on; an answer
+   * goes to the server, which says where the word stands now: its next step comes back a few cards
+   * on, or it has climbed its ladder (and the next word from the pool joins), or it is learned.
+   */
+  const learned = useCallback(
+    (ok: boolean) => {
+      if (!queue || !item?.learn) return;
+      setLast(undefined);
+      void releaseHeldReview();
+      setExit(undefined);
+      const rest = queue.slice(1);
+      const word = item.card;
+      const next = item.learn.kind === "intro" ? insertAfter([item, ...rest], learnTask(word, 0, canSpeak())).slice(1) : rest;
+      setQueue(next);
+      // Inside the tap, where iOS still lets audio play.
+      if (next[0]?.mode === "listening") speak(heard(next[0]));
+      setStep((n) => n + 1);
+      shownAt.current = performance.now();
+      if (session && Date.now() - startedAt >= SESSION_MS) setOver(true);
+      if (item.learn.kind === "intro") return;
+      setLearnt((l) => ({ ...l, steps: l.steps + 1 }));
+      setAnswering((n) => n + 1);
+      api
+        .answerLearning(word.id, ok)
+        .then(
+          (res) => {
+            if (res.status === "climbed" || res.status === "missed") setQueue((q) => insertAfter(q ?? [], learnTask(word, res.step, canSpeak())));
+            else if (res.status === "passed") {
+              setLearnt((l) => ({ ...l, climbed: l.climbed + 1, fresh: l.fresh + (res.next ? 1 : 0) }));
+              if (res.next) {
+                prepare(res.next.card);
+                setQueue((q) => insertAfter(q ?? [], introTask(res.next!.card)));
+              }
+            } else setLearnt((l) => ({ ...l, learned: l.learned + 1 }));
+          },
+          (e: Error) => setError(e.message),
+        )
+        .finally(() => setAnswering((n) => n - 1));
+    },
+    [queue, item, session, startedAt, prepare],
+  );
+
+  /** Five minutes more: the same queue goes on, or a fresh one if it ran out. */
+  const more = useCallback(() => {
+    setStartedAt(Date.now());
+    setNow(Date.now());
+    setOver(false);
+    if (!queue?.length) {
+      setQueue(undefined);
+      setRound((r) => r + 1);
+    }
+  }, [queue]);
 
   /** Brings the last card back with its answer open, so it can be graded again. */
   const back = useCallback(() => {
@@ -249,7 +352,10 @@ export function ReviewScreen({
     return () => removeEventListener("keydown", onKey);
   }, [revealed, reveal, rate, back, listening, speaking, item, guessing, guesses, pickGuess]);
 
-  const progress = total ? Math.min(done / total, 1) : 0;
+  const left = SESSION_MS - (now - startedAt);
+  const progress = session ? Math.min(Math.max(1 - left / SESSION_MS, 0), 1) : total ? Math.min(done / total, 1) : 0;
+  // A session's summary: time is up, or there is nothing left and no answer is on its way.
+  const summary = session && queue && (over || (!card && answering === 0));
 
   return (
     <main className="review">
@@ -260,13 +366,16 @@ export function ReviewScreen({
         <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
           <div className="progress-fill" style={{ transform: `scaleX(${progress})` }} />
         </div>
-        <span className="review-count">{mode !== "mixed" || kinds ? `${Math.min(done, total)} / ${total}` : ""}</span>
+        <span className="review-count">
+          {session ? (summary ? "" : timeLeft(left)) : mode !== "mixed" || kinds ? `${Math.min(done, total)} / ${total}` : ""}
+        </span>
         <button
           type="button"
           className="icon-button review-back"
           aria-label="Вернуть предыдущую карточку"
           title="Вернуть предыдущую карточку"
           disabled={!last}
+          hidden={!!summary}
           onClick={back}
         >
           <UndoIcon />
@@ -279,15 +388,23 @@ export function ReviewScreen({
 
       {!queue && !error && (mode !== "mixed" || kinds) && <div className="review-stage" aria-busy="true" />}
 
-      {queue && !card && <Finished count={done} />}
+      {summary && <SessionDone reviewed={done} {...learnt} onMore={more} empty={!card} />}
 
-      {queue && item && building && (
+      {!session && queue && !card && <Finished count={done} />}
+
+      {session && queue && !card && !summary && <div className="review-stage" aria-busy="true" />}
+
+      {!summary && queue && item?.learn && (
+        <LearnStep key={step} item={item} options={options[item.card.id] ?? []} tiles={tiles[item.card.id]} onDone={learned} />
+      )}
+
+      {!summary && !learning && queue && item && building && (
         <PhraseCard key={step} item={item} tiles={tiles[item.card.id]} ask={item.mode === "listening" ? "sound" : "meaning"} onDone={spoken} />
       )}
 
-      {queue && item && typing && !building && <TypeCard key={step} item={item} ask={typing} onDone={spoken} />}
+      {!summary && !learning && queue && item && typing && !building && <TypeCard key={step} item={item} ask={typing} onDone={spoken} />}
 
-      {queue && item && speaking && !typing && !building && (quiet.has(item) ? (
+      {!summary && !learning && queue && item && speaking && !typing && !building && (quiet.has(item) ? (
         <ChoiceCard
           key={step}
           item={item}
@@ -313,7 +430,7 @@ export function ReviewScreen({
         />
       ))}
 
-      {queue && card && !speaking && (
+      {!summary && queue && card && !speaking && (
         <>
           <SwipeCard
             key={step}
@@ -458,6 +575,91 @@ export function ReviewScreen({
         </>
       )}
     </main>
+  );
+}
+
+/** One step of learning a new word in a session: met, built, picked out by ear or written. */
+function LearnStep({
+  item,
+  options,
+  tiles,
+  onDone,
+}: {
+  item: QueueItem;
+  options: ChoiceOption[];
+  tiles: PhraseTiles | undefined;
+  onDone: (ok: boolean) => void;
+}) {
+  const kind = item.learn!.kind;
+  const { card } = item;
+  if (kind === "intro") return <IntroCard card={card} onDone={() => onDone(true)} />;
+  if (card.kind === "phrase")
+    return <PhraseCard item={item} tiles={tiles} ask={kind === "dictation" ? "sound" : "meaning"} practice onDone={(r) => onDone(r !== "again")} />;
+  if (kind === "build") return <BuildCard card={card} options={options} onDone={onDone} />;
+  return <TypeCard item={item} ask={kind === "dictation" ? "sound" : "meaning"} practice onDone={(r) => onDone(r === "good")} />;
+}
+
+/** The end of a session's five minutes: what it did, and five more. */
+function SessionDone({
+  reviewed,
+  learned,
+  climbed,
+  fresh,
+  steps,
+  empty,
+  onMore,
+}: {
+  reviewed: number;
+  learned: number;
+  climbed: number;
+  fresh: number;
+  steps: number;
+  empty: boolean;
+  onMore: () => void;
+}) {
+  const facts: [number, string][] = (
+    [
+      [learned, "выучено слов"],
+      [climbed, "прошли все шаги"],
+      [steps, "заданий с новыми"],
+      [reviewed, "повторено"],
+    ] as [number, string][]
+  ).filter(([n]) => n > 0);
+  return (
+    <div className="review-stage">
+      <div className="finished session-done">
+        <p className="finished-mark" lang="ko">
+          {empty ? "다 했어요" : "잘했어요!"}
+        </p>
+        {facts.length > 0 && (
+          <dl className="session-facts">
+            {facts.map(([n, label]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd>{n}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+        <p className="finished-text muted">
+          {empty
+            ? "Сейчас учить и повторять больше нечего. Новые слова можно добавить в любой момент."
+            : climbed > 0
+              ? "Слова, прошедшие все шаги, проверю ещё раз через 3 часа."
+              : "Пять минут прошли."}
+        </p>
+        <div className="session-done-actions">
+          {!empty && (
+            <button type="button" className="button primary" onClick={onMore}>
+              Ещё 5 минут
+            </button>
+          )}
+          <a className={`button${empty ? " primary" : ""}`} href="#/">
+            На главную
+          </a>
+        </div>
+      </div>
+    </div>
   );
 }
 

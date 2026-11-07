@@ -62,11 +62,16 @@ export const cards = sqliteTable(
     language: text("language").notNull().default("ko"),
     // Paused: kept with its schedule, but out of every review queue until resumed.
     suspended: integer("suspended", { mode: "boolean" }).notNull().default(false),
-    // Null while the card waits in the new-card queue (cards from Claude, newCards.ts); it has no
-    // review states until then. `introduction` says how it left: added directly, the daily
-    // allowance, or pulled early by hand (which doesn't use up the allowance).
+    // Null while the card waits to be learned (newCards.ts); it has no review states until then.
+    // `introduction` says how it left: learned, pulled in early by hand, or, before lessons, added
+    // directly or let in by the old daily allowance.
     introducedAt: timestamp("introduced_at"),
-    introduction: text("introduction", { enum: ["direct", "daily", "early"] }),
+    introduction: text("introduction", { enum: ["direct", "daily", "early", "learned"] }),
+    // Learning a new word (newCards.ts): picked from the pool into the few being learned, the ladder
+    // steps passed in a row, and when the ladder was done (the word then waits for its later check).
+    learningAt: timestamp("learning_at"),
+    learnStep: integer("learn_step").notNull().default(0),
+    learnPassedAt: timestamp("learn_passed_at"),
     createdAt: timestamp("created_at").notNull(),
     updatedAt: timestamp("updated_at").notNull(),
   },

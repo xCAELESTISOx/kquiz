@@ -29,45 +29,87 @@ describe("startOfDay", () => {
   });
 });
 
-describe("new-card queue", () => {
-  it("queues cards from Claude and lets in the daily allowance", async () => {
-    const t = await signedIn();
-    await t.request("/settings", { method: "PATCH", body: { newPerDay: 3 } });
-    const created = fromClaude(t, 10);
-    expect(created.every((c) => c.queued)).toBe(true);
+describe("new words", () => {
+  it("wait in the pool, a few learned at a time, oldest first", async () => {
+    const t = testApp({}, { learnNewWords: false });
+    await t.signIn();
+    const claude = fromClaude(t, 6);
+    t.clock.now = new Date(t.clock.now.getTime() + HOUR);
+    await t.request("/cards", { body: { korean: "물", meaning: "вода" } });
 
-    const stats = await t.request("/reviews/stats");
-    expect(stats.json.newCards).toEqual({ introduced: 3, limit: 3, queued: 7 });
-    expect(stats.json.due.meaning).toBe(3);
-    // Asking again the same day lets nothing more in.
-    expect((await t.request("/reviews/queue?mode=meaning")).json.items).toHaveLength(3);
-    expect((await t.request("/cards?status=queued")).json.cards).toHaveLength(7);
+    const stats = (await t.request("/reviews/stats")).json;
+    expect(stats.due).toEqual({ meaning: 0, speech: 0, listening: 0 });
+    expect(stats.newCards).toEqual({ queued: 7 });
+    expect((await t.request("/reviews/queue?mode=meaning")).json.items).toHaveLength(0);
 
-    // Next day (Seoul time) three more come in.
-    t.clock.now = new Date(t.clock.now.getTime() + 24 * HOUR);
-    expect((await t.request("/reviews/stats")).json.newCards).toEqual({ introduced: 3, limit: 3, queued: 4 });
+    const learning = (await t.request("/cards/learning")).json;
+    expect(learning.items.map((i: any) => i.card.id)).toEqual(claude.slice(0, 5).map((c) => c.id));
+    expect(learning.items.every((i: any) => i.step === 0)).toBe(true);
+    expect(learning.pool).toBe(2);
+    // Asking again gives the same words.
+    expect((await t.request("/cards/learning")).json.items.map((i: any) => i.card.id)).toEqual(learning.items.map((i: any) => i.card.id));
   });
 
-  it("puts cards added in the app straight into reviews", async () => {
-    const t = await signedIn();
-    await t.request("/settings", { method: "PATCH", body: { newPerDay: 0 } });
-    const one = await t.request("/cards", { body: { korean: "물", meaning: "вода" } });
-    expect(one.json.card.queued).toBe(false);
-    await t.request("/cards/bulk", { body: { text: "불 — огонь" } });
-    expect((await t.request("/reviews/stats")).json).toMatchObject({ due: { meaning: 2 }, newCards: { introduced: 0, queued: 0 } });
+  it("climb the ladder, a miss one step down, then wait for a check and enter reviews", async () => {
+    const t = testApp({}, { learnNewWords: false });
+    await t.signIn();
+    const words = fromClaude(t, 6);
+    const id = words[0]!.id;
+    await t.request("/cards/learning");
+    const answer = (ok: boolean, card = id) => t.request(`/cards/${card}/learning`, { body: { ok } }).then((r) => r.json);
+
+    expect(await answer(true)).toEqual({ status: "climbed", step: 1 });
+    expect(await answer(false)).toEqual({ status: "missed", step: 0 });
+    expect(await answer(false)).toEqual({ status: "missed", step: 0 });
+    expect(await answer(true)).toEqual({ status: "climbed", step: 1 });
+    expect(await answer(true)).toEqual({ status: "climbed", step: 2 });
+    const passed = await answer(true);
+    // At the top it makes room: the sixth word comes in.
+    expect(passed).toMatchObject({ status: "passed", next: { card: { id: words[5]!.id }, step: 0 } });
+    let session = (await t.request("/cards/learning")).json;
+    expect(session.items.map((i: any) => i.card.id)).not.toContain(id);
+    expect(session.pool).toBe(0);
+
+    // Three hours on, it is checked; a miss puts it back on the last step, not the bottom.
+    t.clock.now = new Date(t.clock.now.getTime() + 3 * HOUR);
+    session = (await t.request("/cards/learning")).json;
+    expect(session.items[0]).toMatchObject({ card: { id }, step: "check" });
+    expect(await answer(false)).toEqual({ status: "missed", step: 2 });
+    expect((await t.request("/cards/learning")).json.items.find((i: any) => i.card.id === id).step).toBe(2);
+    expect((await answer(true)).status).toBe("passed");
+    t.clock.now = new Date(t.clock.now.getTime() + 3 * HOUR);
+    // 01:00 in Seoul now: learned, it is due at the next midnight.
+    expect(await answer(true)).toEqual({ status: "learned", due: "2026-10-20T15:00:00.000Z" });
+    expect((await t.request(`/cards/${id}`)).json.card.queued).toBe(false);
+    expect((await answer(true)).status).toBeUndefined();
+    expect((await t.request(`/cards/${id}/learning`, { body: { ok: true } })).status).toBe(409);
+    expect((await t.request("/cards/999/learning", { body: { ok: true } })).status).toBe(404);
+    expect((await t.request(`/cards/${id}/learning`, { body: {} })).status).toBe(400);
+    t.clock.now = new Date("2026-10-20T15:00:00Z");
+    expect((await t.request("/reviews/stats")).json.due.meaning).toBe(1);
   });
 
-  it("pulls a card in early without using up the allowance", async () => {
-    const t = await signedIn();
-    await t.request("/settings", { method: "PATCH", body: { newPerDay: 1 } });
-    const [a, b] = fromClaude(t, 2);
-    expect((await t.request("/reviews/stats")).json.newCards).toEqual({ introduced: 1, limit: 1, queued: 1 });
-    const queued = (await t.request("/cards?status=queued")).json.cards[0];
-    const pulled = await t.request(`/cards/${queued.id}/introduce`, { body: {} });
+  it("enter reviews after learning a group: tomorrow, or later today if missed", async () => {
+    const t = testApp({}, { learnNewWords: false });
+    await t.signIn();
+    const [a, b] = fromClaude(t, 3);
+    const res = await t.request("/cards/learned", { body: { cardIds: [a!.id, b!.id], missed: [b!.id] } });
+    expect(res.json.introduced.sort()).toEqual([a!.id, b!.id].sort());
+    expect((await t.request("/cards/learned", { body: { cardIds: [a!.id] } })).json.introduced).toEqual([]);
+    expect((await t.request("/reviews/stats")).json.newCards).toEqual({ queued: 1 });
+    t.clock.now = new Date(t.clock.now.getTime() + 2 * HOUR);
+    expect((await t.request("/reviews/queue?mode=meaning")).json.items.map((i: any) => i.card.id)).toEqual([b!.id]);
+    expect((await t.request("/cards/learned", { body: { cardIds: [] } })).status).toBe(400);
+  });
+
+  it("can be pulled in by hand, unlearned", async () => {
+    const t = testApp({}, { learnNewWords: false });
+    await t.signIn();
+    const [a] = fromClaude(t, 2);
+    const pulled = await t.request(`/cards/${a!.id}/introduce`, { body: {} });
     expect(pulled.json.card.queued).toBe(false);
-    expect((await t.request(`/cards/${queued.id}/introduce`, { body: {} })).status).toBe(409);
-    expect((await t.request("/reviews/stats")).json).toMatchObject({ due: { meaning: 2 }, newCards: { introduced: 1, queued: 0 } });
-    expect([a!.id, b!.id]).toContain(queued.id);
+    expect((await t.request(`/cards/${a!.id}/introduce`, { body: {} })).status).toBe(409);
+    expect((await t.request("/reviews/stats")).json).toMatchObject({ due: { meaning: 1 }, newCards: { queued: 1 } });
   });
 
   it("keeps paused cards out of reviews and the daily pick", async () => {
