@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkTyped, letters, typingRating, wrongKeyboard } from "./typing";
+import { checkTyped, joinMarks, letters, typingRating, wrongKeyboard } from "./typing";
 
 describe("letters", () => {
   it("splits a syllable", () => {
@@ -41,4 +41,21 @@ describe("checkTyped", () => {
 it("notices a Latin keyboard", () => {
   expect(wrongKeyboard("dkssud")).toBe(true);
   expect(wrongKeyboard("안녕")).toBe(false);
+});
+
+describe("joinMarks", () => {
+  it("joins neighbouring misses into one highlight", () => {
+    expect(
+      joinMarks([
+        { text: "칠", status: "wrong" },
+        { text: "판", status: "missing" },
+        { text: "이", status: "ok" },
+        { text: "다", status: "missing" },
+      ]),
+    ).toEqual([
+      { text: "칠판", status: "wrong" },
+      { text: "이", status: "ok" },
+      { text: "다", status: "missing" },
+    ]);
+  });
 });

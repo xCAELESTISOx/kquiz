@@ -14,6 +14,7 @@ import { canRecord, type Recorder } from "../lib/recorder";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
 import type { Card, ChoiceOption, GroupFilter, PhraseTiles, QueueItem, RatingName } from "../lib/types";
 import { CloseIcon, SpeakerIcon } from "../ui/icons";
+import { HiddenTranslation } from "../ui/HiddenTranslation";
 import { useFamily, WordFamily } from "../ui/WordFamily";
 import { PhraseCard } from "./Phrase";
 import { SpeechCard } from "./Speech";
@@ -309,7 +310,7 @@ export function IntroCard({ card, onDone }: { card: Card; onDone: () => void }) 
           {example && (
             <div className="intro-example">
               <p lang="ko">{example.ko}</p>
-              <p className="muted">{example.ru}</p>
+              <HiddenTranslation text={example.ru} />
             </div>
           )}
           {card.notes && <p className="review-notes muted">{card.notes}</p>}

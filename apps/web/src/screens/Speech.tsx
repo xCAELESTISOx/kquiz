@@ -9,6 +9,7 @@ import { groupHash, navigate } from "../lib/router";
 import { cardAudioUrl, useIntonation } from "../lib/practice";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
 import type { Card, GroupFilter, QueueItem, RatingName, ScoreResult } from "../lib/types";
+import { HiddenTranslation } from "../ui/HiddenTranslation";
 import { LeechBadge } from "../ui/LeechBadge";
 import { CloseIcon, MicIcon, PlayIcon, RetryIcon, SpeakerIcon, StopIcon } from "../ui/icons";
 import { IntonationChart } from "../ui/IntonationChart";
@@ -294,7 +295,7 @@ export function SpeechCard({
                 {revealed ? <mark className="cloze-mark">{cloze.word}</mark> : <span className="cloze-gap" aria-label="пропуск" />}
                 {cloze.after}
               </p>
-              <p className="muted">{card.examples[cloze.example]!.ru}</p>
+              <HiddenTranslation text={card.examples[cloze.example]!.ru} />
             </div>
           )}
 

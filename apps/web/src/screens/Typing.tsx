@@ -5,7 +5,8 @@ import { useLeechIds } from "../lib/leeches";
 import { canSpeak, speak } from "../lib/speech";
 import { heard } from "../lib/voices";
 import type { QueueItem, RatingName } from "../lib/types";
-import { checkTyped, typingRating, wrongKeyboard, type TypingCheck } from "../lib/typing";
+import { checkTyped, joinMarks, typingRating, wrongKeyboard, type TypingCheck } from "../lib/typing";
+import { HiddenTranslation } from "../ui/HiddenTranslation";
 import { LeechBadge } from "../ui/LeechBadge";
 import { SpeakerIcon } from "../ui/icons";
 import "../ui/learn.css";
@@ -18,6 +19,8 @@ const ASK: Record<TypeAsk, string> = {
   meaning: "Напиши по-корейски",
   cloze: "Впиши слово, как в предложении",
 };
+
+const HINT_AFTER_MS = 5000;
 
 /**
  * The word typed in Hangul and checked letter by letter. Sends its rating to the item's schedule as
@@ -47,6 +50,14 @@ export function TypeCard({
   const expected = ask === "cloze" && cloze ? cloze.word : card.korean;
 
   useEffect(() => input.current?.focus({ preventScroll: true }), []);
+
+  // Five seconds without the answer from the translation: its sound is offered as a hint.
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    if (ask !== "meaning" || !canSpeak()) return;
+    const timer = setTimeout(() => setStuck(true), HINT_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [ask]);
 
   const finish = useCallback(
     (typed: string) => {
@@ -99,6 +110,12 @@ export function TypeCard({
             </button>
           )}
           {ask === "meaning" && <p className="speech-meaning">{card.meaning}</p>}
+          {ask === "meaning" && stuck && !check && (
+            <button type="button" className="chip-button type-hint" onClick={() => speak(heard(item))}>
+              <SpeakerIcon />
+              Послушать
+            </button>
+          )}
           {ask === "cloze" && cloze && (
             <div className="speech-context type-context">
               <p lang="ko">
@@ -106,13 +123,13 @@ export function TypeCard({
                 {check ? <mark className="cloze-mark">{cloze.word}</mark> : <span className="cloze-gap" aria-label="пропуск" />}
                 {cloze.after}
               </p>
-              <p className="muted">{card.examples[cloze.example]!.ru}</p>
+              <HiddenTranslation text={card.examples[cloze.example]!.ru} />
             </div>
           )}
           {check && (
             <div className="type-answer">
               <p className="type-word" lang="ko" aria-label={expected}>
-                {check.marks.map((m, i) => (
+                {joinMarks(check.marks).map((m, i) => (
                   <span key={i} className={`type-mark is-${m.status}`}>
                     {m.text}
                   </span>

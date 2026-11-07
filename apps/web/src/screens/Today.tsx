@@ -122,9 +122,7 @@ export function TodayScreen() {
           <a className="button primary session-button" href="#/session">
             <span>Учить</span>
             <span className="session-button-sub">
-              5 минут
-              {totalDue > 0 && ` · повторить ${totalDue}`}
-              {queued > 0 && ` · новых ${queued}`}
+              {[totalDue > 0 && `повторить ${totalDue}`, queued > 0 && `новых слов ${queued}`].filter(Boolean).join(" · ")}
             </span>
           </a>
         )}

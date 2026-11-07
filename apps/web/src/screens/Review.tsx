@@ -5,7 +5,7 @@ import { clozeFor } from "../lib/cloze";
 import { guessHints, isFirstShow, splitAt, type GuessHint } from "../lib/guess";
 import { useLeechIds } from "../lib/leeches";
 import { everyKind, mixWays, serverModes } from "../lib/mix";
-import { firstTasks, insertAfter, interleave, introTask, learnTask, SESSION_MS, timeLeft } from "../lib/session";
+import { firstTasks, insertAfter, interleave, introTask, learnTask, SESSION_TASKS } from "../lib/session";
 import { navigate } from "../lib/router";
 import { canRecord, type Recorder } from "../lib/recorder";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
@@ -46,9 +46,9 @@ type Swipe = RatingName | "back";
  * What goes into the mix is picked first (MixSetup).
  * A new word asked for its meaning the first time, when it shares a root with words already well
  * learned, is guessed first from those words among a few translations; the answer and grading follow.
- * A session ("Учить" on Today, lib/session.ts) is mixed with every way at once, runs SESSION_MS and
+ * A session ("Учить" on Today, lib/session.ts) is mixed with every way at once, runs SESSION_TASKS answers and
  * brings new words from the pool in among the reviews, each step of learning them answered to the
- * server; when time is up the card on screen is finished and a summary offers five minutes more.
+ * server; then a summary offers as many more.
  */
 export function ReviewScreen({
   mode,
@@ -60,7 +60,7 @@ export function ReviewScreen({
   group?: GroupFilter;
   /** Mixed: every way at once ("Повторить" for a group), without asking what to mix. */
   all?: boolean;
-  /** "Учить": five minutes of new words and reviews together. */
+  /** "Учить": a stretch of new words and reviews together, SESSION_TASKS answers at a time. */
   session?: boolean;
 }) {
   const [queue, setQueue] = useState<QueueItem[]>();
@@ -88,10 +88,11 @@ export function ReviewScreen({
   // The translation picked when guessing a new word, or null for "не знаю"; reset with each card.
   const [guess, setGuess] = useState<{ step: number; meaning: string | null }>();
   // A session: when this stretch began, whether it is over, what it did, and answers still on their way.
-  const [startedAt, setStartedAt] = useState(() => Date.now());
+  // Answers given in the session, and how many this stretch runs to.
+  const [answered, setAnswered] = useState(0);
+  const [goal, setGoal] = useState(SESSION_TASKS);
   const [over, setOver] = useState(false);
   const [round, setRound] = useState(0);
-  const [now, setNow] = useState(() => Date.now());
   const [learnt, setLearnt] = useState({ learned: 0, climbed: 0, fresh: 0, steps: 0 });
   const [answering, setAnswering] = useState(0);
 
@@ -148,13 +149,6 @@ export function ReviewScreen({
     // A new group is a new screen (App keys it), so `group` never changes here.
   }, [mode, kinds, round]);
 
-  // The clock in the header, once a second.
-  useEffect(() => {
-    if (!session || over) return;
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [session, over]);
-
   const item = queue?.[0];
   const card = item?.card;
   const learning = !!item?.learn;
@@ -189,6 +183,14 @@ export function ReviewScreen({
     // And the families of new words, so the guess is there as the card comes up, not a moment later.
     for (const i of queue.slice(0, 3)) if (isFirstShow(i) && i.card.roots?.length) api.family(i.card).catch(() => undefined);
   }, [queue]);
+
+  /** One more answer in a session; the stretch is over once it reaches its goal. */
+  const count = useCallback(() => {
+    if (!session) return;
+    const n = answered + 1;
+    setAnswered(n);
+    if (n >= goal) setOver(true);
+  }, [session, answered, goal]);
 
   const reveal = useCallback(() => {
     if (card && !revealed) setRevealed(true);
@@ -230,9 +232,9 @@ export function ReviewScreen({
       setRevealed(false);
       setStep((n) => n + 1);
       shownAt.current = performance.now();
-      if (session && Date.now() - startedAt >= SESSION_MS) setOver(true);
+      count();
     },
-    [item, card, revealed, step, queue, done, speaking, session, startedAt],
+    [item, card, revealed, step, queue, done, speaking, count],
   );
 
   /** A card said aloud has sent its own rating; the session moves on. */
@@ -251,9 +253,9 @@ export function ReviewScreen({
       setRevealed(false);
       setStep((n) => n + 1);
       shownAt.current = performance.now();
-      if (session && Date.now() - startedAt >= SESSION_MS) setOver(true);
+      count();
     },
-    [queue, session, startedAt],
+    [queue, count],
   );
 
   /** Look-alikes and blocks for a new word that joins the session midway. */
@@ -282,8 +284,8 @@ export function ReviewScreen({
       if (next[0]?.mode === "listening") speak(heard(next[0]));
       setStep((n) => n + 1);
       shownAt.current = performance.now();
-      if (session && Date.now() - startedAt >= SESSION_MS) setOver(true);
       if (item.learn.kind === "intro") return;
+      count();
       setLearnt((l) => ({ ...l, steps: l.steps + 1 }));
       setAnswering((n) => n + 1);
       api
@@ -303,19 +305,18 @@ export function ReviewScreen({
         )
         .finally(() => setAnswering((n) => n - 1));
     },
-    [queue, item, session, startedAt, prepare],
+    [queue, item, prepare, count],
   );
 
-  /** Five minutes more: the same queue goes on, or a fresh one if it ran out. */
+  /** "Ещё": as many answers again; the same queue goes on, or a fresh one if it ran out. */
   const more = useCallback(() => {
-    setStartedAt(Date.now());
-    setNow(Date.now());
+    setGoal(answered + SESSION_TASKS);
     setOver(false);
     if (!queue?.length) {
       setQueue(undefined);
       setRound((r) => r + 1);
     }
-  }, [queue]);
+  }, [queue, answered]);
 
   /** Brings the last card back with its answer open, so it can be graded again. */
   const back = useCallback(() => {
@@ -352,8 +353,8 @@ export function ReviewScreen({
     return () => removeEventListener("keydown", onKey);
   }, [revealed, reveal, rate, back, listening, speaking, item, guessing, guesses, pickGuess]);
 
-  const left = SESSION_MS - (now - startedAt);
-  const progress = session ? Math.min(Math.max(1 - left / SESSION_MS, 0), 1) : total ? Math.min(done / total, 1) : 0;
+  const stretch = SESSION_TASKS - (goal - answered);
+  const progress = session ? Math.min(Math.max(stretch / SESSION_TASKS, 0), 1) : total ? Math.min(done / total, 1) : 0;
   // A session's summary: time is up, or there is nothing left and no answer is on its way.
   const summary = session && queue && (over || (!card && answering === 0));
 
@@ -367,7 +368,7 @@ export function ReviewScreen({
           <div className="progress-fill" style={{ transform: `scaleX(${progress})` }} />
         </div>
         <span className="review-count">
-          {session ? (summary ? "" : timeLeft(left)) : mode !== "mixed" || kinds ? `${Math.min(done, total)} / ${total}` : ""}
+          {session ? (summary ? "" : `${stretch} / ${SESSION_TASKS}`) : mode !== "mixed" || kinds ? `${Math.min(done, total)} / ${total}` : ""}
         </span>
         <button
           type="button"
@@ -599,7 +600,7 @@ function LearnStep({
   return <TypeCard item={item} ask={kind === "dictation" ? "sound" : "meaning"} practice onDone={(r) => onDone(r === "good")} />;
 }
 
-/** The end of a session's five minutes: what it did, and five more. */
+/** The end of a session's stretch: what it did, and "Ещё" for another. */
 function SessionDone({
   reviewed,
   learned,
@@ -646,12 +647,12 @@ function SessionDone({
             ? "Сейчас учить и повторять больше нечего. Новые слова можно добавить в любой момент."
             : climbed > 0
               ? "Слова, прошедшие все шаги, проверю ещё раз через 3 часа."
-              : "Пять минут прошли."}
+              : "Можно остановиться или продолжить."}
         </p>
         <div className="session-done-actions">
           {!empty && (
             <button type="button" className="button primary" onClick={onMore}>
-              Ещё 5 минут
+              Ещё
             </button>
           )}
           <a className={`button${empty ? " primary" : ""}`} href="#/">
