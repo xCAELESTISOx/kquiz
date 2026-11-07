@@ -1,9 +1,9 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { api, auth, lastToday, pendingReviewCount, remembered, rememberToday } from "../lib/api";
 import { cardsWord } from "../lib/plural";
 import { hideSplash } from "../lib/splash";
 import type { QueueItem, Stats, StatsOverview } from "../lib/types";
-import { CloseIcon, HeadphonesIcon, MicIcon, ShuffleIcon } from "../ui/icons";
+import { CardsIcon, CloseIcon, HeadphonesIcon, LearnIcon, MicIcon, MoreIcon, PlusIcon, ShuffleIcon } from "../ui/icons";
 import { PracticeLinks } from "../ui/PracticeLinks";
 import { ScheduleSettings } from "./ScheduleSettings";
 import "../ui/today.css";
@@ -128,7 +128,8 @@ export function TodayScreen() {
             </span>
           </a>
         )}
-        <button type="button" className="button" aria-haspopup="dialog" onClick={() => setMore(true)}>
+        <button type="button" className="button more-button" aria-haspopup="dialog" onClick={() => setMore(true)}>
+          <MoreIcon />
           Ещё
         </button>
       </div>
@@ -165,7 +166,7 @@ function TodayStats({ stats }: { stats: Stats }) {
           <dd>{stats.reviewedToday}</dd>
         </div>
         <div>
-          <dt>Новых</dt>
+          <dt>Новых слов</dt>
           <dd>{stats.newCards.queued}</dd>
         </div>
       </dl>
@@ -183,6 +184,51 @@ function TodayStats({ stats }: { stats: Stats }) {
     </a>
   );
 }
+
+function SheetLink({ href, icon, label, count }: { href: string; icon: ReactNode; label: string; count?: number }) {
+  return (
+    <a href={href}>
+      <span className="sheet-icon">{icon}</span>
+      <span className="sheet-label">{label}</span>
+      {count !== undefined && <span className="button-count">{count}</span>}
+    </a>
+  );
+}
+
+const glyph = {
+  width: 24,
+  height: 24,
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 2,
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+  "aria-hidden": true,
+} as const;
+
+const ChoiceIcon = () => (
+  <svg {...glyph}>
+    <rect x="3.5" y="4" width="17" height="6" rx="2" />
+    <rect x="3.5" y="14" width="17" height="6" rx="2" />
+    <path d="m7 7 1.2 1.2L10.5 6" />
+  </svg>
+);
+
+const LeechIcon = () => (
+  <svg {...glyph}>
+    <path d="M12 3.5 21 19.5H3Z" />
+    <path d="M12 10v4M12 17h.01" />
+  </svg>
+);
+
+const PeopleIcon = () => (
+  <svg {...glyph}>
+    <circle cx="9" cy="8.5" r="3.5" />
+    <path d="M2.5 20c.6-3.4 3.2-5.5 6.5-5.5s5.9 2.1 6.5 5.5" />
+    <path d="M16 5.2a3.5 3.5 0 0 1 0 6.6M18 14.8c2 .7 3.2 2.5 3.5 5.2" />
+  </svg>
+);
 
 function daysWord(n: number): string {
   return { карточку: "день", карточки: "дня", карточек: "дней" }[cardsWord(n)]!;
@@ -220,38 +266,15 @@ function MoreSheet({
           </button>
         </header>
         <nav className="sheet-links" onClick={onClose}>
-          {due > 0 && (
-            <a href="#/review">
-              Повторить значения <span className="button-count">{due}</span>
-            </a>
-          )}
-          {mixable && (
-            <a href="#/mix">
-              <ShuffleIcon />
-              Вперемешку, выбрать способы
-            </a>
-          )}
-          {speechDue > 0 && (
-            <a href="#/speech">
-              <MicIcon />
-              Вслух <span className="button-count">{speechDue}</span>
-            </a>
-          )}
-          {speechDue > 0 && <a href="#/choose">Выбрать слово из вариантов</a>}
-          {listenDue > 0 && (
-            <a href="#/listen">
-              <HeadphonesIcon />
-              На слух <span className="button-count">{listenDue}</span>
-            </a>
-          )}
-          {leeches > 0 && (
-            <a href="#/leeches">
-              Трудные карточки <span className="button-count">{leeches}</span>
-            </a>
-          )}
-          <a href="#/cards/queued">Новые слова</a>
-          <a href="#/add">Добавить слова</a>
-          {owner && <a href="#/access">Доступ для друзей</a>}
+          {due > 0 && <SheetLink href="#/review" icon={<CardsIcon />} label="Повторить значения" count={due} />}
+          {mixable && <SheetLink href="#/mix" icon={<ShuffleIcon />} label="Вперемешку, выбрать способы" />}
+          {speechDue > 0 && <SheetLink href="#/speech" icon={<MicIcon />} label="Вслух" count={speechDue} />}
+          {speechDue > 0 && <SheetLink href="#/choose" icon={<ChoiceIcon />} label="Выбрать слово из вариантов" />}
+          {listenDue > 0 && <SheetLink href="#/listen" icon={<HeadphonesIcon />} label="На слух" count={listenDue} />}
+          {leeches > 0 && <SheetLink href="#/leeches" icon={<LeechIcon />} label="Трудные карточки" count={leeches} />}
+          <SheetLink href="#/cards/queued" icon={<LearnIcon />} label="Новые слова" />
+          <SheetLink href="#/add" icon={<PlusIcon />} label="Добавить слова" />
+          {owner && <SheetLink href="#/access" icon={<PeopleIcon />} label="Доступ для друзей" />}
         </nav>
         <PracticeLinks />
         <ScheduleSettings />

@@ -24,6 +24,7 @@ import { SpeechCard } from "./Speech";
 import { TypeCard, type TypeAsk } from "./Typing";
 import "../ui/guess.css";
 import "../ui/learn.css";
+import "../ui/today.css";
 
 const RATINGS: { name: RatingName; label: string; key: string }[] = [
   { name: "again", label: "Снова", key: "1" },
@@ -374,6 +375,7 @@ export function ReviewScreen({
           aria-label="Вернуть предыдущую карточку"
           title="Вернуть предыдущую карточку"
           disabled={!last}
+          hidden={!!summary}
           onClick={back}
         >
           <UndoIcon />
@@ -615,31 +617,47 @@ function SessionDone({
   empty: boolean;
   onMore: () => void;
 }) {
-  const facts = [
-    learned > 0 && `выучено слов: ${learned}`,
-    steps > 0 && `заданий с новыми словами: ${steps}`,
-    climbed > 0 && `прошли все шаги: ${climbed} (проверка через 3 часа)`,
-    fresh > 0 && `новых в работе: ${fresh}`,
-    reviewed > 0 && `повторено: ${reviewed}`,
-  ].filter(Boolean);
+  const facts: [number, string][] = (
+    [
+      [learned, "выучено слов"],
+      [climbed, "прошли все шаги"],
+      [steps, "заданий с новыми"],
+      [reviewed, "повторено"],
+    ] as [number, string][]
+  ).filter(([n]) => n > 0);
   return (
     <div className="review-stage">
-      <div className="finished">
+      <div className="finished session-done">
         <p className="finished-mark" lang="ko">
           {empty ? "다 했어요" : "잘했어요!"}
         </p>
-        <p className="finished-text">
-          {facts.length ? `${facts.join(", ")}.`.replace(/^./, (c) => c.toUpperCase()) : !empty && "Пять минут прошли."}
-          {empty && ` Сейчас учить и повторять ${facts.length ? "больше " : ""}нечего. Новые слова можно добавить в любой момент.`}
-        </p>
-        {!empty && (
-          <button type="button" className="button primary" onClick={onMore}>
-            Ещё 5 минут
-          </button>
+        {facts.length > 0 && (
+          <dl className="session-facts">
+            {facts.map(([n, label]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd>{n}</dd>
+              </div>
+            ))}
+          </dl>
         )}
-        <a className={`button${empty ? " primary" : ""}`} href="#/">
-          На главную
-        </a>
+        <p className="finished-text muted">
+          {empty
+            ? "Сейчас учить и повторять больше нечего. Новые слова можно добавить в любой момент."
+            : climbed > 0
+              ? "Слова, прошедшие все шаги, проверю ещё раз через 3 часа."
+              : "Пять минут прошли."}
+        </p>
+        <div className="session-done-actions">
+          {!empty && (
+            <button type="button" className="button primary" onClick={onMore}>
+              Ещё 5 минут
+            </button>
+          )}
+          <a className={`button${empty ? " primary" : ""}`} href="#/">
+            На главную
+          </a>
+        </div>
       </div>
     </div>
   );
