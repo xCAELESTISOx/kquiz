@@ -1051,6 +1051,33 @@ p {
   white-space: nowrap;
 }
 
+.card-row-link-long {
+  grid-template-columns: 1fr;
+  row-gap: 6px;
+  padding-block: 14px;
+}
+
+.card-row-link-long .card-row-korean {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+.card-row-link-long .card-row-meaning {
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
 .card-row-badges {
   grid-column: 1 / -1;
   display: flex;
