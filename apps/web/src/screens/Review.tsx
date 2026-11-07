@@ -284,8 +284,9 @@ export function ReviewScreen({
       if (next[0]?.mode === "listening") speak(heard(next[0]));
       setStep((n) => n + 1);
       shownAt.current = performance.now();
-      if (item.learn.kind === "intro") return;
+      // Meeting a word is a screen of the session too, so the count moves from the first tap.
       count();
+      if (item.learn.kind === "intro") return;
       setLearnt((l) => ({ ...l, steps: l.steps + 1 }));
       setAnswering((n) => n + 1);
       api
