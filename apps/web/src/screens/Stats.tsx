@@ -118,8 +118,27 @@ function Streak({ stats }: { stats: StatsOverview }) {
   );
 }
 
+const RANGE_KEY = "kq:forecast-range";
+
+function savedRange(): 7 | 30 {
+  try {
+    return localStorage.getItem(RANGE_KEY) === "7" ? 7 : 30;
+  } catch {
+    return 30;
+  }
+}
+
 function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
-  const [range, setRange] = useState<7 | 30>(7);
+  // A month by default: the owner plans lessons around it; the week stays one tap away and is remembered.
+  const [range, setRangeState] = useState<7 | 30>(savedRange);
+  const setRange = (r: 7 | 30) => {
+    setRangeState(r);
+    try {
+      localStorage.setItem(RANGE_KEY, String(r));
+    } catch {
+      /* private mode: the choice just isn't remembered */
+    }
+  };
   const items = stats.forecast.slice(0, range);
   const totals = items.map((f) => sum(modes.map((m) => f.due[m.mode] ?? 0)));
   const max = Math.max(...totals, 1);
@@ -132,10 +151,10 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
 
   return (
     <>
-      <div className="segmented segmented-small" role="tablist" aria-label="Период" data-mode={range === 30 ? "bulk" : "single"}>
-        {([7, 30] as const).map((r) => (
+      <div className="segmented segmented-small" role="tablist" aria-label="Период" data-mode={range === 30 ? "single" : "bulk"}>
+        {([30, 7] as const).map((r) => (
           <button key={r} role="tab" aria-selected={range === r} onClick={() => (setRange(r), select(undefined))}>
-            {r} дней
+            {r === 30 ? "Месяц" : "Неделя"}
           </button>
         ))}
       </div>
@@ -188,7 +207,7 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
       {modes.length > 1 && <Legend modes={modes} />}
       <p className="stats-note">
         {totals[0] ? `Сегодня ${totals[0]}, включая просроченные. ` : ""}
-        За {range} дней — {sum(totals)}
+        {range === 30 ? "За 30 дней" : "За неделю"} — {sum(totals)}
         {totals[peak]! > 0 && peak > 0 ? `, больше всего ${dayName(items[peak]!.day, peak).toLowerCase()}: ${totals[peak]}` : ""}.
         Новые карточки сюда не входят.
       </p>
