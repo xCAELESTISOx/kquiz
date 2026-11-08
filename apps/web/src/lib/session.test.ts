@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { firstTasks, insertAfter, interleave, learnTask } from "./session";
+import { afterIntro, firstTasks, insertAfter, interleave, learnTask, pickMeanings } from "./session";
 import type { Card, QueueItem } from "./types";
 
 const card = (id: number) => ({ id, korean: `단어${id}`, meaning: `слово ${id}` }) as Card;
@@ -38,3 +38,25 @@ describe("session", () => {
 function introTaskOf(id: number): QueueItem {
   return firstTasks([{ card: card(id), step: 0 }], true)[0]!;
 }
+
+describe("right after meeting a word", () => {
+  const opts = [
+    { id: 2, korean: "단어2", meaning: "слово 2" },
+    { id: 3, korean: "단어3", meaning: "Слово 1" },
+    { id: 4, korean: "단어4", meaning: "слово 4" },
+  ];
+
+  it("picks its meaning, then builds it, before anything else", () => {
+    expect(afterIntro(card(1), opts, true).map((i) => i.learn?.kind)).toEqual(["pick", "build"]);
+    // Nothing to pick from, or a phrase: straight to building.
+    expect(afterIntro(card(1), [], true).map((i) => i.learn?.kind)).toEqual(["build"]);
+    expect(afterIntro({ ...card(1), kind: "phrase" }, opts, true).map((i) => i.learn?.kind)).toEqual(["build"]);
+  });
+
+  it("offers the word's own meaning among different ones", () => {
+    const m = pickMeanings(card(1), opts);
+    expect(m).toHaveLength(3);
+    expect(m).toContain("слово 1");
+    expect(m).not.toContain("Слово 1");
+  });
+});
