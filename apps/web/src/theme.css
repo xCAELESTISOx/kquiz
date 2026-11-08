@@ -2900,17 +2900,6 @@ p {
   animation: answer-in var(--dur-3) var(--ease-out) backwards;
 }
 
-/* ---------- Home Screen app ending short (lib/viewport.ts) ---------- */
-
-/*
- * iOS 26 lays a Home Screen app with a translucent status bar out a status bar's height short of the
- * screen and paints nothing fixed below that. The bottom inset the app reserves for the home
- * indicator is then mostly that unpaintable strip already, so it shrinks by the gap.
- */
-html.vp-gap {
-  --safe-bottom: max(0px, env(safe-area-inset-bottom) - var(--vp-gap));
-}
-
 /* ---------- On-screen keyboard ---------- */
 
 /* iOS keeps 100dvh under the keyboard: a task screen takes only the visible part (lib/keyboard.ts). */
