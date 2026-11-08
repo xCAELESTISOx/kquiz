@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { afterIntro, buildable, firstTasks, insertAfter, interleave, learnTask } from "./session";
+import { afterFix, afterIntro, buildable, firstTasks, insertAfter, interleave, learnTask, withMistake } from "./session";
 import type { Card, QueueItem } from "./types";
 
 const card = (id: number) => ({ id, korean: `단어${id}`, meaning: `слово ${id}` }) as Card;
@@ -56,5 +56,25 @@ describe("right after meeting a word", () => {
     expect(buildable({ ...card(1), korean: "눈" })).toBe(false);
     // A phrase is built, not said.
     expect(kinds({ ...card(1), kind: "phrase" })).toEqual(["choose", "build"]);
+  });
+
+  it("keeps each task missed once, and goes over them until each is right", () => {
+    const pick: QueueItem = { ...review(5), learn: { kind: "choose" } };
+    let mistakes = withMistake([], review(1));
+    mistakes = withMistake(mistakes, pick);
+    mistakes = withMistake(mistakes, { ...pick });
+    mistakes = withMistake(mistakes, { ...review(5), learn: { kind: "intro" } });
+    // The same word in another mode is another task.
+    mistakes = withMistake(mistakes, { ...review(1), mode: "listening" });
+    expect(mistakes.map((m) => [m.card.id, m.learn?.kind ?? m.mode])).toEqual([
+      [1, "meaning"],
+      [5, "choose"],
+      [1, "listening"],
+    ]);
+    const again = afterFix(mistakes, false);
+    expect(again[2]).toBe(mistakes[0]);
+    expect(afterFix(again, true)).toEqual([mistakes[2], mistakes[0]]);
+    expect(afterFix([mistakes[0]!], false)).toEqual([mistakes[0]]);
+    expect(afterFix([], true)).toEqual([]);
   });
 });

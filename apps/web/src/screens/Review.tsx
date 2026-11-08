@@ -5,7 +5,7 @@ import { api, holdReview, isConnectionError, releaseHeldReview, takeBackReview }
 import { clozeFor } from "../lib/cloze";
 import { useLeechIds } from "../lib/leeches";
 import { everyKind, mixWays, serverModes } from "../lib/mix";
-import { afterIntro, buildable, firstTasks, insertAfter, interleave, introTask, learnTask, SESSION_TASKS } from "../lib/session";
+import { afterFix, afterIntro, buildable, firstTasks, insertAfter, interleave, introTask, learnTask, SESSION_TASKS, withMistake } from "../lib/session";
 import { navigate } from "../lib/router";
 import { canRecord, type Recorder } from "../lib/recorder";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
@@ -46,7 +46,9 @@ type Swipe = RatingName | "back";
  * What goes into the mix is picked first (MixSetup).
  * A session ("Учить" on Today, lib/session.ts) is mixed with every way at once, runs SESSION_TASKS answers and
  * brings new words from the pool in among the reviews, each step of learning them answered to the
- * server; then a summary offers as many more.
+ * server. The tasks missed in the stretch are then gone over again, after a screen that says so,
+ * until each is right: practice only, since the miss already went to the schedule. Then a summary
+ * offers as many more.
  */
 export function ReviewScreen({
   mode,
@@ -70,7 +72,7 @@ export function ReviewScreen({
   // The card just graded, drawn once more on its way out. Purely decorative: the next card is live at once.
   const [exit, setExit] = useState<{ step: number; rating: RatingName; card: Card }>();
   // The last rating and the session as it was before it, for going back to that card.
-  const [last, setLast] = useState<{ reviewId: string; queue: QueueItem[]; done: number }>();
+  const [last, setLast] = useState<{ reviewId: string; queue: QueueItem[]; done: number; mistakes: QueueItem[] }>();
   const shownAt = useRef(performance.now());
   // Mixed sessions say some cards aloud; the microphone is asked for once per session.
   const recorder = useRef<Recorder>(undefined);
@@ -103,6 +105,16 @@ export function ReviewScreen({
     [],
   );
   const [answering, setAnswering] = useState(0);
+  // A session: the tasks missed in this stretch, and, once going over them, the ones not yet right.
+  const [mistakes, setMistakes] = useState<QueueItem[]>([]);
+  const [fixes, setFixes] = useState<QueueItem[]>();
+  // The stretch is over: its goal is reached, or nothing is left and no answer is on its way.
+  const ended = !!session && !!queue && (over || (!queue[0] && answering === 0));
+  // Then first a screen for the mistakes, then the mistakes themselves, then the summary.
+  const fixIntro = ended && !fixes && mistakes.length > 0;
+  const fixing = ended && !!fixes && fixes.length > 0;
+  const summary = ended && !fixIntro && !fixing;
+  const pause = summary || fixIntro;
 
   useEffect(() => {
     document.title = session
@@ -157,7 +169,7 @@ export function ReviewScreen({
     // A new group is a new screen (App keys it), so `group` never changes here.
   }, [mode, kinds, round]);
 
-  const item = queue?.[0];
+  const item = pause ? undefined : fixing ? fixes![0] : queue?.[0];
   const card = item?.card;
   const learning = !!item?.learn;
   const listening = item?.mode === "listening";
@@ -189,6 +201,32 @@ export function ReviewScreen({
     if (n >= goal) setOver(true);
   }, [session, answered, goal]);
 
+  /** A mistake gone over: right, it is done; wrong, it comes again after the others. */
+  const fixed = useCallback(
+    (ok: boolean) => {
+      if (!fixes) return;
+      const next = afterFix(fixes, ok);
+      setFixes(next);
+      setExit(undefined);
+      setRevealed(false);
+      setStep((n) => n + 1);
+      shownAt.current = performance.now();
+      // Inside the tap, where iOS still lets audio play.
+      if (next[0]?.mode === "listening") speak(heard(next[0]));
+    },
+    [fixes],
+  );
+
+  /** "Исправить": the mistakes of this stretch, in the order they were made. */
+  const startFixes = useCallback(() => {
+    setLast(undefined);
+    void releaseHeldReview();
+    setFixes(mistakes);
+    setStep((n) => n + 1);
+    shownAt.current = performance.now();
+    if (mistakes[0]?.mode === "listening") speak(heard(mistakes[0]));
+  }, [mistakes]);
+
   const reveal = useCallback(() => {
     if (card && !revealed) setRevealed(true);
   }, [card, revealed]);
@@ -196,6 +234,12 @@ export function ReviewScreen({
   const rate = useCallback(
     (rating: RatingName, swiped = false) => {
       if (!item || !card || !revealed || !queue || speaking) return;
+      if (fixing) {
+        fixed(rating !== "again");
+        // A swiped card has already flown off under the finger.
+        if (!swiped) setExit({ step, rating, card });
+        return;
+      }
       // A swiped card has already flown off under the finger.
       setExit(swiped ? undefined : { step, rating, card });
       const reviewId = crypto.randomUUID();
@@ -207,11 +251,12 @@ export function ReviewScreen({
         reviewedAt: new Date().toISOString(),
         elapsedMs: Math.round(performance.now() - shownAt.current),
       }).catch((e: Error) => setError(e.message));
-      setLast({ reviewId, queue, done });
+      setLast({ reviewId, queue, done, mistakes });
       // A forgotten card comes back at the end of this session, like Anki's relearning step, and
-      // is heard in a new voice then.
+      // is heard in a new voice then. In "Учить" that is the mistakes gone over after the stretch.
       if (rating === "again") forgetVoice(item);
-      const next = queue ? (rating === "again" ? [...queue.slice(1), queue[0]!] : queue.slice(1)) : queue;
+      if (rating === "again" && session) setMistakes((m) => withMistake(m, item));
+      const next = rating === "again" && !session ? [...queue.slice(1), queue[0]!] : queue.slice(1);
       setQueue(next);
       // Inside the tap, where iOS still lets audio play.
       if (next?.[0]?.mode === "listening") speak(heard(next[0]));
@@ -222,19 +267,22 @@ export function ReviewScreen({
       shownAt.current = performance.now();
       count();
     },
-    [item, card, revealed, step, queue, done, speaking, count, note],
+    [item, card, revealed, step, queue, done, speaking, count, note, fixing, fixed, mistakes, session],
   );
 
   /** A card said aloud has sent its own rating; the session moves on. */
   const spoken = useCallback(
     (rating: RatingName) => {
       if (!queue) return;
+      // A mistake gone over is practice: its card sent nothing.
+      if (fixing) return fixed(rating !== "again");
       // Going back over it would rate it twice, so the held rating goes out now.
       setLast(undefined);
       void releaseHeldReview();
       setExit(undefined);
       if (rating === "again") forgetVoice(queue[0]!);
-      const next = rating === "again" ? [...queue.slice(1), queue[0]!] : queue.slice(1);
+      if (rating === "again" && session) setMistakes((m) => withMistake(m, queue[0]!));
+      const next = rating === "again" && !session ? [...queue.slice(1), queue[0]!] : queue.slice(1);
       setQueue(next);
       if (next[0]?.mode === "listening") speak(heard(next[0]));
       if (rating !== "again") setDone((n) => n + 1);
@@ -244,7 +292,7 @@ export function ReviewScreen({
       shownAt.current = performance.now();
       count();
     },
-    [queue, count, note],
+    [queue, count, note, fixing, fixed, session],
   );
 
   /** Look-alikes and blocks for a new word that joins the session midway. */
@@ -262,6 +310,9 @@ export function ReviewScreen({
   const learned = useCallback(
     (ok: boolean) => {
       if (!queue || !item?.learn) return;
+      // A mistake gone over is practice: the ladder on the server already has the miss.
+      if (fixing) return fixed(ok);
+      if (!ok) setMistakes((m) => withMistake(m, item));
       setLast(undefined);
       void releaseHeldReview();
       setExit(undefined);
@@ -307,13 +358,15 @@ export function ReviewScreen({
         )
         .finally(() => setAnswering((n) => n - 1));
     },
-    [queue, item, prepare, count, options, note],
+    [queue, item, prepare, count, options, note, fixing, fixed],
   );
 
   /** "Ещё": as many answers again; the same queue goes on, or a fresh one if it ran out. */
   const more = useCallback(() => {
     setGoal(answered + SESSION_TASKS);
     setOver(false);
+    setMistakes([]);
+    setFixes(undefined);
     if (!queue?.length) {
       setQueue(undefined);
       setRound((r) => r + 1);
@@ -322,22 +375,25 @@ export function ReviewScreen({
 
   /** Brings the last card back with its answer open, so it can be graded again. */
   const back = useCallback(() => {
-    if (!last) return;
+    if (!last || pause || fixing) return;
     setLast(undefined);
     // Already sent (the screen was left and reopened): that rating stays.
     if (!takeBackReview(last.reviewId)) return;
     setQueue(last.queue);
     setDone(last.done);
+    setMistakes(last.mistakes);
     setExit(undefined);
     setRevealed(true);
     setStep((n) => n + 1);
     shownAt.current = performance.now();
-  }, [last]);
+  }, [last, pause, fixing]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === "Escape") navigate("today");
+      // The screens between cards take their own taps.
+      else if (pause) return;
       else if (e.key === "Backspace" || e.key === "z" || e.key === "я") back();
       // The card said aloud takes its own keys.
       else if (speaking) return;
@@ -352,12 +408,17 @@ export function ReviewScreen({
     }
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [revealed, reveal, rate, back, listening, speaking, item]);
+  }, [revealed, reveal, rate, back, listening, speaking, item, pause]);
 
   const stretch = SESSION_TASKS - (goal - answered);
-  const progress = session ? Math.min(Math.max(stretch / SESSION_TASKS, 0), 1) : total ? Math.min(done / total, 1) : 0;
-  // A session's summary: time is up, or there is nothing left and no answer is on its way.
-  const summary = session && queue && (over || (!card && answering === 0));
+  const right = mistakes.length - (fixes?.length ?? 0);
+  const progress = fixing
+    ? right / mistakes.length
+    : session
+      ? Math.min(Math.max(stretch / SESSION_TASKS, 0), 1)
+      : total
+        ? Math.min(done / total, 1)
+        : 0;
 
   return (
     <main className="review">
@@ -365,11 +426,11 @@ export function ReviewScreen({
         <a className="icon-button" href="#/" aria-label={mode === "listening" ? "Закончить тренировку на слух" : "Закончить повторение"}>
           <CloseIcon />
         </a>
-        <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
+        <div className={`progress${fixing ? " is-fix" : ""}`} role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
           <div className="progress-fill" style={{ transform: `scaleX(${progress})` }} />
         </div>
         <span className="review-count">
-          {session ? (summary ? "" : `${stretch} / ${SESSION_TASKS}`) : mode !== "mixed" || kinds ? `${Math.min(done, total)} / ${total}` : ""}
+          {session ? (pause ? "" : fixing ? `${right} / ${mistakes.length}` : `${stretch} / ${SESSION_TASKS}`) : mode !== "mixed" || kinds ? `${Math.min(done, total)} / ${total}` : ""}
         </span>
         <button
           type="button"
@@ -377,7 +438,7 @@ export function ReviewScreen({
           aria-label="Вернуть предыдущую карточку"
           title="Вернуть предыдущую карточку"
           disabled={!last}
-          hidden={!!summary}
+          hidden={pause || fixing}
           onClick={back}
         >
           <UndoIcon />
@@ -390,27 +451,37 @@ export function ReviewScreen({
 
       {!queue && !error && (mode !== "mixed" || kinds) && <div className="review-stage" aria-busy="true" />}
 
-      {summary && <SessionDone {...learnt} onMore={more} empty={!card} />}
+      {fixIntro && <FixIntro mistakes={mistakes} onStart={startFixes} />}
+
+      {summary && <SessionDone {...learnt} onMore={more} empty={!queue[0]} />}
 
       {!session && queue && !card && <Finished count={done} />}
 
-      {session && queue && !card && !summary && <div className="review-stage" aria-busy="true" />}
+      {session && queue && !card && !pause && <div className="review-stage" aria-busy="true" />}
 
-      {!summary && queue && item?.learn && (
+      {queue && item?.learn && (
         <LearnStep key={step} item={item} options={options[item.card.id] ?? []} tiles={tiles[item.card.id]} recorder={recorder} onDone={learned} />
       )}
 
-      {!summary && !learning && queue && item && building && (
-        <PhraseCard key={step} item={item} tiles={tiles[item.card.id]} ask={item.mode === "listening" ? "sound" : "meaning"} onDone={spoken} />
+      {!learning && queue && item && building && (
+        <PhraseCard
+          key={step}
+          item={item}
+          tiles={tiles[item.card.id]}
+          ask={item.mode === "listening" ? "sound" : "meaning"}
+          practice={fixing}
+          onDone={spoken}
+        />
       )}
 
-      {!summary && !learning && queue && item && typing && !building && <TypeCard key={step} item={item} ask={typing} onDone={spoken} />}
+      {!learning && queue && item && typing && !building && <TypeCard key={step} item={item} ask={typing} practice={fixing} onDone={spoken} />}
 
-      {!summary && !learning && queue && item && speaking && !typing && !building && (quiet.has(item) ? (
+      {!learning && queue && item && speaking && !typing && !building && (quiet.has(item) ? (
         <ChoiceCard
           key={step}
           item={item}
           options={options[item.card.id] ?? []}
+          practice={fixing}
           onDone={spoken}
           aloud={canRecord() && (
             <button type="button" className="link-button inline" onClick={() => setQuiet((s) => toggled(s, item))}>
@@ -423,6 +494,7 @@ export function ReviewScreen({
           key={step}
           item={item}
           recorder={recorder}
+          practice={fixing}
           onRated={spoken}
           quiet={(options[item.card.id]?.length ?? 0) > 0 && (
             <button type="button" className="link-button inline" onClick={() => setQuiet((s) => toggled(s, item))}>
@@ -432,7 +504,7 @@ export function ReviewScreen({
         />
       ))}
 
-      {!summary && queue && card && !speaking && (
+      {queue && card && !speaking && (
         <>
           <SwipeCard
             key={step}
@@ -585,6 +657,42 @@ function LearnStep({
   if (kind === "build") return <BuildCard card={card} options={options} onDone={onDone} />;
   return <TypeCard item={item} ask={kind === "dictation" ? "sound" : "meaning"} practice onDone={(r) => onDone(r === "good")} />;
 }
+
+/**
+ * Between the stretch and its summary: the tasks missed are gone over again, and this says so
+ * first, with the words they were on.
+ */
+function FixIntro({ mistakes, onStart }: { mistakes: readonly QueueItem[]; onStart: () => void }) {
+  const n = mistakes.length;
+  const words = [...new Map(mistakes.map((m) => [m.card.id, m.card])).values()];
+  return (
+    <div className="review-stage">
+      <div className="finished fix-intro">
+        <p className="fix-intro-mark" aria-hidden="true">
+          <span lang="ko">다시</span>
+        </p>
+        <h1 className="fix-intro-title">Теперь исправим ошибки</h1>
+        <p className="finished-text muted">
+          {n === 1 ? "В одном задании была ошибка." : `Ошибки были в ${n} ${inTasks(n)}.`} Пройдём {n === 1 ? "его" : "их"} ещё
+          раз, пока всё не будет верно. На расписание это не влияет: ошибка уже учтена.
+        </p>
+        <ul className="fix-intro-words" aria-label="Слова с ошибками">
+          {words.map((w, i) => (
+            <li key={w.id} lang="ko" style={{ "--i": i } as CSSProperties}>
+              {w.korean}
+            </li>
+          ))}
+        </ul>
+        <button type="button" className="button primary" onClick={onStart} autoFocus>
+          Исправить
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Prepositional after a number: в 2 заданиях, в 21 задании. */
+const inTasks = (n: number): string => (n % 10 === 1 && n % 100 !== 11 ? "задании" : "заданиях");
 
 /** The end of a session's stretch: where its words got to, in words, and "Ещё" for another. */
 function SessionDone({
