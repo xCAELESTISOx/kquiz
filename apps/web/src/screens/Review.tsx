@@ -1,5 +1,5 @@
 import { shownPronunciation } from "../lib/korean";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject, type PointerEvent, type ReactNode } from "react";
 import { wordsWord } from "../lib/plural";
 import { api, holdReview, isConnectionError, releaseHeldReview, takeBackReview } from "../lib/api";
 import { shuffled } from "../lib/choice";
@@ -7,7 +7,7 @@ import { clozeFor } from "../lib/cloze";
 import { guessHints, isFirstShow, splitAt, type GuessHint } from "../lib/guess";
 import { useLeechIds } from "../lib/leeches";
 import { everyKind, mixWays, serverModes } from "../lib/mix";
-import { afterIntro, firstTasks, insertAfter, interleave, introTask, learnTask, SESSION_TASKS } from "../lib/session";
+import { afterIntro, buildable, firstTasks, insertAfter, interleave, introTask, learnTask, SESSION_TASKS } from "../lib/session";
 import { navigate } from "../lib/router";
 import { canRecord, type Recorder } from "../lib/recorder";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
@@ -19,7 +19,7 @@ import { useGlide } from "../ui/motion";
 import { CardNotes } from "../ui/CardNotes";
 import { useFamily, WordFamily } from "../ui/WordFamily";
 import { ChoiceCard } from "./Choice";
-import { BuildCard, IntroCard, PickMeaningCard } from "./Learn";
+import { BuildCard, IntroCard } from "./Learn";
 import { MixSetup } from "./MixSetup";
 import { PhraseCard } from "./Phrase";
 import { PhraseParts, RegisterBadge } from "../ui/PhraseParts";
@@ -283,7 +283,7 @@ export function ReviewScreen({
   }, []);
 
   /**
-   * A step of learning a new word is done. Meeting it puts its first task a few cards on; an answer
+   * A step of learning a new word is done. Meeting it is followed at once by tasks on it (afterIntro); an answer
    * goes to the server, which says where the word stands now: its next step comes back a few cards
    * on, or it has climbed its ladder (and the next word from the pool joins), or it is learned.
    */
@@ -300,8 +300,8 @@ export function ReviewScreen({
       // Meeting a word is followed at once by tasks on it; a missed pick comes back a few cards on.
       const next =
         kind === "intro"
-          ? [...afterIntro(word, options[word.id] ?? [], canSpeak()), ...rest]
-          : kind === "pick" && !ok
+          ? [...afterIntro(word, options[word.id] ?? [], { hear: canSpeak(), say: canSay(word) }), ...rest]
+          : kind === "choose" && !ok
             ? insertAfter([item, ...rest], item).slice(1)
             : rest;
       setQueue(next);
@@ -311,10 +311,10 @@ export function ReviewScreen({
       shownAt.current = performance.now();
       // Meeting a word is a screen of the session too, so the count moves from the first tap.
       count();
-      if (kind === "intro") return;
-      count();
-      // Picking the meaning is practice on the spot; the ladder on the server starts with building.
-      if (kind === "pick") return;
+      // Picking and saying are practice on the spot; the ladder on the server starts with building.
+      if (kind === "choose" || kind === "aloud") return;
+      // A word of one syllable has nothing to build: meeting it climbs that step.
+      if (kind === "intro" && buildable(word)) return;
       setAnswering((n) => n + 1);
       api
         .answerLearning(word.id, ok)
@@ -426,7 +426,7 @@ export function ReviewScreen({
       {session && queue && !card && !summary && <div className="review-stage" aria-busy="true" />}
 
       {!summary && queue && item?.learn && (
-        <LearnStep key={step} item={item} options={options[item.card.id] ?? []} tiles={tiles[item.card.id]} onDone={learned} />
+        <LearnStep key={step} item={item} options={options[item.card.id] ?? []} tiles={tiles[item.card.id]} recorder={recorder} onDone={learned} />
       )}
 
       {!summary && !learning && queue && item && building && (
@@ -609,22 +609,28 @@ export function ReviewScreen({
   );
 }
 
+/** A new word can be said and scored right after meeting it. */
+const canSay = (card: Card): boolean => canRecord() && card.kind === "word" && card.speakable && card.readyForSpeech;
+
 /** One step of learning a new word in a session: met, built, picked out by ear or written. */
 function LearnStep({
   item,
   options,
   tiles,
+  recorder,
   onDone,
 }: {
   item: QueueItem;
   options: ChoiceOption[];
   tiles: PhraseTiles | undefined;
+  recorder: RefObject<Recorder | undefined>;
   onDone: (ok: boolean) => void;
 }) {
   const kind = item.learn!.kind;
   const { card } = item;
   if (kind === "intro") return <IntroCard card={card} onDone={() => onDone(true)} />;
-  if (kind === "pick") return <PickMeaningCard card={card} options={options} onDone={onDone} />;
+  if (kind === "choose") return <ChoiceCard item={item} options={options} practice instant onDone={(r) => onDone(r !== "again")} />;
+  if (kind === "aloud") return <SpeechCard item={item} recorder={recorder} practice onRated={(r) => onDone(r !== "again")} />;
   if (card.kind === "phrase")
     return <PhraseCard item={item} tiles={tiles} ask={kind === "dictation" ? "sound" : "meaning"} practice onDone={(r) => onDone(r !== "again")} />;
   if (kind === "build") return <BuildCard card={card} options={options} onDone={onDone} />;

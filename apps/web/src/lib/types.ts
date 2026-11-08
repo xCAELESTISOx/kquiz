@@ -113,7 +113,7 @@ export interface QueueItem {
   /** Listening only: other voices the word can be heard in besides the default one (lib/voices.ts). */
   voices?: string[];
   /** In a session only: a step of learning a new word, not a review (lib/session.ts). */
-  learn?: { kind: "intro" | "pick" | "build" | "dictation" | "write"; check?: boolean };
+  learn?: { kind: "intro" | "choose" | "build" | "aloud" | "dictation" | "write"; check?: boolean };
 }
 
 /** A wrong option on the "pick the Korean word" screen: another of the user's words. */

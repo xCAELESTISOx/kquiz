@@ -108,6 +108,7 @@ export function ChoiceCard({
   onDone,
   aloud,
   practice,
+  instant,
 }: {
   item: QueueItem;
   options: ChoiceOption[];
@@ -115,13 +116,15 @@ export function ChoiceCard({
   aloud?: ReactNode;
   /** Learning one word: the pick grades nothing. */
   practice?: boolean;
+  /** Options at once, without the recall pause: the word was shown a moment ago. */
+  instant?: boolean;
 }) {
   const { card } = item;
   const [picked, setPicked] = useState<number>();
   const [error, setError] = useState<string>();
   const shownAt = useRef(performance.now());
-  const [revealed, setRevealed] = useState(false);
-  const revealedAt = useRef(0);
+  const [revealed, setRevealed] = useState(!!instant);
+  const revealedAt = useRef(instant ? performance.now() : 0);
   const rating = useRef<RatingName>("good");
   const leeches = useLeechIds("speech");
   // Similar words picked instead (휴지통 for 쓰레기통): each is said so and set aside, the pick goes on.

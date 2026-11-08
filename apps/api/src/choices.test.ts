@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createCards } from "./cardStore.js";
-import { CHOICE_OPTIONS, distractors, senses } from "./choices.js";
+import { CHOICE_OPTIONS, distractors, jamo, letterDistance, senses } from "./choices.js";
 import { openDb } from "./db/client.js";
 import { OWNER_ID } from "./users.js";
 import { testApp } from "./testing.js";
@@ -45,5 +45,13 @@ describe("choices", () => {
     expect(res.status).toBe(200);
     expect(res.json.options).toEqual({ [a]: [expect.objectContaining({ korean: "불", meaning: "огонь" })] });
     expect((await t.request("/reviews/choices?cardIds=abc")).status).toBe(400);
+  });
+});
+
+describe("letterDistance", () => {
+  it("is small for words spelled alike and large for different ones", () => {
+    expect(jamo("사과")).toEqual(["ㅅ", "ㅏ", "ㄱ", "ㅘ"]);
+    expect(letterDistance("사과", "사과")).toBe(0);
+    expect(letterDistance("바지", "비자")).toBeLessThan(letterDistance("바지", "학교"));
   });
 });
