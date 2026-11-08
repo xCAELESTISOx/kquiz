@@ -2915,6 +2915,34 @@ p {
   animation: answer-in var(--dur-3) var(--ease-out) backwards;
 }
 
+/* ---------- Home Screen app height (lib/viewport.ts) ---------- */
+
+/* iOS may lay a standalone app out short of the screen; everything is pinned to the screen's height. */
+html.app-h #root {
+  bottom: auto;
+  height: var(--app-h);
+}
+
+html.app-h .shell,
+html.app-h .screen,
+html.app-h .login {
+  min-height: var(--app-h);
+}
+
+html.app-h .review {
+  height: var(--app-h);
+}
+
+html.app-h .tabbar {
+  bottom: auto;
+  top: calc(var(--app-h) - var(--tabbar-h) - var(--safe-bottom));
+}
+
+html.app-h .sheet-backdrop {
+  bottom: auto;
+  height: var(--app-h);
+}
+
 /* ---------- On-screen keyboard ---------- */
 
 /* iOS keeps 100dvh under the keyboard: the app takes only the visible part (lib/keyboard.ts). */
