@@ -27,17 +27,17 @@ export interface Drill {
 
 // Dev without apps/api: a little to look at. The audio itself 404s there.
 const DEMO_SHADOW: ShadowItem[] = [
-  { cardId: 1, word: "안녕하세요", meaning: "здравствуйте", ko: "선생님, 안녕하세요!", ru: "Здравствуйте, учитель!" },
-  { cardId: 2, word: "물", meaning: "вода", ko: "물 한 잔 주세요.", ru: "Стакан воды, пожалуйста." },
+  { cardId: 1, word: "안녕하세요", meaning: "hello", ko: "선생님, 안녕하십니까?", ru: "Hello, teacher." },
+  { cardId: 2, word: "물", meaning: "water", ko: "물 한 잔 주십시오.", ru: "A glass of water, please." },
 ];
 const DEMO_DRILLS: Drill[] = [
   {
     id: 1,
     contrast: "ㄱ/ㅋ/ㄲ",
     words: [
-      { korean: "기다", meaning: "ползти" },
+      { korean: "기다", meaning: "to crawl" },
       { korean: "키다", meaning: null },
-      { korean: "끼다", meaning: "надевать" },
+      { korean: "끼다", meaning: "to put on" },
     ],
     correct: 2,
     wrong: 3,
@@ -48,8 +48,8 @@ const DEMO_DRILLS: Drill[] = [
     id: 2,
     contrast: "ㅓ/ㅗ",
     words: [
-      { korean: "거리", meaning: "улица" },
-      { korean: "고리", meaning: "кольцо" },
+      { korean: "거리", meaning: "street" },
+      { korean: "고리", meaning: "ring" },
     ],
     correct: 4,
     wrong: 1,

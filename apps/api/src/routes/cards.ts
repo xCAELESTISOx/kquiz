@@ -76,7 +76,7 @@ export function cardRoutes(db: Db, now: () => Date, timeZone: string) {
     return c.json(parseBulk(body.data.text));
   });
 
-  // Either pasted lines (`한국어 — перевод`) or ready card objects; at most MAX_BATCH cards.
+  // Either pasted lines (`한국어 — translation`) or ready card objects; at most MAX_BATCH cards.
   app.post("/bulk", async (c) => {
     const body = bulkBody.safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: "invalid_request", issues: body.error.issues }, 400);
@@ -175,7 +175,7 @@ export function cardRoutes(db: Db, now: () => Date, timeZone: string) {
     return c.json(result);
   });
 
-  // Words just learned in "Учить" for a group enter reviews: tomorrow, or later today the ones missed on the way.
+  // Words just learned in "Learn" for a group enter reviews: tomorrow, or later today the ones missed on the way.
   // Cards already in reviews are left alone.
   app.post("/learned", async (c) => {
     const body = learnedBody.safeParse(await c.req.json().catch(() => null));

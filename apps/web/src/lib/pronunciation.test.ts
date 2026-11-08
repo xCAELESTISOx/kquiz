@@ -41,15 +41,15 @@ describe("pronunciation", () => {
       {
         syllable: "국",
         status: "wrong",
-        label: "Патчхим", detail: "нужно ㅇ [ŋ], слышно ㄱ [k]",
-        fix: "Здесь звук носовой: перед ㄴ и ㅁ ㄱ читается как ㅇ. Не обрывай его, пусти воздух в нос.",
+        label: "Batchim", detail: "expected ㅇ [ŋ], heard ㄱ [k]",
+        fix: "This sound is nasal: before ㄴ and ㅁ, ㄱ is read as ㅇ. Don't cut it off, let the air out through your nose.",
       },
-      { syllable: "물", status: "weak", label: "Гласная", detail: "ㅜ [u] звучит неуверенно" },
+      { syllable: "물", status: "weak", label: "Vowel", detail: "ㅜ [u] sounds unsure" },
     ]);
   });
 
   it("never calls weak syllables a mistake", () => {
     expect(verdict({ ...result, suggestedRating: "good" }).tone).toBe("ok");
-    expect(verdict(result).title).toBe("Почти");
+    expect(verdict(result).title).toBe("Almost");
   });
 });

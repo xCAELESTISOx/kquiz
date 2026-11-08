@@ -18,7 +18,7 @@ export type BuildAsk = "meaning" | "sound";
 /**
  * A phrase put together from its blocks, with wrong ones mixed in: look-alikes with another particle
  * or ending, and blocks of other phrases. A phrase met for the first time is shown whole before it is
- * asked. Sends its rating as soon as it is checked; "Дальше" tells the session.
+ * asked. Sends its rating as soon as it is checked; "Next" tells the session.
  */
 export function PhraseCard({
   item,
@@ -30,7 +30,7 @@ export function PhraseCard({
   item: QueueItem;
   tiles: PhraseTiles | undefined;
   ask: BuildAsk;
-  /** "Учить": nothing is sent, the schedule and the stats stay as they were. */
+  /** "Learn": nothing is sent, the schedule and the stats stay as they were. */
   practice?: boolean;
   onDone: (rating: RatingName) => void;
 }) {
@@ -105,7 +105,7 @@ export function PhraseCard({
       <>
         <div className="review-stage">
           <div className="review-card phrase-card">
-            <p className="phrase-kicker">Новая фраза</p>
+            <p className="phrase-kicker">New phrase</p>
             <p className="phrase-whole" lang="ko">
               {card.korean}
             </p>
@@ -119,7 +119,7 @@ export function PhraseCard({
             <PhraseParts card={card} />
             <CardNotes card={card} />
             {canSpeak() && (
-              <button type="button" className="icon-button speak-button" aria-label="Послушать" onClick={() => speak(card)}>
+              <button type="button" className="icon-button speak-button" aria-label="Listen" onClick={() => speak(card)}>
                 <SpeakerIcon />
               </button>
             )}
@@ -127,9 +127,9 @@ export function PhraseCard({
         </div>
         <footer className="review-actions">
           <button type="button" className="button primary" onClick={start}>
-            Собрать её
+            Build it
           </button>
-          <p className="review-tip muted small">Послушай пару раз и повтори вслух</p>
+          <p className="review-tip muted small">Listen a couple of times and repeat it aloud</p>
         </footer>
       </>
     );
@@ -142,10 +142,10 @@ export function PhraseCard({
       <div className="review-stage">
         <div className="review-card phrase-card" data-result={result ? (correct ? "right" : "wrong") : undefined}>
           {!practice && leeches.has(card.id) && <LeechBadge />}
-          <p className="speech-ask">{ask === "sound" ? "Собери, что слышишь" : "Собери фразу по-корейски"}</p>
+          <p className="speech-ask">{ask === "sound" ? "Build what you hear" : "Build the phrase in Korean"}</p>
           {ask === "sound" ? (
             !result && (
-              <button type="button" className="listen-play" aria-label="Послушать ещё раз" onClick={() => speak(card)}>
+              <button type="button" className="listen-play" aria-label="Listen again" onClick={() => speak(card)}>
                 <SpeakerIcon />
               </button>
             )
@@ -153,7 +153,7 @@ export function PhraseCard({
             <p className="speech-meaning phrase-prompt">{card.meaning}</p>
           )}
 
-          <div className="phrase-line" lang="ko" aria-label="Собранная фраза">
+          <div className="phrase-line" lang="ko" aria-label="Your phrase">
             {set.blocks.map((_, i) => {
               const tile = picked[i];
               const state = result?.slots[i];
@@ -166,7 +166,7 @@ export function PhraseCard({
                   className="phrase-chip"
                   data-state={state}
                   disabled={!!result}
-                  aria-label={`убрать ${tile.text}`}
+                  aria-label={`remove ${tile.text}`}
                   onClick={() => setPicked((p) => p.filter((t) => t.id !== tile.id))}
                 >
                   {tile.text}
@@ -188,7 +188,7 @@ export function PhraseCard({
               <PhraseParts card={card} />
               <CardNotes card={card} />
               {canSpeak() && (
-                <button type="button" className="icon-button speak-button" aria-label="Послушать фразу" onClick={() => speak(card)}>
+                <button type="button" className="icon-button speak-button" aria-label="Listen to the phrase" onClick={() => speak(card)}>
                   <SpeakerIcon />
                 </button>
               )}
@@ -201,7 +201,7 @@ export function PhraseCard({
         {error && <p className="notice notice-error speech-notice">{error}</p>}
         {result && (
           <p className={`sounds-feedback tone-${correct ? "ok" : "wrong"}`}>
-            {correct ? (result.rating === "hard" ? "Верно, но не сразу" : "Верно") : result.gaveUp ? "Вот как правильно" : "Не так, правильно выше"}
+            {correct ? (result.rating === "hard" ? "Correct, after a try" : "Correct") : result.gaveUp ? "Here's the right one" : "Not quite, the right one is above"}
           </p>
         )}
       </div>
@@ -209,7 +209,7 @@ export function PhraseCard({
       <footer className="review-actions phrase-actions">
         {result ? (
           <button type="button" className="button primary" onClick={() => onDone(result.rating)}>
-            Дальше
+            Next
           </button>
         ) : (
           <>
@@ -229,10 +229,10 @@ export function PhraseCard({
             </div>
             <div className="phrase-buttons">
               <button type="button" className="chip-button dont-know" onClick={() => check(true)}>
-                Не знаю
+                Don't know
               </button>
               <button type="button" className="button primary" disabled={!full} onClick={() => check()}>
-                Проверить
+                Check
               </button>
             </div>
           </>

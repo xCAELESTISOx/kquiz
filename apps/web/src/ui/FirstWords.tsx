@@ -33,18 +33,18 @@ export function FirstWords() {
           첫 단어
         </h2>
         <p className="first-words-text">
-          Слов пока нет. Добавьте первые, и здесь каждый день будет очередь на повторение.
+          No words yet. Add your first ones, and a review queue will be waiting here every day.
         </p>
       </div>
 
-      <nav className="practice-links first-words-ways" aria-label="Как добавить слова">
+      <nav className="practice-links first-words-ways" aria-label="Ways to add words">
         <a href="#/add" onClick={() => pickMode("single")} style={{ "--i": 0 } as CSSProperties}>
           <span className="practice-icon">
             <PenIcon />
           </span>
           <span className="practice-text">
-            <span className="practice-title">По одному</span>
-            <span className="practice-sub">Слово, перевод и пример</span>
+            <span className="practice-title">One by one</span>
+            <span className="practice-sub">A word, its translation and an example</span>
           </span>
           <ChevronIcon />
         </a>
@@ -53,8 +53,8 @@ export function FirstWords() {
             <ListIcon />
           </span>
           <span className="practice-text">
-            <span className="practice-title">Списком</span>
-            <span className="practice-sub">Вставить сразу много строк</span>
+            <span className="practice-title">As a list</span>
+            <span className="practice-sub">Paste many lines at once</span>
           </span>
           <ChevronIcon />
         </a>
@@ -63,8 +63,8 @@ export function FirstWords() {
             <SparkIcon />
           </span>
           <span className="practice-text">
-            <span className="practice-title">Попросить Claude</span>
-            <span className="practice-sub">«Добавь в KQuiz 10 слов про еду»</span>
+            <span className="practice-title">Ask Claude</span>
+            <span className="practice-sub">“Add 10 food words to KQuiz”</span>
           </span>
           <ChevronIcon />
         </a>

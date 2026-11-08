@@ -85,7 +85,7 @@ interface RequestOptions<T> {
 }
 
 /** The connection, not the server: offline, or cut off by iOS while the app was in the background. */
-export const NO_CONNECTION = "Нет связи с сервером. Попробуй ещё раз";
+export const NO_CONNECTION = "Can't reach the server. Try again";
 
 export function isConnectionError(error: unknown): boolean {
   return error instanceof ApiError && error.status === 0;
@@ -145,7 +145,7 @@ async function send<T>(method: string, path: string, opts: RequestOptions<T> & {
     lastAnswers.clear();
     forgetToday();
     location.assign(loginUrl());
-    throw new ApiError(401, "Нужно войти");
+    throw new ApiError(401, "Please sign in");
   }
   if (res.status === 403 && !retried && method !== "GET") {
     // The token may be stale after the session was renewed; fetch a fresh one once.
@@ -154,7 +154,7 @@ async function send<T>(method: string, path: string, opts: RequestOptions<T> & {
   }
   if (!res.ok && !opts.accept?.includes(res.status)) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    if (res.status === 429) throw new ApiError(429, "Слишком много запросов, попробуй через минуту", data.error);
+    if (res.status === 429) throw new ApiError(429, "Too many requests, try again in a minute", data.error);
     throw new ApiError(res.status, data.error ?? `HTTP ${res.status}`, data.error);
   }
   return (await res.json()) as T;
@@ -236,7 +236,7 @@ export const auth = {
   registerOptions: (who: RegisterAs) => request<Record<string, unknown>>("POST", "/auth/register/options", { body: who }),
   registerVerify: (who: RegisterAs, response: unknown) =>
     request<{ ok: boolean; csrfToken?: string }>("POST", "/auth/register/verify", {
-      body: { ...who, response, name: navigator.platform || "iPhone" },
+      body: { ...who, response, name: navigator.platform || "Device" },
     }),
   invite: (code: string) =>
     request<{ status: InviteStatus }>("GET", `/auth/invite?code=${encodeURIComponent(code)}`, { fallback: () => ({ status: "ok" }) }),

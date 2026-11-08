@@ -5,8 +5,8 @@ const envSchema = z.object({
   // Public origin of the app, e.g. https://kquiz.example.com. Passkeys are bound to it.
   ORIGIN: z.url().default("http://localhost:5173"),
   RP_NAME: z.string().default("KQuiz"),
-  // Secret header value that Cloudflare adds to every proxied request (Transform Rule).
-  // When set, requests without it are rejected: nobody can reach the API around Cloudflare.
+  // Secret header value the reverse proxy in front of the API adds to every request (deploy/Caddyfile;
+  // a CDN such as Cloudflare can do the same). When set, requests without it are rejected.
   ORIGIN_SECRET: z.string().min(32).optional(),
   // One-time code for binding the first passkey. Generated at startup when unset.
   SETUP_CODE: z.string().min(16).optional(),

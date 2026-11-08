@@ -29,13 +29,13 @@ function path(contour: Contour): string {
 export function IntonationChart({ state, compact = false }: { state: IntonationState | undefined; compact?: boolean }) {
   if (!state) return null;
   if (state.status === "unavailable") {
-    return <p className="intonation-note muted small">Мелодию покажу, когда сервер озвучит образец.</p>;
+    return <p className="intonation-note muted small">The melody will show once the server records the sample.</p>;
   }
   if (state.status === "working") {
     return (
       <div className="intonation is-working" aria-busy="true">
         <Spinner />
-        <span className="muted small">Сравниваю мелодию…</span>
+        <span className="muted small">Comparing the melody…</span>
       </div>
     );
   }
@@ -50,7 +50,7 @@ export function IntonationChart({ state, compact = false }: { state: IntonationS
         className="intonation-chart"
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         role="img"
-        aria-label={`Мелодия образца и твоя. ${verdict.title}.`}
+        aria-label={`The sample's melody and yours. ${verdict.title}.`}
       >
         {comparison.diverging.map(([from, to]) => (
           <rect key={from} className="intonation-apart" x={x(from)} y={4} width={Math.max(x(to) - x(from), 2)} height={HEIGHT - 8} rx={6} />
@@ -61,8 +61,8 @@ export function IntonationChart({ state, compact = false }: { state: IntonationS
       </svg>
       <div className="intonation-foot">
         <span className="intonation-legend" aria-hidden="true">
-          <span className="is-reference">Образец</span>
-          <span className="is-yours">Ты</span>
+          <span className="is-reference">Sample</span>
+          <span className="is-yours">You</span>
         </span>
         {!compact && <p className="intonation-text muted small">{verdict.text}</p>}
       </div>

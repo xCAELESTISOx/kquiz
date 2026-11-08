@@ -6,16 +6,16 @@ import { Spinner } from "../ui/Spinner";
 
 // A friend opens the owner's one-time link, gives a name and makes a passkey: that is their account.
 const SERVER_ERRORS: Record<string, string> = {
-  forbidden: "Ссылка уже не работает. Попроси новую.",
-  challenge_expired: "Запрос устарел. Нажми кнопку ещё раз.",
-  verification_failed: "Passkey не создался. Попробуй ещё раз.",
+  forbidden: "This link no longer works. Ask for a new one.",
+  challenge_expired: "The request expired. Tap the button again.",
+  verification_failed: "The passkey wasn't created. Try again.",
 };
 
 function errorText(error: unknown): string {
   const { name, message } = (error ?? {}) as Partial<Error>;
-  if (name === "NotAllowedError" || name === "AbortError") return "Отменено. Нажми кнопку ещё раз.";
-  if (name === "InvalidStateError") return "На этом телефоне уже есть passkey для KQuiz. Войди им.";
-  return (message ? SERVER_ERRORS[message] : undefined) ?? (message ? `Не получилось: ${message}` : "Не получилось.");
+  if (name === "NotAllowedError" || name === "AbortError") return "Canceled. Tap the button again.";
+  if (name === "InvalidStateError") return "This phone already has a KQuiz passkey. Sign in with it.";
+  return (message ? SERVER_ERRORS[message] : undefined) ?? (message ? `Something went wrong: ${message}` : "Something went wrong.");
 }
 
 export function InviteScreen({ code }: { code: string }) {
@@ -25,7 +25,7 @@ export function InviteScreen({ code }: { code: string }) {
   const [error, setError] = useState<string>();
 
   useEffect(() => {
-    document.title = "Приглашение · KQuiz";
+    document.title = "Invite · KQuiz";
     auth.invite(code).then(
       ({ status }) => setStatus(status),
       (e) => {
@@ -39,7 +39,7 @@ export function InviteScreen({ code }: { code: string }) {
     event.preventDefault();
     if (busy) return;
     const userName = name.trim();
-    if (!userName) return setError("Напиши, как тебя зовут.");
+    if (!userName) return setError("Enter your name.");
     setBusy(true);
     setError(undefined);
     const who = { invite: code, userName };
@@ -68,11 +68,11 @@ export function InviteScreen({ code }: { code: string }) {
       {status === "ok" && (
         <form className="login-body" onSubmit={join}>
           <p className="muted">
-            Тебя пригласили учить корейский в KQuiz. Карточки, повторения и статистика будут твои, их никто не увидит.
-            Вход по passkey: Face ID или код телефона.
+            You're invited to learn Korean in KQuiz. Your cards, reviews and stats are yours alone; no one else sees them.
+            You sign in with a passkey: Face ID or your phone's passcode.
           </p>
           <label className="field">
-            <span className="field-label">Как тебя зовут</span>
+            <span className="field-label">Your name</span>
             <input
               className="input"
               name="name"
@@ -85,7 +85,7 @@ export function InviteScreen({ code }: { code: string }) {
           <div aria-live="polite">{error && <p className="notice notice-error">{error}</p>}</div>
           <button type="submit" className="button primary" disabled={busy}>
             {busy && <Spinner />}
-            Создать passkey
+            Create passkey
           </button>
         </form>
       )}
@@ -94,12 +94,12 @@ export function InviteScreen({ code }: { code: string }) {
         <div className="login-body">
           <p className="notice">
             {status === "full"
-              ? "Мест больше нет. Напиши тому, кто тебя пригласил."
-              : "Эта ссылка уже использована или устарела. Попроси новую."}
+              ? "There are no places left. Message the person who invited you."
+              : "This link was already used or has expired. Ask for a new one."}
           </p>
           {error && <p className="notice notice-error">{error}</p>}
           <a className="button" href="/login">
-            У меня уже есть вход
+            I already have an account
           </a>
         </div>
       )}

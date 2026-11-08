@@ -8,7 +8,7 @@ export function HiddenTranslation({ text }: { text: string }) {
       type="button"
       className={`hidden-translation${open ? " is-open" : ""}`}
       aria-expanded={open}
-      aria-label={open ? undefined : "Показать перевод"}
+      aria-label={open ? undefined : "Show translation"}
       onClick={(e) => {
         e.stopPropagation();
         setOpen((o) => !o);

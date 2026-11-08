@@ -20,7 +20,7 @@ export function AddScreen() {
   const [mode, setMode] = useState<Mode>(() => (localStorage.getItem(MODE_KEY) === "bulk" ? "bulk" : "single"));
 
   useEffect(() => {
-    document.title = "Добавить · KQuiz";
+    document.title = "Add · KQuiz";
   }, []);
 
   function switchMode(next: Mode) {
@@ -32,15 +32,15 @@ export function AddScreen() {
     <main className="screen">
       <header className="screen-header">
         <h1 className="title">추가</h1>
-        <p className="subtitle">Новая карточка</p>
+        <p className="subtitle">New card</p>
       </header>
 
-      <div className="segmented" role="tablist" aria-label="Способ добавления" data-mode={mode}>
+      <div className="segmented" role="tablist" aria-label="How to add" data-mode={mode}>
         <button type="button" role="tab" aria-selected={mode === "single"} onClick={() => switchMode("single")}>
-          Одна
+          One
         </button>
         <button type="button" role="tab" aria-selected={mode === "bulk"} onClick={() => switchMode("bulk")}>
-          Списком
+          List
         </button>
       </div>
 
@@ -74,9 +74,9 @@ function SingleForm() {
     event.preventDefault();
     if (busy) return;
     const errors = {
-      ...(!korean.trim() && { korean: phrase ? "Впиши фразу по-корейски" : "Впиши слово по-корейски" }),
-      ...(!meaning.trim() && { meaning: "Впиши перевод" }),
-      ...(!phrase && !exampleKo.trim() !== !exampleMeaning.trim() && { example: "Нужны и пример, и его перевод" }),
+      ...(!korean.trim() && { korean: phrase ? "Enter the phrase in Korean" : "Enter the word in Korean" }),
+      ...(!meaning.trim() && { meaning: "Enter the translation" }),
+      ...(!phrase && !exampleKo.trim() !== !exampleMeaning.trim() && { example: "Add both the example and its translation" }),
     };
     setFieldErrors(errors);
     if (errors.korean) return koreanRef.current?.focus();
@@ -108,7 +108,7 @@ function SingleForm() {
         setRegister(undefined);
         koreanRef.current?.focus();
       } else {
-        setError(`«${card.korean}» уже есть в карточках`);
+        setError(`"${card.korean}" is already in your cards`);
       }
     } catch (e) {
       setError((e as Error).message);
@@ -120,7 +120,7 @@ function SingleForm() {
   return (
     <form className="form" onSubmit={submit}>
       <label className="field">
-        <span className="field-label">{phrase ? "Фраза по-корейски" : "По-корейски"}</span>
+        <span className="field-label">{phrase ? "Phrase in Korean" : "Korean"}</span>
         <input
           ref={koreanRef}
           className="input input-korean"
@@ -149,29 +149,28 @@ function SingleForm() {
         {fieldErrors.korean ? (
           <span className="field-error">{fieldErrors.korean}</span>
         ) : (
-          notSpeakable && <span className="field-hint">Не только хангыль: в тренировку произношения не попадёт</span>
+          notSpeakable && <span className="field-hint">Not just Hangul: it won't go into pronunciation practice</span>
         )}
       </label>
 
       <label className="toggle">
         <span className="toggle-text">
-          <span>Фраза целиком</span>
-          <span className="muted small">В повторении собирается из блоков, а не переводится</span>
+          <span>Whole phrase</span>
+          <span className="muted small">In review you build it from blocks instead of translating</span>
         </span>
         <input type="checkbox" role="switch" className="switch" checked={phrase} onChange={(e) => setPhraseSet(e.target.checked)} />
       </label>
 
       <label className="field">
-        <span className="field-label">Перевод</span>
+        <span className="field-label">Translation</span>
         <input
           ref={meaningRef}
           className="input"
-          lang="ru"
           autoComplete="off"
           enterKeyHint="done"
           name="meaning"
           aria-invalid={!!fieldErrors.meaning}
-          placeholder={phrase ? "например: приятного аппетита…" : "например: море…"}
+          placeholder={phrase ? "e.g. enjoy your meal…" : "e.g. sea…"}
           value={meaning}
           onChange={(e) => {
             setMeaning(e.target.value);
@@ -185,7 +184,7 @@ function SingleForm() {
         <div className="more-fields">
           {phrase && (
             <fieldset className="register-edit">
-              <legend className="field-label">Вежливость</legend>
+              <legend className="field-label">Politeness</legend>
               <div className="register-options">
                 {(Object.keys(REGISTER_LABELS) as Register[]).map((r) => (
                   <button
@@ -204,7 +203,7 @@ function SingleForm() {
           {!phrase && (
             <>
               <label className="field">
-                <span className="field-label">Пример</span>
+                <span className="field-label">Example</span>
                 <input
                   className="input"
                   lang="ko"
@@ -218,7 +217,7 @@ function SingleForm() {
                 />
               </label>
               <label className="field">
-                <span className="field-label">Перевод примера</span>
+                <span className="field-label">Example translation</span>
                 <input
                   className="input"
                   autoComplete="off"
@@ -233,14 +232,14 @@ function SingleForm() {
               </label>
             </>
           )}
-          <NotesField label={phrase ? "Когда говорят" : "Заметка"} value={notes} onChange={setNotes} marks={!phrase} />
+          <NotesField label={phrase ? "When it's said" : "Note"} value={notes} onChange={setNotes} marks={!phrase} />
           <label className="field">
-            <span className="field-label">Теги через запятую</span>
+            <span className="field-label">Tags, comma-separated</span>
             <input
               className="input"
               autoComplete="off"
               autoCapitalize="off"
-              placeholder="еда, глаголы…"
+              placeholder="food, verbs…"
               value={tags}
               onChange={(e) => setTags(e.target.value)}
             />
@@ -248,18 +247,18 @@ function SingleForm() {
         </div>
       ) : (
         <button type="button" className="link-button" onClick={() => setMore(true)}>
-          {phrase ? "Вежливость, заметка, теги" : "Пример, заметка, теги"}
+          {phrase ? "Politeness, note, tags" : "Example, note, tags"}
         </button>
       )}
 
       <p className="muted small">
-        {phrase ? "Разбор фразы по словам может добавить Claude." : "Произношение и романизация заполнятся сами."}
+        {phrase ? "Claude can add a word-by-word breakdown." : "Pronunciation and romanization fill in on their own."}
       </p>
 
       <div aria-live="polite">{error && <p className="notice notice-error">{error}</p>}</div>
 
       {added.length > 0 && (
-        <ul className="added-list" aria-label="Только что добавлены">
+        <ul className="added-list" aria-label="Just added">
           {added.map((card) => (
             <li key={card.korean} className="added-item">
               <CheckIcon />
@@ -275,7 +274,7 @@ function SingleForm() {
       <div className="bottom-actions">
         <button className="button primary" type="submit" disabled={busy}>
           {busy && <Spinner />}
-          Добавить карточку
+          Add card
         </button>
       </div>
     </form>
@@ -295,7 +294,7 @@ function BulkForm() {
   async function submit() {
     if (busy) return;
     if (!cards.length) {
-      setError(lines.length ? "Ни одна строка не разобралась. Поправь их по подсказкам ниже." : "Вставь слова, по одному на строку.");
+      setError(lines.length ? "No line could be read. Fix them using the hints below." : "Paste words, one per line.");
       return;
     }
     setBusy(true);
@@ -315,7 +314,7 @@ function BulkForm() {
   return (
     <div className="form">
       <label className="field">
-        <span className="field-label">Одна карточка на строку</span>
+        <span className="field-label">One card per line</span>
         <textarea
           className="input textarea textarea-bulk"
           lang="ko"
@@ -323,7 +322,7 @@ function BulkForm() {
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
-          placeholder={"물 — вода\n불 — огонь\n하늘 — небо…"}
+          placeholder={"물 — water\n불 — fire\n하늘 — sky…"}
           value={text}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -337,19 +336,19 @@ function BulkForm() {
             setError(undefined);
           }}
         />
-        <span className="field-hint muted">Разделитель: тире, дефис с пробелами или табуляция</span>
+        <span className="field-hint muted">Separator: a dash, a hyphen with spaces, or a tab</span>
       </label>
 
       {result && (
         <div className="notice notice-ok" role="status" aria-live="polite">
-          Добавлено: {result.created.length}
-          {result.duplicates.length > 0 && <>. Уже были: {result.duplicates.map((d) => d.korean).join(", ")}</>}
-          {result.rejected.length > 0 && <>. Не приняты: {result.rejected.map((r) => r.input).join(", ")}</>}
+          Added: {result.created.length}
+          {result.duplicates.length > 0 && <>. Already there: {result.duplicates.map((d) => d.korean).join(", ")}</>}
+          {result.rejected.length > 0 && <>. Not accepted: {result.rejected.map((r) => r.input).join(", ")}</>}
         </div>
       )}
 
       {lines.length > 0 && (
-        <ul className="preview-list" aria-label="Предпросмотр">
+        <ul className="preview-list" aria-label="Preview">
           {lines.map((l) =>
             l.card ? (
               <li key={l.line} className="preview-item">
@@ -362,7 +361,7 @@ function BulkForm() {
               <li key={l.line} className="preview-item preview-bad">
                 <span className="preview-raw">{l.raw}</span>
                 <span className="preview-error">
-                  строка {l.line}: {l.error}
+                  line {l.line}: {l.error}
                 </span>
               </li>
             ),
@@ -375,7 +374,7 @@ function BulkForm() {
       <div className="bottom-actions">
         <button className="button primary" type="button" disabled={busy} onClick={submit}>
           {busy && <Spinner />}
-          {cards.length ? `Добавить ${cards.length} ${cardsWord(cards.length)}` : "Добавить карточки"}
+          {cards.length ? `Add ${cards.length} ${cardsWord(cards.length)}` : "Add cards"}
         </button>
       </div>
     </div>

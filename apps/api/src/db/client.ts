@@ -13,7 +13,7 @@ export function openDb(path: string): Db {
   const sqlite = new Database(path);
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("busy_timeout = 5000");
-  // SQLite's lower() and LIKE fold only ASCII; search must also match "Яблоко" with "яблоко".
+  // SQLite's lower() and LIKE fold only ASCII; search must also match "Яблоко" with "яблоко" (or "Äpfel" with "äpfel").
   sqlite.function("ulower", { deterministic: true }, (text: unknown) =>
     typeof text === "string" ? text.toLocaleLowerCase() : text,
   );

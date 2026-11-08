@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { playOnce } from "../lib/audioSession";
 import { play, practice, preload, stopPlayback, textAudioUrl, useIntonation, type ShadowItem } from "../lib/practice";
 import { canRecord, Recorder, RecorderFailure, type RecorderError } from "../lib/recorder";
+import { phrasesWord } from "../lib/plural";
 import { navigate } from "../lib/router";
 import { IntonationChart } from "../ui/IntonationChart";
 import { CloseIcon, PlayIcon, RetryIcon, SpeakerIcon } from "../ui/icons";
@@ -12,10 +13,10 @@ import "../ui/practice.css";
 type Phase = "prompt" | "recording" | "scoring" | "result";
 
 const MIC_ERRORS: Record<RecorderError, string> = {
-  unsupported: "Этот браузер не умеет записывать звук. Открой приложение в Safari на iPhone.",
-  denied: "Нет доступа к микрофону. Разреши его в Настройках → Safari → Микрофон и попробуй снова.",
-  no_microphone: "Не нашёлся микрофон.",
-  failed: "Не получилось включить микрофон. Попробуй ещё раз.",
+  unsupported: "This browser can't record audio. Try an up-to-date Chrome, Safari, Firefox or Edge.",
+  denied: "No access to the microphone. Allow it in your browser or system settings and try again.",
+  no_microphone: "No microphone found.",
+  failed: "Couldn't turn on the microphone. Try again.",
 };
 
 // Speaking over the reference is real shadowing, but without headphones the reference leaks into
@@ -48,7 +49,7 @@ export function ShadowingScreen() {
   const intonation = useIntonation(refUrl, take?.wav);
 
   useEffect(() => {
-    document.title = "Шедоуинг · KQuiz";
+    document.title = "Shadowing · KQuiz";
     practice.shadowing(10).then(
       ({ items }) => setItems(items),
       (e: Error) => setError(e.message),
@@ -76,7 +77,7 @@ export function ShadowingScreen() {
   const listen = useCallback(() => {
     if (!item) return;
     void play(textAudioUrl(item.ko)).then((ok) => {
-      if (!ok) setError("Образец ещё не готов. Сервер озвучивает примеры в фоне, загляни позже.");
+      if (!ok) setError("The sample isn't ready yet. The server records examples in the background, check back later.");
     });
   }, [item]);
 
@@ -89,7 +90,7 @@ export function ShadowingScreen() {
     const recorded = await r.stop();
     if (!recorded || recorded.seconds < 0.5) {
       setPhase(take ? "result" : "prompt");
-      setError("Запись получилась слишком короткой. Скажи фразу целиком.");
+      setError("The recording is too short. Say the whole phrase.");
       return;
     }
     setTake({ wav: recorded.wav, url: URL.createObjectURL(new Blob([recorded.wav], { type: "audio/wav" })) });
@@ -157,7 +158,7 @@ export function ShadowingScreen() {
   return (
     <main className="review speech shadow">
       <header className="review-top">
-        <a className="icon-button" href="#/" aria-label="Закончить">
+        <a className="icon-button" href="#/" aria-label="Finish">
           <CloseIcon />
         </a>
         <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={index}>
@@ -177,7 +178,7 @@ export function ShadowingScreen() {
           <div className="review-stage">
             <div className="review-card speech-card" key={index}>
               <div className="speech-body">
-                <p className="speech-ask">Повтори за образцом</p>
+                <p className="speech-ask">Repeat after the sample</p>
                 <p className="shadow-sentence" lang="ko">
                   {item.ko}
                 </p>
@@ -189,7 +190,7 @@ export function ShadowingScreen() {
                 {phase === "result" && <IntonationChart state={intonation} />}
               </div>
 
-              <button type="button" className="icon-button speak-button" aria-label="Послушать образец" onClick={listen}>
+              <button type="button" className="icon-button speak-button" aria-label="Play the sample" onClick={listen}>
                 <SpeakerIcon />
               </button>
             </div>
@@ -203,21 +204,21 @@ export function ShadowingScreen() {
                 <div className="speech-again">
                   <button type="button" className="chip-button" onClick={listen}>
                     <SpeakerIcon />
-                    Образец
+                    Sample
                   </button>
                   {take && (
                     <button type="button" className="chip-button" onClick={() => playOnce(take.url)}>
                       <PlayIcon />
-                      Моя запись
+                      My recording
                     </button>
                   )}
                   <button type="button" className="chip-button" onClick={() => void record()}>
                     <RetryIcon />
-                    Заново
+                    Again
                   </button>
                 </div>
                 <button type="button" className="button primary" onClick={next}>
-                  {index + 1 < total ? "Дальше" : "Готово"}
+                  {index + 1 < total ? "Next" : "Done"}
                 </button>
               </>
             ) : (
@@ -230,7 +231,7 @@ export function ShadowingScreen() {
                   disabled={phase !== "prompt"}
                 >
                   <HeadphonesIcon />
-                  {together ? "Говорю вместе с образцом" : "Говорить вместе с образцом"}
+                  {together ? "Speaking along with the sample" : "Speak along with the sample"}
                   <span className="shadow-switch" aria-hidden="true" />
                 </button>
                 <RecordButton
@@ -239,8 +240,8 @@ export function ShadowingScreen() {
                   seconds={seconds}
                   disabled={!canRecord()}
                   onPress={() => void record()}
-                  idleCaption={together ? "В наушниках: нажми и говори вместе с ним" : "Послушай и нажми, чтобы повторить"}
-                  busyCaption="Сравниваю…"
+                  idleCaption={together ? "With headphones: tap and speak along" : "Listen, then tap to repeat"}
+                  busyCaption="Comparing…"
                 />
               </>
             )}
@@ -260,11 +261,11 @@ function ShadowingDone({ count }: { count: number }) {
         </p>
         <p className="finished-text">
           {count
-            ? `Повторено фраз: ${count}.`
-            : "Пока нечего повторять: сервер ещё озвучивает примеры из карточек. Загляни чуть позже."}
+            ? `You repeated ${count} ${phrasesWord(count)}.`
+            : "Nothing to repeat yet: the server is still recording the examples from your cards. Check back a bit later."}
         </p>
         <a className="button primary" href="#/">
-          На главную
+          Home
         </a>
       </div>
     </div>

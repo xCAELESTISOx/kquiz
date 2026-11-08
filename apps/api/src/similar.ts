@@ -1,6 +1,6 @@
-// Similar words: two of the user's cards easy to mix up, such as 휴지통 «корзина для бумаг» and
-// 쓰레기통 «мусорное ведро», or 아래 and 밑. A link goes both ways and carries a short note on how the
-// two differ. When the Russian is shown and the Korean asked for, answering with the linked word
+// Similar words: two of the user's cards easy to mix up, such as 휴지통 "wastebasket" and
+// 쓰레기통 "trash can", or 아래 and 밑. A link goes both ways and carries a short note on how the
+// two differ. When the translation is shown and the Korean asked for, answering with the linked word
 // isn't counted as a mistake: the app says which word that was and asks for the other one.
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";

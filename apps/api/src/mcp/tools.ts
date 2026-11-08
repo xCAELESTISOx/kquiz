@@ -9,40 +9,41 @@ export const MAX_CARDS_PER_CALL = 50;
 
 // Told to Claude once per connection, so cards from chat match the ones made in the app.
 const instructions = `KQuiz is the user's personal Korean flashcard deck; each person who connects it sees only their own cards. Cards are reviewed for meaning and, when speakable, for pronunciation.
+The app's interface is in English, but the deck's translations are in the user's own language: write every meaning, example translation, gloss and note in the language the user's existing cards use (look with find_cards); with an empty deck, use the language the user writes to you in. Below, "translation" and "gloss" always mean in that language.
 - korean: the word or phrase in Hangul only (no hanja, Latin letters or brackets). Use dictionary form for verbs and adjectives unless the user asks otherwise.
-- meaning: a short Russian translation, the most common sense first.
+- meaning: a short translation, the most common sense first.
 - pronunciation (optional): how it is actually said, in Hangul without brackets (the app adds them), only when it differs from the spelling (e.g. 읽다 → 익따). Leave it out when it sounds as written.
-- examples (required, exactly ${EXAMPLES_PER_CARD}): short natural Korean sentences that use the word, each with its Russian translation, as {"ko", "ru"}. Vary the forms and situations, keep them at the user's level. Every add_cards card and every update_card call must carry all ${EXAMPLES_PER_CARD}; when editing, send the card's current examples again if they stay as they are.
-- notes (optional), in Russian, one point per line. The app lays them out by kind: a line opening with a mark goes under that mark's heading, any other line is a plain remark shown first. Marks: "≠" a word not to mix up with (Не путать), "↔" the opposite (Противоположность), "≈" a word near in meaning or a synonym (Близкие по смыслу), "+" a set expression or collocation with the word (Выражения), "=" the literal meaning (Дословно), "!" a trap: a homonym, an exception (Внимание). After ≠ ↔ ≈ + put the Korean first, then " — " and a short Russian gloss: "≠ 밑 — прямо под, вплотную", "↔ 위 — верх", "+ 아래층 — нижний этаж". Keep each line short; usage advice goes in a plain line. Example for 아래:
-Просто «ниже», пара к 위. Часто взаимозаменяемо с 밑.
-≠ 밑 — прямо под, вплотную; ещё «дно»
-↔ 위 — верх
-+ 아래층 — нижний этаж
-+ 아래요 — «ниже» (на кассе)
-A word linked with similar is already shown under Не путать with its note, so a ≠ line for it is only for what the pair's note doesn't say.
-- tags: lowercase topics such as "еда" or "глаголы".
-- roots: the Sino-Korean roots of the word, one per syllable that comes from hanja, as {"ko", "hanja", "meaning"}: the syllable, its character and a short Russian gloss of the character, e.g. 학교 → [{"ko":"학","hanja":"學","meaning":"учёба"},{"ko":"교","hanja":"校","meaning":"школа"}]. Use the traditional character the word is really written with, and the same gloss for the same character across cards, so the app can link a word to others with that root (its word family). A native Korean word (사랑, 먹다) or a loanword gets []. For a mixed word list only the hanja syllables (공부하다 → 공 工, 부 夫). Give roots for every card you add.
-- similar (optional): the user's other words easy to mix up with this one, as {"korean", "note"}: two words for near things (휴지통 / 쓰레기통, 아래 / 밑, 안 / 속, 책장 / 선반) or two words for one thing (공책 / 노트). note says in Russian how the two differ, the same note for both words of the pair, e.g. "휴지통 — корзина для бумаг у стола; 쓰레기통 — мусорное ведро на кухне или улице". A link goes both ways, so give it on one card of the pair. The app shows the pair on both cards, puts the other word among the options when the user picks the Korean for the Russian, and when the user answers with the other word it says which word that was and asks for the right one instead of counting a mistake. So keep each word's meaning distinct, and link the pair even when it is distinct. Whenever you add a word with such a neighbour, link them; to link or unlink words already in the deck, or change a note, use link_similar.
+- examples (required, exactly ${EXAMPLES_PER_CARD}): short natural Korean sentences that use the word, each with its translation, as {"ko", "ru"} (the field is named ru for historical reasons; it holds the translation in the deck's language). Vary the forms and situations, keep them at the user's level. Every add_cards card and every update_card call must carry all ${EXAMPLES_PER_CARD}; when editing, send the card's current examples again if they stay as they are.
+- notes (optional), one point per line. The app lays them out by kind: a line opening with a mark goes under that mark's heading, any other line is a plain remark shown first. Marks: "≠" a word not to mix up with (Don't confuse), "↔" the opposite (Opposite), "≈" a word near in meaning or a synonym (Close in meaning), "+" a set expression or collocation with the word (Expressions), "=" the literal meaning (Literally), "!" a trap: a homonym, an exception (Watch out). After ≠ ↔ ≈ + put the Korean first, then " — " and a short gloss: "≠ 밑 — right under, touching", "↔ 위 — top, above", "+ 아래층 — downstairs". Keep each line short; usage advice goes in a plain line. Example for 아래:
+Just "below", the pair of 위. Often interchangeable with 밑.
+≠ 밑 — right under, touching; also "bottom"
+↔ 위 — top, above
++ 아래층 — downstairs
++ 아래요 — "the one below" (at a counter)
+A word linked with similar is already shown under Don't confuse with its note, so a ≠ line for it is only for what the pair's note doesn't say.
+- tags: lowercase topics such as "food" or "verbs", in the deck's language.
+- roots: the Sino-Korean roots of the word, one per syllable that comes from hanja, as {"ko", "hanja", "meaning"}: the syllable, its character and a short gloss of the character, e.g. 학교 → [{"ko":"학","hanja":"學","meaning":"study"},{"ko":"교","hanja":"校","meaning":"school"}]. Use the traditional character the word is really written with, and the same gloss for the same character across cards, so the app can link a word to others with that root (its word family). A native Korean word (사랑, 먹다) or a loanword gets []. For a mixed word list only the hanja syllables (공부하다 → 공 工, 부 夫). Give roots for every card you add.
+- similar (optional): the user's other words easy to mix up with this one, as {"korean", "note"}: two words for near things (휴지통 / 쓰레기통, 아래 / 밑, 안 / 속, 책장 / 선반) or two words for one thing (공책 / 노트). note says how the two differ, the same note for both words of the pair, e.g. "휴지통 — wastebasket by a desk; 쓰레기통 — trash can in a kitchen or outside". A link goes both ways, so give it on one card of the pair. The app shows the pair on both cards, puts the other word among the options when the user picks the Korean for the translation, and when the user answers with the other word it says which word that was and asks for the right one instead of counting a mistake. So keep each word's meaning distinct, and link the pair even when it is distinct. Whenever you add a word with such a neighbour, link them; to link or unlink words already in the deck, or change a note, use link_similar.
 Cards added here don't enter reviews at once: they wait in a pool of new words and the app teaches them a few at a time, in the order added; a word enters reviews only once the user has learned it. So adding many words at once is fine.
 Call find_cards before adding words the user may already have; add_cards also reports duplicates. To fix a card, use update_card instead of adding a new one: any field can be changed, and an empty string clears pronunciation, romanization or notes. Cards cannot be deleted from here.
 When the user asks to fix hard cards, call get_leeches and rework each with update_card: a clearer meaning, a mnemonic or the confusing neighbour in notes (and link it with link_similar when it is a similar word), ${EXAMPLES_PER_CARD} fresh examples. A card that mixes two senses can be split: narrow it with update_card and add the other sense with add_cards. If a card should go, tell the user; only they can delete it in the app.
 Older cards may have no roots yet: when the user asks to fill them in, page through find_cards with without_roots and send them with set_roots, 50 at a time, until none are left.
 When the user asks for practice on sounds they confuse (ㄱ/ㅋ/ㄲ, ㅓ/ㅗ…), add listening drills with add_sound_drills.
-Set phrases learned whole (안녕히 가세요, 잘 먹겠습니다, 화장실이 어디예요?) go in with add_phrases, not add_cards. A phrase has no examples: instead parts breaks it into its pieces in order, exactly as written in the phrase, each with its dictionary form (base) when that differs and a short Russian gloss, e.g. 어떻게 지내요? → [{"ko":"어떻게","meaning":"как"},{"ko":"지내요","base":"지내다","meaning":"поживать"}]. The app links each piece to the user's card for that word and builds the phrase from these pieces, mixed with wrong ones, in reviews (Russian → Korean, and by ear). register is how polite it is: formal (합쇼체), polite (해요체) or casual (반말); notes say when it is said and the reply it usually gets. Keep the phrase in the form it is really said, not the dictionary form. When editing a phrase with update_card, send parts instead of examples.`;
+Set phrases learned whole (안녕히 가세요, 잘 먹겠습니다, 화장실이 어디예요?) go in with add_phrases, not add_cards. A phrase has no examples: instead parts breaks it into its pieces in order, exactly as written in the phrase, each with its dictionary form (base) when that differs and a short gloss, e.g. 어떻게 지내요? → [{"ko":"어떻게","meaning":"how"},{"ko":"지내요","base":"지내다","meaning":"to get along"}]. The app links each piece to the user's card for that word and builds the phrase from these pieces, mixed with wrong ones, in reviews (translation → Korean, and by ear). register is how polite it is: formal (합쇼체), polite (해요체) or casual (반말); notes say when it is said and the reply it usually gets. Keep the phrase in the form it is really said, not the dictionary form. When editing a phrase with update_card, send parts instead of examples.`;
 
 const cardInput = z.object({
   korean: z.string(),
   meaning: z.string(),
   pronunciation: z.string().optional(),
   romanization: z.string().optional(),
-  notes: z.string().optional().describe("Russian, one point per line; ≠ ↔ ≈ + = ! marks as in the server instructions"),
+  notes: z.string().optional().describe("One point per line, in the deck's language; ≠ ↔ ≈ + = ! marks as in the server instructions"),
   tags: z.array(z.string()).optional(),
   roots: z
     .array(
       z.object({
         ko: z.string().describe("One Hangul syllable of the word"),
         hanja: z.string().describe("Its hanja character"),
-        meaning: z.string().describe("Short Russian gloss of the character"),
+        meaning: z.string().describe("Short gloss of the character"),
       }),
     )
     .max(MAX_ROOTS)
@@ -55,7 +56,7 @@ const examplesInput = z
   .array(
     z.object({
       ko: z.string().describe("Korean sentence that uses the word"),
-      ru: z.string().describe("Its Russian translation"),
+      ru: z.string().describe("Its translation"),
     }),
   )
   .length(EXAMPLES_PER_CARD)
@@ -65,7 +66,7 @@ const similarInput = z
   .array(
     z.object({
       korean: z.string().describe("The other word, as on its card; it can be added in the same call"),
-      note: z.string().optional().describe("How the two differ, in Russian; the same note shows on both cards"),
+      note: z.string().optional().describe("How the two differ; the same note shows on both cards"),
     }),
   )
   .max(MAX_SIMILAR)
@@ -76,7 +77,7 @@ const newCardInput = cardInput.extend({ examples: examplesInput, similar: simila
 const similarPairInput = z.object({
   korean: z.string().describe("One word of the pair, as on its card"),
   other: z.string().describe("The other word, as on its card"),
-  note: z.string().optional().describe("How the two differ, in Russian; left out keeps the old note, empty clears it"),
+  note: z.string().optional().describe("How the two differ; left out keeps the old note, empty clears it"),
   remove: z.boolean().optional().describe("true takes the link off"),
 });
 
@@ -85,7 +86,7 @@ const partsInput = z
     z.object({
       ko: z.string().describe("The piece exactly as written in the phrase"),
       base: z.string().optional().describe("Its dictionary form, when it differs (가세요 → 가다)"),
-      meaning: z.string().describe("Short Russian gloss"),
+      meaning: z.string().describe("Short gloss"),
     }),
   )
   .min(1)
@@ -96,7 +97,7 @@ const registerInput = z.enum(REGISTERS).describe("formal: 합쇼체, polite: 해
 
 const newPhraseInput = z.object({
   korean: z.string().describe("The phrase in Hangul, as it is said"),
-  meaning: z.string().describe("Russian translation"),
+  meaning: z.string().describe("Translation"),
   parts: partsInput,
   register: registerInput.optional(),
   notes: z.string().optional().describe("When it is said, the usual reply, anything worth remembering"),
@@ -171,7 +172,7 @@ export function createMcpServer(store: CardStore, drills?: DrillStore): McpServe
     "add_phrases",
     {
       title: "Add phrases",
-      description: `Adds up to ${MAX_CARDS_PER_CALL} set Korean phrases, learned whole, to the new-card queue. Each needs parts, its breakdown into pieces (no examples). In reviews the user builds the phrase from those pieces mixed with wrong ones, from the Russian and by ear. Returns created phrases, duplicates of existing cards and rejected ones with the reason.`,
+      description: `Adds up to ${MAX_CARDS_PER_CALL} set Korean phrases, learned whole, to the new-card queue. Each needs parts, its breakdown into pieces (no examples). In reviews the user builds the phrase from those pieces mixed with wrong ones, from the translation and by ear. Returns created phrases, duplicates of existing cards and rejected ones with the reason.`,
       inputSchema: { phrases: z.array(newPhraseInput).min(1).max(MAX_CARDS_PER_CALL) },
       annotations: { destructiveHint: false, idempotentHint: true },
     },
@@ -233,7 +234,7 @@ export function createMcpServer(store: CardStore, drills?: DrillStore): McpServe
     "link_similar",
     {
       title: "Link similar words",
-      description: `Links pairs of the user's cards as similar words, easy to mix up (휴지통 / 쓰레기통, 아래 / 밑, 공책 / 노트), with a Russian note on how the two differ; or changes the note, or with remove takes a link off. Each word is named by its Korean text as on its card, and both must already be cards. A link goes both ways; a card can have at most ${MAX_SIMILAR}. It is not an edit of either card. Returns the pairs linked, unlinked and rejected with the reason. find_cards shows each card's similar words.`,
+      description: `Links pairs of the user's cards as similar words, easy to mix up (휴지통 / 쓰레기통, 아래 / 밑, 공책 / 노트), with a note on how the two differ; or changes the note, or with remove takes a link off. Each word is named by its Korean text as on its card, and both must already be cards. A link goes both ways; a card can have at most ${MAX_SIMILAR}. It is not an edit of either card. Returns the pairs linked, unlinked and rejected with the reason. find_cards shows each card's similar words.`,
       inputSchema: { pairs: z.array(similarPairInput).min(1).max(MAX_CARDS_PER_CALL) },
       annotations: { destructiveHint: false, idempotentHint: true },
     },
@@ -330,7 +331,7 @@ function registerDrillTools(server: McpServer, drills: DrillStore) {
     "add_sound_drills",
     {
       title: "Add sound drills",
-      description: `Adds up to ${MAX_DRILLS_PER_CALL} listening drills on sounds the user confuses. Each drill is 2-4 Korean words that differ in exactly one sound, e.g. 불/풀/뿔 for ㅂ/ㅍ/ㅃ or 거리/고리 for ㅓ/ㅗ; the app plays one and the user picks which. Prefer real, common words and the user's own cards (find_cards); use get_weak_sounds to choose the contrasts. contrast names the sounds as shown to the user, e.g. "ㅂ/ㅍ/ㅃ". meaning is a short Russian gloss. Drills cannot be deleted from here; list_sound_drills shows existing ones.`,
+      description: `Adds up to ${MAX_DRILLS_PER_CALL} listening drills on sounds the user confuses. Each drill is 2-4 Korean words that differ in exactly one sound, e.g. 불/풀/뿔 for ㅂ/ㅍ/ㅃ or 거리/고리 for ㅓ/ㅗ; the app plays one and the user picks which. Prefer real, common words and the user's own cards (find_cards); use get_weak_sounds to choose the contrasts. contrast names the sounds as shown to the user, e.g. "ㅂ/ㅍ/ㅃ". meaning is a short gloss. Drills cannot be deleted from here; list_sound_drills shows existing ones.`,
       inputSchema: {
         drills: z
           .array(

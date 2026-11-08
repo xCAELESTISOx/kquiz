@@ -7,17 +7,17 @@ import { Spinner } from "../ui/Spinner";
 type Phase = "checking" | "login" | "setup";
 
 const SERVER_ERRORS: Record<string, string> = {
-  forbidden: "Код настройки не подошёл. Он напечатан в логе сервера при первом запуске.",
-  challenge_expired: "Запрос устарел. Нажми кнопку ещё раз.",
-  verification_failed: "Passkey не подошёл. Попробуй ещё раз.",
-  setup_required: "Сначала нужно привязать passkey.",
+  forbidden: "Wrong setup code. The server prints it to its log on first start.",
+  challenge_expired: "The request expired. Tap the button again.",
+  verification_failed: "That passkey didn't work. Try again.",
+  setup_required: "Set up a passkey first.",
 };
 
 function errorText(error: unknown): string {
   const { name, message } = (error ?? {}) as Partial<Error>;
-  if (name === "NotAllowedError" || name === "AbortError") return "Вход отменён. Нажми кнопку ещё раз.";
-  if (name === "InvalidStateError") return "Этот passkey уже привязан.";
-  return (message ? SERVER_ERRORS[message] : undefined) ?? (message ? `Не получилось: ${message}` : "Не получилось войти.");
+  if (name === "NotAllowedError" || name === "AbortError") return "Sign-in canceled. Tap the button again.";
+  if (name === "InvalidStateError") return "This passkey is already set up.";
+  return (message ? SERVER_ERRORS[message] : undefined) ?? (message ? `Something went wrong: ${message}` : "Couldn't sign in.");
 }
 
 export function LoginScreen() {
@@ -32,7 +32,7 @@ export function LoginScreen() {
   const [setupCode, setSetupCode] = useState("");
 
   useEffect(() => {
-    document.title = "Вход · KQuiz";
+    document.title = "Sign in · KQuiz";
     auth.status().then(
       (status) => {
         if (status.setupRequired) setPhase("setup");
@@ -66,7 +66,7 @@ export function LoginScreen() {
     event.preventDefault();
     if (busy) return;
     const code = setupCode.trim();
-    if (!code) return setError("Впиши код настройки из лога сервера.");
+    if (!code) return setError("Enter the setup code from the server log.");
     setBusy(true);
     setError(undefined);
     try {
@@ -93,21 +93,21 @@ export function LoginScreen() {
       {phase === "login" && (
         <div className="login-body">
           <p className="muted">
-            {fresh ? "Подтверди, что это ты, чтобы дать Claude доступ к карточкам." : "Вход по passkey: Face ID или код телефона."}
+            {fresh ? "Confirm it's you to give Claude access to your cards." : "Sign in with a passkey: Face ID or your phone's passcode."}
           </p>
           <div aria-live="polite">{error && <p className="notice notice-error">{error}</p>}</div>
           <button type="button" className="button primary" disabled={busy} onClick={login}>
             {busy && <Spinner />}
-            Войти с Face ID
+            Sign in with Face ID
           </button>
         </div>
       )}
 
       {phase === "setup" && (
         <form className="login-body" onSubmit={register}>
-          <p className="muted">Первый запуск. Введи код настройки из лога сервера, и этот телефон станет ключом входа.</p>
+          <p className="muted">First start. Enter the setup code from the server log, and this phone becomes your sign-in key.</p>
           <label className="field">
-            <span className="field-label">Код настройки</span>
+            <span className="field-label">Setup code</span>
             <input
               className="input"
               name="setupCode"
@@ -115,7 +115,7 @@ export function LoginScreen() {
               autoCapitalize="off"
               autoCorrect="off"
               spellCheck={false}
-              placeholder="например: 4F9K-2QX7…"
+              placeholder="e.g. 4F9K-2QX7…"
               value={setupCode}
               onChange={(e) => setSetupCode(e.target.value)}
             />
@@ -123,7 +123,7 @@ export function LoginScreen() {
           <div aria-live="polite">{error && <p className="notice notice-error">{error}</p>}</div>
           <button type="submit" className="button primary" disabled={busy}>
             {busy && <Spinner />}
-            Создать passkey
+            Create passkey
           </button>
         </form>
       )}

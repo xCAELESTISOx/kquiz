@@ -3,10 +3,10 @@ import type { Route } from "../lib/router";
 import { CardsIcon, ChartIcon, HomeIcon, PlusIcon } from "./icons";
 
 const TABS = [
-  { id: "today", href: "#/", label: "Сегодня", Icon: HomeIcon },
-  { id: "add", href: "#/add", label: "Добавить", Icon: PlusIcon },
-  { id: "cards", href: "#/cards", label: "Карточки", Icon: CardsIcon },
-  { id: "stats", href: "#/stats", label: "Статистика", Icon: ChartIcon },
+  { id: "today", href: "#/", label: "Today", Icon: HomeIcon },
+  { id: "add", href: "#/add", label: "Add", Icon: PlusIcon },
+  { id: "cards", href: "#/cards", label: "Cards", Icon: CardsIcon },
+  { id: "stats", href: "#/stats", label: "Stats", Icon: ChartIcon },
 ] as const;
 
 export function TabBar({ route }: { route: Route }) {
@@ -16,7 +16,7 @@ export function TabBar({ route }: { route: Route }) {
     0,
   );
   return (
-    <nav className="tabbar" aria-label="Разделы">
+    <nav className="tabbar" aria-label="Sections">
       <div className="tabbar-inner" style={{ "--tabs": TABS.length, "--active": index } as CSSProperties}>
         {/* One pill that slides between tabs, so the eye follows the switch. */}
         <span className="tab-indicator" aria-hidden="true" />

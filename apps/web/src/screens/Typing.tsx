@@ -17,16 +17,16 @@ import "../ui/learn.css";
 export type TypeAsk = "sound" | "meaning" | "cloze";
 
 const ASK: Record<TypeAsk, string> = {
-  sound: "Напиши, что слышишь",
-  meaning: "Напиши по-корейски",
-  cloze: "Впиши слово, как в предложении",
+  sound: "Type what you hear",
+  meaning: "Type it in Korean",
+  cloze: "Type the word as in the sentence",
 };
 
 const HINT_AFTER_MS = 5000;
 
 /**
  * The word typed in Hangul and checked letter by letter. Sends its rating to the item's schedule as
- * soon as it is checked, unless practising; "Дальше" tells the session. With a cloze, the answer is
+ * soon as it is checked, unless practising; "Next" tells the session. With a cloze, the answer is
  * the word as it stands in that sentence (먹어요, not 먹다).
  */
 export function TypeCard({
@@ -119,7 +119,7 @@ export function TypeCard({
           {leeches.has(card.id) && <LeechBadge />}
           <p className="speech-ask">{ASK[ask]}</p>
           {ask === "sound" && (
-            <button type="button" className="listen-play" aria-label="Послушать ещё раз" onClick={() => speak(heard(item))}>
+            <button type="button" className="listen-play" aria-label="Listen again" onClick={() => speak(heard(item))}>
               <SpeakerIcon />
             </button>
           )}
@@ -127,7 +127,7 @@ export function TypeCard({
           {ask === "meaning" && stuck && !check && (
             <button type="button" className="chip-button type-hint" onClick={() => speak(heard(item))}>
               <SpeakerIcon />
-              Послушать
+              Listen
             </button>
           )}
           {nudge && !check && <SimilarNudge key={nudge.id} word={nudge} />}
@@ -135,7 +135,7 @@ export function TypeCard({
             <div className="speech-context type-context">
               <p lang="ko">
                 {cloze.before}
-                {check ? <mark className="cloze-mark">{cloze.word}</mark> : <span className="cloze-gap" aria-label="пропуск" />}
+                {check ? <mark className="cloze-mark">{cloze.word}</mark> : <span className="cloze-gap" aria-label="gap" />}
                 {cloze.after}
               </p>
               <HiddenTranslation text={card.examples[cloze.example]!.ru} />
@@ -152,7 +152,7 @@ export function TypeCard({
               </p>
               {ask !== "meaning" && <p className="type-meaning">{card.meaning}</p>}
               {canSpeak() && ask !== "sound" && (
-                <button type="button" className="icon-button speak-button" aria-label="Послушать слово" onClick={() => speak(heard(item))}>
+                <button type="button" className="icon-button speak-button" aria-label="Listen to the word" onClick={() => speak(heard(item))}>
                   <SpeakerIcon />
                 </button>
               )}
@@ -182,24 +182,24 @@ export function TypeCard({
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
-          aria-label="Слово по-корейски"
+          aria-label="The word in Korean"
           placeholder="한글로"
           readOnly={!!check}
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
-        {latin && <p className="review-tip muted small">Включи корейскую раскладку</p>}
+        {latin && <p className="review-tip muted small">Switch to a Korean keyboard</p>}
         {check ? (
           <button type="submit" className="button primary">
-            Дальше
+            Next
           </button>
         ) : (
           <>
             <button type="submit" className="button primary" disabled={!text.trim()}>
-              Проверить
+              Check
             </button>
             <button type="button" className="chip-button dont-know" onClick={() => finish("")}>
-              Не знаю
+              Don't know
             </button>
           </>
         )}
@@ -210,9 +210,9 @@ export function TypeCard({
 
 /** Letter by letter only while the answer was close; a different word is just shown right. */
 function feedback(check: TypingCheck, typed: string, nudged: boolean): string {
-  if (check.correct) return nudged ? "Верно, с подсказкой" : "Верно";
-  if (check.almost) return `Почти: ${check.slips[0]}`;
-  if (!typed.trim()) return "Вот как пишется";
+  if (check.correct) return nudged ? "Correct, with a hint" : "Correct";
+  if (check.almost) return `Almost: ${check.slips[0]}`;
+  if (!typed.trim()) return "Here's how it's spelled";
   const close = check.marks.filter((m) => m.status === "ok").length >= check.marks.length / 2;
-  return close ? check.slips.slice(0, 2).join(", ") : "Другое слово, вот как правильно";
+  return close ? check.slips.slice(0, 2).join(", ") : "A different word, here's the right one";
 }

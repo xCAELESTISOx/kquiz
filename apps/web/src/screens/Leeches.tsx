@@ -4,20 +4,18 @@ import type { Leech } from "../lib/types";
 import { EmptyState } from "../ui/EmptyState";
 
 // What to tell Claude in chat; the KQuiz connector's get_leeches tool does the rest.
-const ASK_CLAUDE = "Переделай мои трудные карточки в KQuiz";
+const ASK_CLAUDE = "Rework my hard cards in KQuiz";
 
 function times(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  return mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? "раза" : "раз";
+  return n === 1 ? "once" : `${n} times`;
 }
 
 function forgottenText({ forgotten }: Leech): string {
   const parts = [];
-  if (forgotten.meaning) parts.push(`перевод — ${forgotten.meaning} ${times(forgotten.meaning)}`);
-  if (forgotten.speech) parts.push(`произношение — ${forgotten.speech} ${times(forgotten.speech)}`);
-  if (forgotten.listening) parts.push(`на слух — ${forgotten.listening} ${times(forgotten.listening)}`);
-  return `Забыта: ${parts.join(", ")}`;
+  if (forgotten.meaning) parts.push(`meaning ${times(forgotten.meaning)}`);
+  if (forgotten.speech) parts.push(`pronunciation ${times(forgotten.speech)}`);
+  if (forgotten.listening) parts.push(`listening ${times(forgotten.listening)}`);
+  return `Forgotten: ${parts.join(", ")}`;
 }
 
 export function LeechesScreen() {
@@ -26,7 +24,7 @@ export function LeechesScreen() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    document.title = "Трудные карточки · KQuiz";
+    document.title = "Hard cards · KQuiz";
     api.leeches().then(
       ({ items }) => setItems(items),
       (e: Error) => setError(e.message),
@@ -48,7 +46,7 @@ export function LeechesScreen() {
         <h1 className="title" lang="ko">
           약점
         </h1>
-        <p className="subtitle">Трудные карточки</p>
+        <p className="subtitle">Hard cards</p>
       </header>
 
       <div aria-live="polite">{error && <p className="notice notice-error">{error}</p>}</div>
@@ -57,7 +55,7 @@ export function LeechesScreen() {
 
       {items && items.length === 0 && (
         <EmptyState word="좋아요">
-          Трудных карточек нет. Сюда попадает карточка, забытая в шесть разных дней после последней правки.
+          No hard cards. A card lands here once it's forgotten on six different days since its last edit.
         </EmptyState>
       )}
 
@@ -79,14 +77,14 @@ export function LeechesScreen() {
 
           <section className="leech-help">
             <p>
-              Обычно такая карточка плохо сформулирована или путается с соседней. Попроси Claude её переделать: он
-              перепишет перевод и примеры, добавит подсказку или разделит карточку на две. После правки карточка уходит
-              из списка. Поправить или удалить её можешь и сам: нажми на неё.
+              Such a card is usually badly worded or mixed up with another one. Ask Claude to rework it: it will
+              rewrite the translation and examples, add a hint or split the card in two. Once edited, the card leaves
+              the list. You can also edit or delete it yourself: tap it.
             </p>
             <div className="leech-ask">
-              <span>«{ASK_CLAUDE}»</span>
+              <span>"{ASK_CLAUDE}"</span>
               <button type="button" className="chip-button" onClick={() => void copy()}>
-                {copied ? "Скопировано" : "Скопировать"}
+                {copied ? "Copied" : "Copy"}
               </button>
             </div>
           </section>

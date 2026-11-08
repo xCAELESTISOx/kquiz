@@ -6,24 +6,17 @@ import { Spinner } from "../ui/Spinner";
 
 // The owner's screen: invite a friend by a one-time link, see who uses the app, switch someone off.
 
-function daysWord(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "день";
-  return mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? "дня" : "дней";
-}
-
 function ago(iso: string | null): string {
-  if (!iso) return "ещё не входил";
+  if (!iso) return "never signed in";
   const days = Math.floor((Date.now() - Date.parse(iso)) / 86_400_000);
-  if (days <= 0) return "входил сегодня";
-  if (days === 1) return "входил вчера";
-  return `входил ${days} ${daysWord(days)} назад`;
+  if (days <= 0) return "signed in today";
+  if (days === 1) return "signed in yesterday";
+  return `signed in ${days} days ago`;
 }
 
 function userLine(user: AccessUser): string {
   const cards = cardsCount(user.cards);
-  return user.disabled ? `${cards} · отключён` : `${cards} · ${ago(user.lastSignInAt)}`;
+  return user.disabled ? `${cards} · switched off` : `${cards} · ${ago(user.lastSignInAt)}`;
 }
 
 export function AccessScreen() {
@@ -36,11 +29,11 @@ export function AccessScreen() {
   const load = () =>
     access.get().then(
       (data) => setInfo(data),
-      (e: Error) => setError(e.message === "forbidden" ? "Этот раздел только для владельца." : e.message),
+      (e: Error) => setError(e.message === "forbidden" ? "This section is for the owner only." : e.message),
     );
 
   useEffect(() => {
-    document.title = "Доступ · KQuiz";
+    document.title = "Friends' access · KQuiz";
     void load();
   }, []);
 
@@ -66,7 +59,7 @@ export function AccessScreen() {
 
   async function share() {
     if (!link) return;
-    const text = "Учи корейский со мной в KQuiz. Ссылка работает один раз в течение суток:";
+    const text = "Learn Korean with me in KQuiz. The link works once, within 24 hours:";
     try {
       if (navigator.share) await navigator.share({ title: "KQuiz", text, url: link });
       else {
@@ -89,7 +82,7 @@ export function AccessScreen() {
   }
 
   const remove = (user: AccessUser) => {
-    if (!confirm(`Удалить ${user.name} и все его карточки, повторения и статистику? Вернуть будет нельзя.`)) return;
+    if (!confirm(`Delete ${user.name} with all their cards, reviews and stats? This can't be undone.`)) return;
     void run(`remove-${user.id}`, () => access.remove(user.id));
   };
 
@@ -98,8 +91,8 @@ export function AccessScreen() {
   return (
     <main className="screen">
       <header className="screen-header">
-        <h1 className="title">Доступ</h1>
-        <p className="subtitle">Кто ещё учится в KQuiz</p>
+        <h1 className="title">Friends' access</h1>
+        <p className="subtitle">Who else learns with KQuiz</p>
       </header>
 
       <div aria-live="polite">{error && <p className="notice notice-error">{error}</p>}</div>
@@ -114,7 +107,7 @@ export function AccessScreen() {
                 <div className="access-who">
                   <span className="access-name">
                     {user.name}
-                    {user.role === "owner" && <span className="muted"> · ты</span>}
+                    {user.role === "owner" && <span className="muted"> · you</span>}
                   </span>
                   <span className="muted small">{userLine(user)}</span>
                 </div>
@@ -128,10 +121,10 @@ export function AccessScreen() {
                           disabled={Boolean(busy)}
                           onClick={() => void run(`enable-${user.id}`, () => access.enable(user.id))}
                         >
-                          Включить
+                          Switch on
                         </button>
                         <button type="button" className="chip-button danger" disabled={Boolean(busy)} onClick={() => remove(user)}>
-                          Удалить
+                          Delete
                         </button>
                       </>
                     ) : (
@@ -141,7 +134,7 @@ export function AccessScreen() {
                         disabled={Boolean(busy)}
                         onClick={() => void run(`disable-${user.id}`, () => access.disable(user.id))}
                       >
-                        Отключить
+                        Switch off
                       </button>
                     )}
                   </div>
@@ -153,14 +146,14 @@ export function AccessScreen() {
           <section className="access-invite">
             {link ? (
               <>
-                <p>Ссылка для друга. Она сработает один раз в течение суток, потом нужна новая.</p>
+                <p>A link for a friend. It works once, within 24 hours; after that you need a new one.</p>
                 <code className="access-link">{link}</code>
                 <div className="action-pair">
                   <button type="button" className="button primary" onClick={() => void share()}>
-                    Отправить
+                    Share
                   </button>
                   <button type="button" className="button" onClick={() => void copy()}>
-                    {copied ? "Скопировано" : "Скопировать"}
+                    {copied ? "Copied" : "Copy"}
                   </button>
                 </div>
               </>
@@ -168,18 +161,18 @@ export function AccessScreen() {
               <>
                 <p>
                   {full
-                    ? `Больше ${info.maxUsers} человек сервер не пускает. Чтобы пригласить ещё кого-то, удали отключённого.`
-                    : "Друг откроет ссылку на своём телефоне, напишет имя и создаст passkey. Его карточки и статистику не видишь ты, а он не видит твои."}
+                    ? `The server allows at most ${info.maxUsers} people. To invite someone else, delete a switched-off person.`
+                    : "Your friend opens the link on their phone, enters a name and creates a passkey. You don't see their cards and stats, and they don't see yours."}
                 </p>
                 <button type="button" className="button primary" disabled={full || Boolean(busy)} onClick={() => void invite()}>
                   {busy === "invite" && <Spinner />}
-                  Пригласить
+                  Invite
                 </button>
               </>
             )}
             {info.invites.length > 0 && (
               <p className="muted small">
-                Неиспользованных ссылок: {info.invites.length}.{" "}
+                Unused links: {info.invites.length}.{" "}
                 <button
                   type="button"
                   className="link-button inline"
@@ -191,7 +184,7 @@ export function AccessScreen() {
                     })
                   }
                 >
-                  Отменить
+                  Cancel
                 </button>
               </p>
             )}
@@ -199,12 +192,12 @@ export function AccessScreen() {
 
           <section className="access-notes muted small">
             <p>
-              У друзей есть лимиты, чтобы сервер не перегружался: {info.memberLimits.cardsPerDay} новых карточек и{" "}
-              {info.memberLimits.scoresPerDay} проверок произношения в сутки. У тебя лимитов нет.
+              Friends have limits so the server isn't overloaded: {info.memberLimits.cardsPerDay} new cards and{" "}
+              {info.memberLimits.scoresPerDay} pronunciation checks a day. You have no limits.
             </p>
             <p>
-              Свой Claude друг может подключить сам: коннектор по адресу <code>{location.origin}/mcp</code>. Claude
-              увидит только его карточки.
+              A friend can connect their own Claude: the connector is at <code>{location.origin}/mcp</code>. Claude
+              will see only their cards.
             </p>
           </section>
         </>

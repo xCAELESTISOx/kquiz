@@ -86,7 +86,7 @@ export function CardScreen({ id }: { id: number }) {
         setDraft((d) => (d && seen && Object.keys(diff(seen, d)).length > 0 ? d : toDraft(card)));
         document.title = `${card.korean} · KQuiz`;
       },
-      (e: Error) => setError(e.message === "not_found" ? "Такой карточки нет. Может, её уже удалили." : e.message),
+      (e: Error) => setError(e.message === "not_found" ? "There's no such card. Maybe it was deleted." : e.message),
     );
   }, [id]);
 
@@ -106,14 +106,14 @@ export function CardScreen({ id }: { id: number }) {
   async function save(event: FormEvent) {
     event.preventDefault();
     if (!card || !draft || !dirty || busy) return;
-    if (!draft.korean.trim() || !draft.meaning.trim()) return setError(`${card.kind === "phrase" ? "Фраза" : "Слово"} и перевод не могут быть пустыми`);
-    if (fullExamples(draft.examples).some((e) => !e.ko || !e.ru)) return setError("У каждого примера нужен и перевод");
+    if (!draft.korean.trim() || !draft.meaning.trim()) return setError(`The ${card.kind === "phrase" ? "phrase" : "word"} and translation can't be empty`);
+    if (fullExamples(draft.examples).some((e) => !e.ko || !e.ru)) return setError("Every example needs a translation");
     setBusy("save");
     setError(undefined);
     try {
       const result = await api.updateCard(card.id, patch);
       if (result.status === "duplicate") {
-        setError(`Карточка «${draft.korean.trim()}» уже есть`);
+        setError(`The card "${draft.korean.trim()}" already exists`);
       } else {
         setCard(result.card);
         setDraft(toDraft(result.card));
@@ -160,7 +160,7 @@ export function CardScreen({ id }: { id: number }) {
         <a
           className="icon-button"
           href={lastCardsHash}
-          aria-label="К списку карточек"
+          aria-label="Back to cards"
           onClick={(e) => {
             e.preventDefault();
             back();
@@ -171,14 +171,14 @@ export function CardScreen({ id }: { id: number }) {
         {card && (
           <div className="card-top-actions">
             {canSpeak() && (
-              <button type="button" className="icon-button" aria-label="Послушать" onClick={() => speak(card)}>
+              <button type="button" className="icon-button" aria-label="Listen" onClick={() => speak(card)}>
                 <SpeakerIcon />
               </button>
             )}
             {card.kind === "word" && (
-              <Menu label="Ещё">
-                <MenuItem href={`#/learn/${card.id}`} icon={<LearnIcon />} hint="Заучить слово по шагам, не трогая статистику">
-                  Учить
+              <Menu label="More">
+                <MenuItem href={`#/learn/${card.id}`} icon={<LearnIcon />} hint="Learn the word step by step without touching stats">
+                  Learn
                 </MenuItem>
               </Menu>
             )}
@@ -194,36 +194,36 @@ export function CardScreen({ id }: { id: number }) {
           {card.queued && (
             <div className="queue-note">
               <p>
-                <strong>Ждёт в очереди новых.</strong>
-                <span className="muted"> Войдёт в повторение сама, в свой день.</span>
+                <strong>Queued with new words.</strong>
+                <span className="muted"> It will enter reviews on its own, on its day.</span>
               </p>
               <button type="button" className="chip-button" disabled={!!busy} onClick={() => void introduce()}>
                 {busy === "introduce" && <Spinner />}
-                Учить сейчас
+                Learn now
               </button>
             </div>
           )}
 
           {card.roots && card.roots.length > 0 && (
             <div className="field">
-              <span className="field-label">Корни</span>
+              <span className="field-label">Roots</span>
               <WordFamily card={card} families={families} />
             </div>
           )}
 
           {card.kind === "phrase" && (
             <div className="field">
-              <span className="field-label">Фраза по частям</span>
+              <span className="field-label">Phrase by parts</span>
               {card.parts?.length ? (
                 <PhraseParts card={card} />
               ) : (
-                <p className="muted small">Разбора пока нет. Попроси Claude разобрать фразу.</p>
+                <p className="muted small">No breakdown yet. Ask Claude to break the phrase down.</p>
               )}
             </div>
           )}
 
           <label className="field">
-            <span className="field-label">{card.kind === "phrase" ? "Фраза по-корейски" : "По-корейски"}</span>
+            <span className="field-label">{card.kind === "phrase" ? "Phrase in Korean" : "Korean"}</span>
             <input
               className="input input-korean"
               lang="ko"
@@ -236,26 +236,26 @@ export function CardScreen({ id }: { id: number }) {
             />
           </label>
           <label className="field">
-            <span className="field-label">Перевод</span>
+            <span className="field-label">Translation</span>
             <input className="input" autoComplete="off" value={draft.meaning} onChange={(e) => set("meaning", e.target.value)} />
           </label>
 
           <div className="field-pair">
             <label className="field">
-              <span className="field-label">Произношение</span>
+              <span className="field-label">Pronunciation</span>
               <input
                 className="input"
                 lang="ko"
                 autoComplete="off"
                 autoCorrect="off"
                 spellCheck={false}
-                placeholder="как пишется"
+                placeholder="as written"
                 value={draft.pronunciation}
                 onChange={(e) => set("pronunciation", e.target.value)}
               />
             </label>
             <label className="field">
-              <span className="field-label">Латиницей</span>
+              <span className="field-label">Romanization</span>
               <input
                 className="input"
                 autoComplete="off"
@@ -270,7 +270,7 @@ export function CardScreen({ id }: { id: number }) {
 
           {card.kind === "phrase" && (
             <fieldset className="register-edit">
-              <legend className="field-label">Вежливость</legend>
+              <legend className="field-label">Politeness</legend>
               <div className="register-options">
                 {(Object.keys(REGISTER_LABELS) as Register[]).map((r) => (
                   <button key={r} type="button" className="chip" aria-pressed={draft.register === r} onClick={() => set("register", r)}>
@@ -283,23 +283,23 @@ export function CardScreen({ id }: { id: number }) {
 
           {card.kind === "word" && (
             <fieldset className="examples-edit">
-              <legend className="field-label">Примеры</legend>
+              <legend className="field-label">Examples</legend>
               {draft.examples.map((example, i) => (
                 <div key={i} className="example-edit">
                   <input
                     className="input"
                     lang="ko"
                     autoComplete="off"
-                    aria-label={`Пример ${i + 1}`}
-                    placeholder={`Пример ${i + 1}`}
+                    aria-label={`Example ${i + 1}`}
+                    placeholder={`Example ${i + 1}`}
                     value={example.ko}
                     onChange={(e) => setExample(i, "ko", e.target.value)}
                   />
                   <input
                     className="input input-sub"
                     autoComplete="off"
-                    aria-label={`Перевод примера ${i + 1}`}
-                    placeholder="перевод"
+                    aria-label={`Example ${i + 1} translation`}
+                    placeholder="translation"
                     value={example.ru}
                     onChange={(e) => setExample(i, "ru", e.target.value)}
                   />
@@ -310,21 +310,21 @@ export function CardScreen({ id }: { id: number }) {
 
           {card.kind === "word" && (
             <div className="field">
-              <span className="field-label">Похожие слова</span>
-              <p className="muted small field-hint">Легко спутать. Если ответишь похожим словом, приложение подскажет, а не засчитает ошибку.</p>
+              <span className="field-label">Similar words</span>
+              <p className="muted small field-hint">Easy to mix up. If you answer with a similar word, the app gives a hint instead of counting a mistake.</p>
               <SimilarEditor card={card} onChange={(next) => setCard({ ...card, similar: next.similar, updatedAt: next.updatedAt })} />
             </div>
           )}
 
           <NotesField
-            label={card.kind === "phrase" ? "Когда говорят" : "Заметка"}
+            label={card.kind === "phrase" ? "When it's said" : "Note"}
             value={draft.notes}
             onChange={(value) => set("notes", value)}
             similar={card.similar}
             marks={card.kind !== "phrase"}
           />
           <label className="field">
-            <span className="field-label">Теги через запятую</span>
+            <span className="field-label">Tags, comma-separated</span>
             <input
               className="input"
               autoComplete="off"
@@ -340,32 +340,32 @@ export function CardScreen({ id }: { id: number }) {
                 checked={draft.speakable && readyForSpeech}
                 disabled={!readyForSpeech}
                 onChange={(v) => set("speakable", v)}
-                label="Тренировать произношение"
-                hint={readyForSpeech ? "Карточка попадает в «Произношение»" : "Только для слов из одного хангыля"}
+                label="Practice pronunciation"
+                hint={readyForSpeech ? "The card goes into Pronunciation" : "Only for words written fully in Hangul"}
               />
             )}
             <Toggle
               checked={draft.suspended}
               onChange={(v) => set("suspended", v)}
-              label="На паузе"
-              hint="Не показывается в повторении, расписание сохраняется"
+              label="Paused"
+              hint="Not shown in reviews; its schedule is kept"
             />
           </div>
 
           <div aria-live="polite">
             {error && <p className="notice notice-error">{error}</p>}
-            {saved && !dirty && <p className="notice notice-ok">Сохранено</p>}
+            {saved && !dirty && <p className="notice notice-ok">Saved</p>}
           </div>
 
           <button type="button" className={`danger-button${confirmDelete ? " is-armed" : ""}`} disabled={!!busy} onClick={() => void remove()}>
             {busy === "delete" && <Spinner />}
-            {confirmDelete ? "Точно удалить? Нажми ещё раз" : "Удалить карточку"}
+            {confirmDelete ? "Delete for sure? Tap again" : "Delete card"}
           </button>
 
           <div className="bottom-actions">
             <button className="button primary" type="submit" disabled={!dirty || !!busy}>
               {busy === "save" && <Spinner />}
-              Сохранить
+              Save
             </button>
           </div>
         </form>

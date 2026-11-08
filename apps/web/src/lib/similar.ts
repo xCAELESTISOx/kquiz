@@ -1,6 +1,6 @@
 import type { Card, RatingName, SimilarWord } from "./types";
 
-// Similar words (휴지통 / 쓰레기통): when the Russian is shown and the Korean asked for, answering with
+// Similar words (휴지통 / 쓰레기통): when the translation is shown and the Korean asked for, answering with
 // the linked word is a known confusion, not a blank. The app says which word that was and asks for
 // the other one; the answer then still counts, a little lower (hard), since it needed the nudge.
 

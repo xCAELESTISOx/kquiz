@@ -38,7 +38,7 @@ export function CardsScreen({ filter, root }: { filter?: CardFilter; root?: stri
   const requestId = useRef(0);
 
   useEffect(() => {
-    document.title = "Карточки · KQuiz";
+    document.title = "Cards · KQuiz";
     lastCardsHash = (filter ? `#/cards/${filter}` : "#/cards") + (root ? `?root=${encodeURIComponent(root)}` : "");
   }, [filter, root]);
 
@@ -95,10 +95,10 @@ export function CardsScreen({ filter, root }: { filter?: CardFilter; root?: stri
 
   const counts = summary?.counts;
   const filters: { id: CardFilter | undefined; label: string; count?: number }[] = [
-    { id: undefined, label: "Все", count: counts?.all },
-    { id: "queued", label: "Новые", count: counts?.queued },
-    { id: "phrases", label: "Фразы", count: counts?.phrases },
-    { id: "paused", label: "Пауза", count: counts?.paused },
+    { id: undefined, label: "All", count: counts?.all },
+    { id: "queued", label: "New", count: counts?.queued },
+    { id: "phrases", label: "Phrases", count: counts?.phrases },
+    { id: "paused", label: "Paused", count: counts?.paused },
   ];
 
   return (
@@ -107,7 +107,7 @@ export function CardsScreen({ filter, root }: { filter?: CardFilter; root?: stri
         <h1 className="title" lang="ko">
           카드
         </h1>
-        <p className="subtitle">{counts ? cardsCount(counts.all) : "Карточки"}</p>
+        <p className="subtitle">{counts ? cardsCount(counts.all) : "Cards"}</p>
       </header>
 
       <label className="search">
@@ -121,14 +121,14 @@ export function CardsScreen({ filter, root }: { filter?: CardFilter; root?: stri
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
-          placeholder="Слово или перевод…"
-          aria-label="Поиск по карточкам"
+          placeholder="Word or translation…"
+          aria-label="Search cards"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
       </label>
 
-      <div className="chips" role="toolbar" aria-label="Фильтры">
+      <div className="chips" role="toolbar" aria-label="Filters">
         {filters.map((f) => (
           <a
             key={f.label}
@@ -174,16 +174,16 @@ export function CardsScreen({ filter, root }: { filter?: CardFilter; root?: stri
       {cards && cards.length === 0 && (
         <EmptyState word={query || tag || root || filter === "paused" ? "없어요" : "비었어요"}>
           {query || tag || root ? (
-            "Ничего не нашлось. Попробуй другое слово или сними фильтр."
+            "Nothing found. Try another word or clear the filter."
           ) : filter === "queued" ? (
-            "Новых слов нет: все карточки уже выучены и в повторении."
+            "No new words: every card is learned and in review."
           ) : filter === "phrases" ? (
-            "Фраз пока нет. Попроси Claude добавить фразы, которые хочешь выучить целиком."
+            "No phrases yet. Ask Claude to add phrases you want to learn whole."
           ) : filter === "paused" ? (
-            "На паузе ничего нет. Поставить карточку на паузу можно в её настройках."
+            "Nothing is paused. You can pause a card in its settings."
           ) : (
             <>
-              Карточек пока нет. <a href="#/add">Добавь первые слова</a>.
+              No cards yet. <a href="#/add">Add your first words</a>.
             </>
           )}
         </EmptyState>
@@ -200,16 +200,16 @@ export function CardsScreen({ filter, root }: { filter?: CardFilter; root?: stri
                 <span className="card-row-meaning">{card.meaning}</span>
                 {(card.suspended || (card.queued && filter !== "queued") || card.kind === "phrase" || !card.speakable) && (
                   <span className="card-row-badges">
-                    {card.kind === "phrase" && filter !== "phrases" && <span className="badge badge-phrase">фраза</span>}
-                    {card.queued && filter !== "queued" && <span className="badge">новое</span>}
-                    {card.suspended && <span className="badge">пауза</span>}
-                    {!card.speakable && card.kind === "word" && <span className="badge badge-faint">без произношения</span>}
+                    {card.kind === "phrase" && filter !== "phrases" && <span className="badge badge-phrase">phrase</span>}
+                    {card.queued && filter !== "queued" && <span className="badge">new</span>}
+                    {card.suspended && <span className="badge">paused</span>}
+                    {!card.speakable && card.kind === "word" && <span className="badge badge-faint">no pronunciation</span>}
                   </span>
                 )}
               </a>
               {filter === "queued" && (
                 <button type="button" className="row-action" onClick={() => void introduce(card)}>
-                  В повторение
+                  To review
                 </button>
               )}
             </li>
@@ -220,13 +220,13 @@ export function CardsScreen({ filter, root }: { filter?: CardFilter; root?: stri
       {nextBefore !== null && (
         <button type="button" className="button" disabled={loadingMore} onClick={() => void loadMore()}>
           {loadingMore && <Spinner />}
-          Показать ещё
+          Show more
         </button>
       )}
 
       <a className="link-button export-link" href={api.exportUrl} download>
         <DownloadIcon />
-        Выгрузить всё в JSON
+        Export all as JSON
       </a>
     </main>
   );
@@ -236,7 +236,7 @@ export function CardsScreen({ filter, root }: { filter?: CardFilter; root?: stri
 function RootBanner({ root, cards, filter }: { root: string; cards: Card[] | undefined; filter?: CardFilter }) {
   const known = cards?.flatMap((c) => c.roots ?? []).find((r) => r.hanja === root);
   return (
-    <section className="root-banner" aria-label="Семья слова">
+    <section className="root-banner" aria-label="Word family">
       <span className="family-key root-banner-key" aria-hidden="true">
         <span className="family-syllable" lang="ko">
           {known?.ko ?? "·"}
@@ -246,10 +246,10 @@ function RootBanner({ root, cards, filter }: { root: string; cards: Card[] | und
         </span>
       </span>
       <div className="root-banner-text">
-        <p className="family-gloss">{known ? `Корень «${known.meaning}»` : "Корень"}</p>
-        <p className="muted small">Все твои слова с этим корнем</p>
+        <p className="family-gloss">{known ? `Root "${known.meaning}"` : "Root"}</p>
+        <p className="muted small">All your words with this root</p>
       </div>
-      <a className="icon-button" href={filter ? `#/cards/${filter}` : "#/cards"} aria-label="Показать все карточки">
+      <a className="icon-button" href={filter ? `#/cards/${filter}` : "#/cards"} aria-label="Show all cards">
         <CloseIcon />
       </a>
     </section>
@@ -257,15 +257,13 @@ function RootBanner({ root, cards, filter }: { root: string; cards: Card[] | und
 }
 
 /**
- * Just what the list shows: a search, a tag, the queue. "Учить" takes it step by step, GROUP_SIZE
- * words at a time, without touching the schedule (Learn.tsx). "Повторить" reviews all of it, due or
+ * Just what the list shows: a search, a tag, the queue. "Learn" takes it step by step, GROUP_SIZE
+ * words at a time, without touching the schedule (Learn.tsx). "Review" reviews all of it, due or
  * not, in every way at once and in random order; those ratings go into the usual schedule.
  */
-/** Nominative: 1 карточка, 2 карточки, 5 карточек; 1 фраза, 2 фразы, 5 фраз. */
+/** 1 card, 5 cards; 1 phrase, 5 phrases. */
 function groupWord(n: number, phrases: boolean): string {
-  const word = cardsWord(n);
-  if (!phrases) return word === "карточку" ? "карточка" : word;
-  return word === "карточку" ? "фраза" : phrasesWord(n);
+  return phrases ? phrasesWord(n) : cardsWord(n);
 }
 
 function GroupBar({ group, cards, more }: { group: GroupFilter; cards: Card[]; more: boolean }) {
@@ -275,42 +273,42 @@ function GroupBar({ group, cards, more }: { group: GroupFilter; cards: Card[]; m
   const count = more ? `${active.length}+` : String(active.length);
   const phrases = group.kind === "phrase";
   return (
-    <section className="group-bar" aria-label="Учить выбранные">
+    <section className="group-bar" aria-label="Learn the selection">
       <p className="group-bar-title">
-        В группе <span className="group-bar-count">{count}</span> {groupWord(more ? 5 : active.length, phrases)}
+        <span className="group-bar-count">{count}</span> {groupWord(more ? 5 : active.length, phrases)} in the group
       </p>
       <div className="group-bar-actions">
         <a className="button primary" href={groupHash("learn", group)}>
           <LearnIcon />
-          Учить
+          Learn
         </a>
         <a className="button" href={groupHash("mix", group, { all: true })}>
           <ShuffleIcon />
-          Повторить
+          Review
         </a>
       </div>
       <p className="muted small">
-        {more || active.length > GROUP_SIZE ? `Учить — по ${GROUP_SIZE} за раз, без оценок. ` : "Учить — по шагам, без оценок. "}
-        Повторить — все режимы вперемешку{queued ? ", новые слова войдут в повторение сразу, без обучения." : "."}
+        {more || active.length > GROUP_SIZE ? `Learn: ${GROUP_SIZE} at a time, no grades. ` : "Learn: step by step, no grades. "}
+        Review: every mode mixed{queued ? ", new words enter reviews at once, without learning." : "."}
       </p>
     </section>
   );
 }
 
-/** How the new words come in: learned a few at a time in "Учить" on Today, oldest first. */
+/** How the new words come in: learned a few at a time in "Learn" on Today, oldest first. */
 function PoolNote() {
   return (
-    <section className="queue-panel" aria-label="Новые слова">
-      <p className="queue-panel-title">Новые слова учатся по порядку</p>
+    <section className="queue-panel" aria-label="New words">
+      <p className="queue-panel-title">New words are learned in order</p>
       <p className="muted small">
-        «Учить» на главном экране берёт по 5 слов отсюда, сверху вниз от самых старых. Выученное слово уходит в повторение, его место
-        занимает следующее. «В повторение» берёт карточку сразу, без обучения.
+        "Learn" on Today takes 5 words at a time from here, top down from the oldest. A learned word moves into review and the next one
+        takes its place. "To review" moves a card there at once, without learning.
       </p>
     </section>
   );
 }
 
-/** Фразы и длинные записи идут в два ряда: корейский сверху, перевод под ним. */
+/** Phrases and long entries take two rows: Korean on top, the translation below. */
 function isLong(card: { kind?: string; korean: string }): boolean {
   return card.kind === "phrase" || card.korean.length > 12;
 }

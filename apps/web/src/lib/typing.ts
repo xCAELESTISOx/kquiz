@@ -28,7 +28,7 @@ export interface TypingCheck {
   almost: boolean;
   /** The expected word, syllable by syllable, as the typed answer got it. */
   marks: { text: string; status: MarkStatus }[];
-  /** What went wrong, in words: "ㅓ вместо ㅗ", "лишний слог 요". */
+  /** What went wrong, in words: "ㅓ instead of ㅗ", "extra syllable 요". */
   slips: string[];
 }
 
@@ -59,12 +59,12 @@ function align(expected: string[], typed: string[]): Op[] {
 
 function describe(expected: string, typed: string): string[] {
   const [e, t] = [letters(expected), letters(typed)];
-  if (!e || !t) return [`${typed} вместо ${expected}`];
+  if (!e || !t) return [`${typed} instead of ${expected}`];
   return e.flatMap((letter, i) => {
     if (letter === t[i]) return [];
-    if (i === 2 && !t[2]) return [`нет 받침 ${letter} в ${expected}`];
-    if (i === 2 && !letter) return [`лишний 받침 ${t[2]} в ${typed}`];
-    return [`${t[i]} вместо ${letter}`];
+    if (i === 2 && !t[2]) return [`missing batchim ${letter} in ${expected}`];
+    if (i === 2 && !letter) return [`extra batchim ${t[2]} in ${typed}`];
+    return [`${t[i]} instead of ${letter}`];
   });
 }
 
@@ -82,10 +82,10 @@ export function checkTyped(expected: string, typed: string): TypingCheck {
       slips.push(...said);
     } else if (op.kind === "missing") {
       marks.push({ text: op.expected, status: "missing" });
-      slips.push(`пропущен слог ${op.expected}`);
+      slips.push(`missing syllable ${op.expected}`);
       letterSlips += 3;
     } else {
-      slips.push(`лишний слог ${op.typed}`);
+      slips.push(`extra syllable ${op.typed}`);
       letterSlips += 3;
     }
   }

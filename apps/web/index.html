@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru" class="booting">
+<html lang="en" class="booting">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -13,6 +13,9 @@
       media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
     />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <title>KQuiz</title>
     <!-- Inline so the splash paints on the first frame, before any script or stylesheet arrives. -->
     <style>
@@ -119,7 +122,7 @@
     </style>
   </head>
   <body>
-    <div id="splash" role="status" aria-label="KQuiz загружается">
+    <div id="splash" role="status" aria-label="KQuiz is loading">
       <div class="splash-mark">
         <svg class="splash-glyph" viewBox="0 0 100 100" aria-hidden="true">
           <!-- ㅁ -->
@@ -144,7 +147,7 @@
         if (!splash || splash.classList.contains("is-leaving")) return;
         const p = document.createElement("p");
         p.className = "splash-error";
-        p.textContent = "Приложение не открылось. Проверь сеть и обнови страницу.";
+        p.textContent = "The app didn't open. Check your connection and reload the page.";
         splash.append(p);
       }, 12000);
     </script>

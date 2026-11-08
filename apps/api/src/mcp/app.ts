@@ -376,12 +376,12 @@ export function createMcpApp(options: McpAppOptions) {
 
 function consentPage(clientName: string, ticket: string) {
   return html`<!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
-    <title>KQuiz · доступ для ${clientName}</title>
+    <title>KQuiz · access for ${clientName}</title>
     <style>
       body { margin: 0; min-height: 100dvh; display: grid; place-items: center; background: #0b0d12; color: #e8eaf0;
         font: 16px/1.5 Pretendard, -apple-system, system-ui, sans-serif; padding: 16px; box-sizing: border-box; }
@@ -396,17 +396,17 @@ function consentPage(clientName: string, ticket: string) {
   </head>
   <body>
     <main>
-      <h1>Дать доступ «${clientName}»?</h1>
-      <p>Приложение сможет работать с твоими карточками в KQuiz.</p>
+      <h1>Give “${clientName}” access?</h1>
+      <p>It will be able to work with your KQuiz cards.</p>
       <ul>
-        <li>добавлять и править карточки</li>
-        <li>искать карточки и смотреть статистику</li>
-        <li>удалять карточки не сможет</li>
+        <li>add and edit cards</li>
+        <li>search cards and see your stats</li>
+        <li>it can't delete cards</li>
       </ul>
       <form method="post" action="/oauth/authorize">
         <input type="hidden" name="ticket" value="${ticket}" />
-        <button class="allow" name="decision" value="allow">Разрешить</button>
-        <button class="deny" name="decision" value="deny">Отклонить</button>
+        <button class="allow" name="decision" value="allow">Allow</button>
+        <button class="deny" name="decision" value="deny">Deny</button>
       </form>
     </main>
   </body>

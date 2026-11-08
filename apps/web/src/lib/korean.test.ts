@@ -23,10 +23,10 @@ describe("parseBulk", () => {
   });
 
   it("reports bad lines with their line numbers", () => {
-    const lines = parseBulk("물 — вода\nбез разделителя\ncat — кошка");
+    const lines = parseBulk("물 — вода\nno separator here\ncat — кошка");
     expect(lines.filter((l) => l.error).map((l) => [l.line, l.error])).toEqual([
-      [2, "Нет разделителя «—»"],
-      [3, "Нет корейского слова"],
+      [2, "No “—” separator"],
+      [3, "No Korean word"],
     ]);
   });
 });

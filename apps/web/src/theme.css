@@ -2372,13 +2372,13 @@ p {
   font-variant-numeric: tabular-nums;
 }
 
-/* "Не знаю": a quiet way out that counts as forgotten. */
+/* "Don't know": a quiet way out that counts as forgotten. */
 .review-actions > .dont-know {
   align-self: center;
   color: var(--text-muted);
 }
 
-/* "Не знаю" and, while learning a word, "Не могу говорить" side by side. */
+/* "Don't know" and, while learning a word, "Can't speak now" side by side. */
 .speech-skips {
   display: flex;
   flex-wrap: wrap;

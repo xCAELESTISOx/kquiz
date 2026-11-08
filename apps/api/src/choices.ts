@@ -1,5 +1,5 @@
-// Options for the "pick the Korean word" screen: the Russian is shown, the user picks the Korean
-// among a few of their own words. It reviews the speech schedule (Russian → Korean recall), as the
+// Options for the "pick the Korean word" screen: the translation is shown, the user picks the Korean
+// among a few of their own words. It reviews the speech schedule (translation → Korean recall), as the
 // quiet alternative to saying the word aloud. Wrong options are words that look alike: the same
 // kind of word (a verb in 다 next to a verb, a phrase next to a phrase), about as long, sharing a
 // topic or a syllable, spelled and so sounding alike letter by letter (사과 next to 사각, 바지 next to 비자). Words whose translation overlaps the card's are left out, or two options
@@ -16,13 +16,14 @@ export type ChoiceOption = { id: number; korean: string; meaning: string };
 
 type Word = { id: number; korean: string; meaning: string; tags: string[] };
 
-/** Every sense of a translation, lowercased: "есть, кушать (о еде)" → {"есть", "кушать"}. */
+/** Every sense of a translation, lowercased: "to eat, to have (food)" → {"to eat", "to have"}. */
 export function senses(meaning: string): Set<string> {
   return new Set(
     meaning
       .toLowerCase()
       .replace(/\([^)]*\)/g, "")
       .split(/[,;/]/)
+      // ё and е are one letter to most Russian writers.
       .map((s) => s.trim().replace(/ё/g, "е"))
       .filter(Boolean),
   );

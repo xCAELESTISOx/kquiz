@@ -38,7 +38,7 @@ export function serverModes(kinds: ReadonlySet<MixKind>): ReviewMode[] {
   return modes;
 }
 
-/** "Повторить" a group: every way at once. Only phrases have no speech schedule, so none of its ways. */
+/** "Review" a group: every way at once. Only phrases have no speech schedule, so none of its ways. */
 export function everyKind(phrases = false): ReadonlySet<MixKind> {
   return new Set<MixKind>(phrases ? ["meaning", "listening", "dictation"] : ["meaning", "aloud", "choice", "write", "listening", "dictation"]);
 }

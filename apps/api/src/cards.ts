@@ -8,7 +8,7 @@ export const MAX_SPEAKABLE_SYLLABLES = 12;
 /** Claude must give exactly this many examples when it adds or edits a card. */
 export const EXAMPLES_PER_CARD = 3;
 
-/** A Korean sentence that uses the word, with its Russian translation. */
+/** A Korean sentence that uses the word, with its translation. */
 export const exampleSchema = z.object({
   ko: z.string().trim().min(1).max(300).regex(/\p{Script=Hangul}/u, "must be a Korean sentence"),
   ru: z.string().trim().min(1).max(300),
@@ -17,9 +17,9 @@ export const exampleSchema = z.object({
 export type Example = z.infer<typeof exampleSchema>;
 
 /**
- * A Sino-Korean root of the word: one syllable, its hanja and a short Russian gloss, e.g.
- * 학 學 «учёба». Cards that share a hanja are one word family; the hanja is the key, because
- * one syllable has many unrelated roots (수 水 «вода», 수 數 «число»).
+ * A Sino-Korean root of the word: one syllable, its hanja and a short gloss, e.g.
+ * 학 學 "study". Cards that share a hanja are one word family; the hanja is the key, because
+ * one syllable has many unrelated roots (수 水 "water", 수 數 "number").
  */
 export const rootSchema = z.object({
   ko: z.string().trim().regex(/^[가-힣]$/, "must be one Hangul syllable"),
@@ -105,7 +105,7 @@ export function isSpeakable(korean: string): boolean {
 }
 
 /**
- * Parses bulk input, one card per line: `한국어 — перевод`.
+ * Parses bulk input, one card per line: `한국어 — translation`.
  * Accepts an em dash, en dash, hyphen surrounded by spaces, or a tab as the separator.
  */
 export function parseBulk(input: string): { cards: NewCard[]; rejected: string[] } {

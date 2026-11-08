@@ -5,6 +5,7 @@ import { clozeFor } from "../lib/cloze";
 import { useLeechIds } from "../lib/leeches";
 import { describeErrors, segments, verdict } from "../lib/pronunciation";
 import { canRecord, MAX_SECONDS, Recorder, RecorderFailure, type RecorderError } from "../lib/recorder";
+import { wordsWord } from "../lib/plural";
 import { groupHash, navigate } from "../lib/router";
 import { cardAudioUrl, useIntonation } from "../lib/practice";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
@@ -18,31 +19,31 @@ import { useFamily, WordFamily } from "../ui/WordFamily";
 import { Spinner } from "../ui/Spinner";
 
 const RATINGS: { name: RatingName; label: string; key: string }[] = [
-  { name: "again", label: "Снова", key: "1" },
-  { name: "hard", label: "Трудно", key: "2" },
-  { name: "good", label: "Хорошо", key: "3" },
-  { name: "easy", label: "Легко", key: "4" },
+  { name: "again", label: "Again", key: "1" },
+  { name: "hard", label: "Hard", key: "2" },
+  { name: "good", label: "Good", key: "3" },
+  { name: "easy", label: "Easy", key: "4" },
 ];
 
 type Phase = "prompt" | "recording" | "scoring" | "result";
 
 const MIC_ERRORS: Record<RecorderError, string> = {
-  unsupported: "Этот браузер не умеет записывать звук. Открой приложение в Safari на iPhone.",
-  denied: "Нет доступа к микрофону. Разреши его в Настройках → Safari → Микрофон и попробуй снова.",
-  no_microphone: "Не нашёлся микрофон.",
-  failed: "Не получилось включить микрофон. Попробуй ещё раз.",
+  unsupported: "This browser can't record audio. Try an up-to-date Chrome, Safari, Firefox or Edge.",
+  denied: "No access to the microphone. Allow it in your browser or system settings and try again.",
+  no_microphone: "No microphone found.",
+  failed: "Couldn't turn on the microphone. Try again.",
 };
 
 function scoreError(error: unknown): string {
-  if (!(error instanceof ApiError)) return "Нет связи с сервером. Оцени себя сам или попробуй позже.";
+  if (!(error instanceof ApiError)) return "Can't reach the server. Grade yourself or try later.";
   switch (error.code) {
     case "bad_recording":
-      return "Не удалось разобрать запись: слишком тихо или коротко. Скажи слово чуть громче.";
+      return "Couldn't make out the recording: too quiet or too short. Say the word a bit louder.";
     case "busy":
-      return "Проверка занята другой записью. Подожди пару секунд и запиши ещё раз.";
+      return "The checker is busy with another recording. Wait a few seconds and record again.";
     case "timeout":
     case "unavailable":
-      return "Проверка произношения сейчас недоступна. Оцени себя сам.";
+      return "Pronunciation check is unavailable right now. Grade yourself.";
     default:
       return error.message;
   }
@@ -58,7 +59,7 @@ export function SpeechScreen({ group }: { group?: GroupFilter }) {
   const recorder = useRef<Recorder>(undefined);
 
   useEffect(() => {
-    document.title = "Произношение · KQuiz";
+    document.title = "Pronunciation · KQuiz";
     (group ? api.group("speech", group) : api.queue("speech")).then(
       ({ items }) => {
         setQueue(items);
@@ -95,7 +96,7 @@ export function SpeechScreen({ group }: { group?: GroupFilter }) {
   return (
     <main className="review speech">
       <header className="review-top">
-        <a className="icon-button" href="#/" aria-label="Закончить тренировку">
+        <a className="icon-button" href="#/" aria-label="End practice">
           <CloseIcon />
         </a>
         <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
@@ -118,7 +119,7 @@ export function SpeechScreen({ group }: { group?: GroupFilter }) {
           item={item}
           recorder={recorder}
           onRated={rated}
-          quiet={<a href={group ? groupHash("choose", group) : "#/choose"}>Выбрать из вариантов</a>}
+          quiet={<a href={group ? groupHash("choose", group) : "#/choose"}>Choose from options</a>}
         />
       )}
     </main>
@@ -144,7 +145,7 @@ export function SpeechCard({
   quiet?: ReactNode;
   /** Learning one word: neither the rating nor the take is kept. */
   practice?: boolean;
-  /** "Не могу говорить": the word is passed over without saying it. */
+  /** "Can't speak now": the word is passed over without saying it. */
   onCantSpeak?: () => void;
 }) {
   const { card } = item;
@@ -157,7 +158,7 @@ export function SpeechCard({
   const [seconds, setSeconds] = useState(0);
   const [take, setTake] = useState<string>();
   const [takeWav, setTakeWav] = useState<Uint8Array>();
-  // "Не знаю": the word is shown and the card counts as forgotten.
+  // "Don't know": the word is shown and the card counts as forgotten.
   const [skipped, setSkipped] = useState(false);
   const shownAt = useRef(performance.now());
   const startedAt = useRef(0);
@@ -188,7 +189,7 @@ export function SpeechCard({
     const recorded = await r.stop();
     if (!recorded || recorded.seconds < 0.3) {
       setPhase(result || scoreFailed ? "result" : "prompt");
-      setError("Запись получилась слишком короткой. Нажми и скажи слово целиком.");
+      setError("The recording is too short. Tap and say the whole word.");
       return;
     }
     setTake(URL.createObjectURL(new Blob([recorded.wav], { type: "audio/wav" })));
@@ -288,14 +289,14 @@ export function SpeechCard({
           <div className="speech-body">
           {leeches.has(card.id) && <LeechBadge />}
           <p className="speech-ask">
-            {cloze ? `Скажи пропущенное слово${card.korean.endsWith("다") ? " в словарной форме" : ""}` : "Скажи по-корейски"}
+            {cloze ? `Say the missing word${card.korean.endsWith("다") ? " in dictionary form" : ""}` : "Say it in Korean"}
           </p>
           <p className="speech-meaning">{card.meaning}</p>
           {cloze && (
             <div className="speech-context">
               <p lang="ko">
                 {cloze.before}
-                {revealed ? <mark className="cloze-mark">{cloze.word}</mark> : <span className="cloze-gap" aria-label="пропуск" />}
+                {revealed ? <mark className="cloze-mark">{cloze.word}</mark> : <span className="cloze-gap" aria-label="gap" />}
                 {cloze.after}
               </p>
               <HiddenTranslation text={card.examples[cloze.example]!.ru} />
@@ -321,7 +322,7 @@ export function SpeechCard({
             </div>
           ) : (
             <button type="button" className="speech-reveal" onClick={() => setRevealed(true)}>
-              Показать слово
+              Show word
             </button>
           )}
 
@@ -331,7 +332,7 @@ export function SpeechCard({
           </div>
 
           {canSpeak() && (
-            <button type="button" className="icon-button speak-button" aria-label="Послушать образец" onClick={() => speak(card)}>
+            <button type="button" className="icon-button speak-button" aria-label="Play the sample" onClick={() => speak(card)}>
               <SpeakerIcon />
             </button>
           )}
@@ -344,21 +345,21 @@ export function SpeechCard({
         {skipped ? (
           <>
             <button type="button" className="button primary" onClick={skipNext}>
-              Дальше
+              Next
             </button>
-            <p className="review-tip muted small">Засчитано как «Снова»: слово вернётся в конце</p>
+            <p className="review-tip muted small">Counted as “Again”: the word comes back at the end</p>
           </>
         ) : phase === "result" ? (
           <>
             <div className="speech-again">
               <button type="button" className="chip-button" onClick={() => void record()}>
                 <RetryIcon />
-                Записать ещё раз
+                Record again
               </button>
               {take && (
                 <button type="button" className="chip-button" onClick={() => playOnce(take)}>
                   <PlayIcon />
-                  Моя запись
+                  My recording
                 </button>
               )}
             </div>
@@ -375,7 +376,7 @@ export function SpeechCard({
                 </button>
               ))}
             </div>
-            <p className="review-tip muted small">{suggested ? "Подсвечена оценка по записи, решаешь ты" : "Оцени себя сам"}</p>
+            <p className="review-tip muted small">{suggested ? "The grade from your recording is highlighted, you decide" : "Grade yourself"}</p>
           </>
         ) : (
           <>
@@ -389,16 +390,16 @@ export function SpeechCard({
             {phase === "prompt" && (
               <div className="speech-skips">
                 <button type="button" className="chip-button dont-know" onClick={skip}>
-                  Не знаю
+                  Don't know
                 </button>
                 {onCantSpeak && (
                   <button type="button" className="chip-button dont-know" onClick={onCantSpeak}>
-                    Не могу говорить
+                    Can't speak now
                   </button>
                 )}
               </div>
             )}
-            {quiet && phase === "prompt" && <p className="review-tip muted small">Нельзя говорить? {quiet}</p>}
+            {quiet && phase === "prompt" && <p className="review-tip muted small">Can't speak? {quiet}</p>}
           </>
         )}
       </footer>
@@ -438,7 +439,7 @@ function ResultDetails({ result, failed }: { result?: ScoreResult; failed?: stri
                 {line.syllable}
               </span>
               <span>
-                <span className="speech-error-label">{line.status === "weak" ? `${line.label}, на грани` : line.label}</span>
+                <span className="speech-error-label">{line.status === "weak" ? `${line.label}, borderline` : line.label}</span>
                 <span className="speech-error-detail">{line.detail}</span>
                 {line.fix && <span className="speech-error-fix">{line.fix}</span>}
               </span>
@@ -454,7 +455,7 @@ function ResultDetails({ result, failed }: { result?: ScoreResult; failed?: stri
 function ScoreRing({ score, tone }: { score: number; tone: string }) {
   const shown = useCountUp(score);
   return (
-    <p className={`speech-score tone-${tone}`} aria-label={`Балл ${score} из 100`}>
+    <p className={`speech-score tone-${tone}`} aria-label={`Score ${score} of 100`}>
       <svg viewBox="0 0 48 48" aria-hidden="true">
         <circle className="score-track" cx="24" cy="24" r="20" pathLength={100} />
         <circle
@@ -477,8 +478,8 @@ export function RecordButton({
   seconds,
   disabled,
   onPress,
-  idleCaption = "Нажми и скажи слово",
-  busyCaption = "Слушаю…",
+  idleCaption = "Tap and say the word",
+  busyCaption = "Listening…",
 }: {
   phase: Phase;
   level: number;
@@ -496,7 +497,7 @@ export function RecordButton({
       <button
         type="button"
         className={`record-button${recording ? " is-recording" : ""}`}
-        aria-label={recording ? "Остановить запись" : "Записать"}
+        aria-label={recording ? "Stop recording" : "Record"}
         aria-pressed={recording}
         disabled={disabled || scoring}
         onClick={onPress}
@@ -515,11 +516,11 @@ export function RecordButton({
       </button>
       <p className="record-caption" aria-live="polite">
         {disabled
-          ? "Запись здесь недоступна"
+          ? "Recording isn't available here"
           : scoring
             ? busyCaption
             : recording
-              ? `Говори. Нажми, когда закончишь · ${Math.ceil(left)} с`
+              ? `Speak. Tap when you're done · ${Math.ceil(left)} s`
               : idleCaption}
       </p>
     </div>
@@ -534,10 +535,10 @@ function Finished({ count }: { count: number }) {
           잘했어요!
         </p>
         <p className="finished-text">
-          {count ? `Проговорено слов: ${count}. На сегодня всё.` : "Сейчас тренировать нечего."}
+          {count ? `You said ${count} ${wordsWord(count)}. That's all for today.` : "Nothing to practise right now."}
         </p>
         <a className="button primary" href="#/">
-          На главную
+          Home
         </a>
       </div>
     </div>

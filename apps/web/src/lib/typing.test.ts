@@ -16,19 +16,19 @@ describe("checkTyped", () => {
 
   it("names a wrong vowel and calls one letter a slip", () => {
     const check = checkTyped("고기", "거기");
-    expect(check).toMatchObject({ correct: false, almost: true, slips: ["ㅓ вместо ㅗ"] });
+    expect(check).toMatchObject({ correct: false, almost: true, slips: ["ㅓ instead of ㅗ"] });
     expect(check.marks.map((m) => m.status)).toEqual(["wrong", "ok"]);
     expect(typingRating(check)).toBe("hard");
   });
 
   it("names a missing final", () => {
-    expect(checkTyped("국물", "구물").slips).toEqual(["нет 받침 ㄱ в 국"]);
+    expect(checkTyped("국물", "구물").slips).toEqual(["missing batchim ㄱ in 국"]);
   });
 
   it("tells missing and extra syllables", () => {
     expect(checkTyped("학교", "학").marks.map((m) => m.status)).toEqual(["ok", "missing"]);
     const extra = checkTyped("물", "물요");
-    expect(extra.slips).toEqual(["лишний слог 요"]);
+    expect(extra.slips).toEqual(["extra syllable 요"]);
     expect(typingRating(extra)).toBe("again");
   });
 

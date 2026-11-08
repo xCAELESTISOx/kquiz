@@ -110,7 +110,7 @@ describe("migration 0008 (users)", () => {
       insert into oauth_clients values ('c', null, 'Claude', '[]', 1, 1);
       insert into oauth_grants values ('g', 'c', 'cards', 1, 1, 'a', 2, 'r', 3, '[]');
     `);
-    // Up to 0011: 0013 later wipes the owner's learning on purpose.
+    // Up to 0011, the last migration this test is about.
     migrateUpTo(sqlite, dir, 11);
     sqlite.close();
 
@@ -129,8 +129,8 @@ describe("migration 0008 (users)", () => {
   });
 });
 
-describe("migrations 0012 and 0013 (fresh start keeping audio)", () => {
-  it("wipe the owner's learning, keep their account, friends' data and every recording", () => {
+describe("migrations 0012 and 0013 (audio library; 0013 retired)", () => {
+  it("copy every recording into the library and keep everyone's learning", () => {
     const dir = mkdtempSync(join(tmpdir(), "kquiz-0013-"));
     const file = join(dir, "kquiz.db");
     const sqlite = new Database(file);
@@ -155,8 +155,8 @@ describe("migrations 0012 and 0013 (fresh start keeping audio)", () => {
 
     const db = openDb(file);
     const n = (q: string) => (db.$client.prepare(`select count(*) n from ${q}`).get() as { n: number }).n;
-    for (const table of ["cards", "fsrs_settings", "phone_stats", "sound_drills"]) expect(n(`${table} where user_id = 1`), table).toBe(0);
-    for (const table of ["review_states", "review_log", "attempts", "card_audio"]) expect(n(`${table} where card_id = 7`), table).toBe(0);
+    for (const table of ["cards", "fsrs_settings", "phone_stats", "sound_drills"]) expect(n(`${table} where user_id = 1`), table).toBe(1);
+    for (const table of ["review_states", "review_log", "attempts", "card_audio"]) expect(n(`${table} where card_id = 7`), table).toBe(1);
     expect(n("settings where user_id = 1")).toBe(1);
     expect(n("users")).toBe(2);
     for (const table of ["cards", "fsrs_settings", "phone_stats"]) expect(n(`${table} where user_id = 2`), table).toBe(1);

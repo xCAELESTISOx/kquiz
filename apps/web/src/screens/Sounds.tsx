@@ -31,7 +31,7 @@ export function SoundsScreen() {
   }, []);
 
   useEffect(() => {
-    document.title = "Похожие звуки · KQuiz";
+    document.title = "Similar sounds · KQuiz";
     load();
     return stopPlayback;
   }, [load]);
@@ -44,7 +44,7 @@ export function SoundsScreen() {
   }, [round, step]);
 
   const listen = useCallback((text: string, voice?: string) => {
-    void play(textAudioUrl(text, voice)).then((ok) => !ok && setError("Не получилось проиграть звук. Попробуй ещё раз."));
+    void play(textAudioUrl(text, voice)).then((ok) => !ok && setError("Couldn't play the sound. Try again."));
   }, []);
 
   const listenTarget = useCallback(() => {
@@ -110,7 +110,7 @@ export function SoundsScreen() {
   return (
     <main className="review sounds">
       <header className="review-top">
-        <a className="icon-button" href="#/" aria-label="Закончить">
+        <a className="icon-button" href="#/" aria-label="Finish">
           <CloseIcon />
         </a>
         <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={round.length} aria-valuenow={answered}>
@@ -131,20 +131,20 @@ export function SoundsScreen() {
         <>
           <div className="review-stage">
             <div className="review-card sounds-card" key={step}>
-              <p className="speech-ask">Какое слово звучит?</p>
+              <p className="speech-ask">Which word do you hear?</p>
               <p className="sounds-contrast" lang="ko">
                 {trial.drill.contrast.split("/").join(" · ")}
               </p>
               <button
                 type="button"
                 className="sounds-play"
-                aria-label="Послушать ещё раз"
+                aria-label="Listen again"
                 data-pulse={!heard || undefined}
                 onClick={listenTarget}
               >
                 <EarIcon />
               </button>
-              <p className="muted small">{heard ? "Нажми, чтобы повторить" : "Нажми, чтобы услышать"}</p>
+              <p className="muted small">{heard ? "Tap to play again" : "Tap to listen"}</p>
             </div>
           </div>
 
@@ -152,7 +152,7 @@ export function SoundsScreen() {
             {error && <p className="notice notice-error speech-notice">{error}</p>}
             {picked !== undefined && (
               <p className={`sounds-feedback tone-${picked === trial.target ? "ok" : "wrong"}`}>
-                {picked === trial.target ? "Верно" : `Это было ${trial.drill.words[trial.target]!.korean}`}
+                {picked === trial.target ? "Right" : `It was ${trial.drill.words[trial.target]!.korean}`}
               </p>
             )}
           </div>
@@ -183,12 +183,12 @@ export function SoundsScreen() {
             {picked !== undefined ? (
               <>
                 <button type="button" className="button primary" onClick={next}>
-                  {step + 1 < round.length ? "Дальше" : "Итог"}
+                  {step + 1 < round.length ? "Next" : "Results"}
                 </button>
                 <p className="review-tip muted small">
-                  Нажимай на слова, чтобы сравнить.{" "}
+                  Tap the words to compare.{" "}
                   <button type="button" className="link-button" onClick={remove}>
-                    Убрать этот набор
+                    Remove this set
                   </button>
                 </p>
               </>
@@ -196,10 +196,10 @@ export function SoundsScreen() {
               <>
                 {heard && (
                   <button type="button" className="chip-button dont-know" onClick={() => pick(-1)}>
-                    Не знаю
+                    Don't know
                   </button>
                 )}
-                <p className="review-tip muted small">{heard ? "Выбери, что услышал" : "Сначала послушай"}</p>
+                <p className="review-tip muted small">{heard ? "Pick what you heard" : "Listen first"}</p>
               </>
             )}
           </footer>
@@ -218,11 +218,11 @@ function NoDrills({ waiting }: { waiting: number }) {
         </p>
         <p className="finished-text">
           {waiting
-            ? `Наборов: ${waiting}. Сервер их ещё озвучивает, загляни чуть позже.`
-            : "Наборов пока нет. Попроси Claude: «Добавь в KQuiz упражнения на звуки, которые я путаю». Он подберёт слова из твоих карточек."}
+            ? `${waiting} ${waiting === 1 ? "set" : "sets"} waiting: the server is still recording them. Check back a bit later.`
+            : "No sets yet. Ask Claude: “Add sound drills to KQuiz for the sounds I mix up”. It will pick words from your cards."}
         </p>
         <a className="button primary" href="#/">
-          На главную
+          Home
         </a>
       </div>
     </div>
@@ -234,20 +234,20 @@ function RoundDone({ right, total, onAgain }: { right: number; total: number; on
     <div className="review-stage">
       <div className="finished">
         <p className="finished-mark">
-          {right} <span className="muted">из {total}</span>
+          {right} <span className="muted">of {total}</span>
         </p>
         <p className="finished-text">
           {right === total
-            ? "Всё на слух верно."
+            ? "You heard every one right."
             : right >= total * 0.75
-              ? "Почти всё. Наборы с ошибками придут первыми в следующий раз."
-              : "Эти звуки пока сливаются. Наборы с ошибками придут первыми в следующий раз."}
+              ? "Almost all. The sets you missed come first next time."
+              : "These sounds still blur together. The sets you missed come first next time."}
         </p>
         <button type="button" className="button primary" onClick={onAgain}>
-          Ещё раунд
+          Another round
         </button>
         <a className="button" href="#/">
-          На главную
+          Home
         </a>
       </div>
     </div>

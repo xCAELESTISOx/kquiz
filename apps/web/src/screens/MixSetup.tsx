@@ -9,38 +9,38 @@ import "../ui/practice.css";
 const KINDS: { kind: MixKind; title: string; sub: string; icon: ReactNode }[] = [
   {
     kind: "meaning",
-    title: "Перевод",
-    sub: "Слово → вспомнить перевод, фраза → собрать из блоков",
+    title: "Translation",
+    sub: "Word → recall the translation, phrase → build it from blocks",
     icon: <CardsIcon />,
   },
   {
     kind: "aloud",
-    title: "Вслух",
-    sub: "Перевод → сказать по-корейски",
+    title: "Aloud",
+    sub: "Translation → say it in Korean",
     icon: <MicIcon />,
   },
   {
     kind: "choice",
-    title: "Выбор из вариантов",
-    sub: "Перевод → найти слово среди похожих",
+    title: "Choose from options",
+    sub: "Translation → find the word among similar ones",
     icon: <ChoiceIcon />,
   },
   {
     kind: "write",
-    title: "Написать по переводу",
-    sub: "Перевод → набрать хангылем",
+    title: "Type from translation",
+    sub: "Translation → type it in Hangul",
     icon: <PenIcon />,
   },
   {
     kind: "listening",
-    title: "На слух",
-    sub: "Послушать → вспомнить перевод",
+    title: "Listening",
+    sub: "Listen → recall the translation",
     icon: <HeadphonesIcon />,
   },
   {
     kind: "dictation",
-    title: "Написать по звуку",
-    sub: "Послушать → набрать слово или собрать фразу",
+    title: "Type what you hear",
+    sub: "Listen → type the word or build the phrase",
     icon: <EarIcon />,
   },
 ];
@@ -49,8 +49,8 @@ const SPEECH_KINDS: ReadonlySet<MixKind> = new Set(["aloud", "choice", "write"])
 
 // How the ways read when only phrases are mixed.
 const PHRASE_TEXT: Partial<Record<MixKind, { title: string; sub: string }>> = {
-  meaning: { title: "Собрать по переводу", sub: "Перевод → собрать фразу из блоков" },
-  dictation: { title: "Собрать по звуку", sub: "Послушать → собрать фразу из блоков" },
+  meaning: { title: "Build from translation", sub: "Translation → build the phrase from blocks" },
+  dictation: { title: "Build what you hear", sub: "Listen → build the phrase from blocks" },
 };
 
 /**
@@ -105,7 +105,7 @@ export function MixSetup({
       <div className="review-stage mix-stage">
         <section className="mix-setup" aria-labelledby="mix-title">
           <h1 id="mix-title" className="mix-title">
-            Что смешать
+            What to mix
           </h1>
           <div className="mix-options">
             {shown.map(({ kind, title, sub, icon }, i) => {
@@ -126,7 +126,7 @@ export function MixSetup({
                       {title}
                       {counted && due && <span className="mix-count">{due[kind]}</span>}
                     </span>
-                    <span className="practice-sub">{off ? "Запись здесь недоступна" : sub}</span>
+                    <span className="practice-sub">{off ? "Recording isn't available here" : sub}</span>
                   </span>
                   <span className="mix-check" aria-hidden="true">
                     <CheckIcon />
@@ -136,13 +136,13 @@ export function MixSetup({
             })}
           </div>
           {(["aloud", "choice", "write"] as const).filter((k) => kinds.has(k)).length > 1 && (
-            <p className="muted small">Слова «вслух» делятся между выбранными способами поровну.</p>
+            <p className="muted small">Words for speaking are split evenly between the ways you pick.</p>
           )}
         </section>
       </div>
       <footer className="review-actions">
         <button type="button" className="button primary" disabled={!kinds.size} onClick={() => onStart(kinds)}>
-          Начать
+          Start
         </button>
       </footer>
     </>

@@ -23,7 +23,7 @@ export function useFamily(card: Card | undefined): Family[] | undefined {
 const MORE_WORDS = 3;
 
 /**
- * The card's Sino-Korean roots, each with the user's other words that share it: 학 學 «учёба» →
+ * The card's Sino-Korean roots, each with the user's other words that share it: 학 學 "study" →
  * 학생, 대학교. A root opens the cards screen filtered to its family. Shows nothing for a native word.
  */
 export function WordFamily({ card, families }: { card: Card; families: Family[] | undefined }) {
@@ -31,7 +31,7 @@ export function WordFamily({ card, families }: { card: Card; families: Family[] 
   // Until the family arrives, the roots alone; a root repeated in the word is shown once.
   const roots = families ?? card.roots.filter((r, i, all) => all.findIndex((o) => o.hanja === r.hanja) === i);
   return (
-    <section className="family" aria-label="Корни слова">
+    <section className="family" aria-label="Word roots">
       <ul className="family-list">
         {roots.map((root) => {
           const family = "cards" in root ? (root as Family) : undefined;
@@ -42,7 +42,7 @@ export function WordFamily({ card, families }: { card: Card; families: Family[] 
               <a
                 className="family-key"
                 href={`#/cards?root=${encodeURIComponent(root.hanja)}`}
-                aria-label={`${root.ko} ${root.hanja}, ${root.meaning}: все слова с этим корнем`}
+                aria-label={`${root.ko} ${root.hanja}, ${root.meaning}: all words with this root`}
                 // Inside a swipeable card: following the link is not a tap or a swipe on the card.
                 onClick={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
@@ -57,13 +57,13 @@ export function WordFamily({ card, families }: { card: Card; families: Family[] 
               <div className="family-body">
                 <p className="family-gloss">{root.meaning}</p>
                 {shown.length > 0 && (
-                  <ul className="family-words" aria-label="Слова с тем же корнем">
+                  <ul className="family-words" aria-label="Words with the same root">
                     {shown.map((word) => (
                       <li key={word.id} className="family-word">
                         <span lang="ko">{word.korean}</span> <span className="family-word-meaning">{word.meaning}</span>
                       </li>
                     ))}
-                    {more > 0 && <li className="family-more">и ещё {more}</li>}
+                    {more > 0 && <li className="family-more">and {more} more</li>}
                   </ul>
                 )}
               </div>
