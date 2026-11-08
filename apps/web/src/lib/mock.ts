@@ -463,8 +463,19 @@ export class MockApi {
         speech: this.queue("speech", Infinity).length,
         listening: this.queue("listening", Infinity).length,
       },
+      dueWords: new Set(this.queue("mixed", Infinity).map((i) => i.card.id)).size,
       reviewedToday: this.state.reviewedToday.day === day ? this.state.reviewedToday.count : 0,
-      newCards: { queued: this.state.cards.filter((c) => c.queued).length },
+      learned: this.state.cards.filter((c) => !c.queued && !c.suspended).length,
+      learnedToday: 0,
+      newCards: {
+        queued: this.state.cards.filter((c) => c.queued).length,
+        learning: this.state.cards.filter((c) => c.queued && !c.suspended && (this.state.learn?.[c.id]?.at || this.state.learn?.[c.id]?.passedAt)).length,
+        next: this.state.cards
+          .filter((c) => c.queued && !c.suspended)
+          .sort((a, b) => Number(!this.state.learn?.[a.id]?.at) - Number(!this.state.learn?.[b.id]?.at) || a.id - b.id)
+          .slice(0, 12)
+          .map((c) => c.korean),
+      },
     };
   }
 

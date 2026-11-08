@@ -39,13 +39,18 @@ describe("new words", () => {
 
     const stats = (await t.request("/reviews/stats")).json;
     expect(stats.due).toEqual({ meaning: 0, speech: 0, listening: 0 });
-    expect(stats.newCards).toEqual({ queued: 7 });
+    expect(stats.newCards).toMatchObject({ queued: 7, learning: 0 });
+    expect(stats.newCards.next).toHaveLength(7);
     expect((await t.request("/reviews/queue?mode=meaning")).json.items).toHaveLength(0);
 
     const learning = (await t.request("/cards/learning")).json;
     expect(learning.items.map((i: any) => i.card.id)).toEqual(claude.slice(0, 5).map((c) => c.id));
     expect(learning.items.every((i: any) => i.step === 0)).toBe(true);
     expect(learning.pool).toBe(2);
+    // Today shows how many are in learning and which come first: those, then the pool.
+    const after = (await t.request("/reviews/stats")).json.newCards;
+    expect(after.learning).toBe(5);
+    expect(after.next.slice(0, 5)).toEqual(claude.slice(0, 5).map((c) => c.korean));
     // Asking again gives the same words.
     expect((await t.request("/cards/learning")).json.items.map((i: any) => i.card.id)).toEqual(learning.items.map((i: any) => i.card.id));
   });
@@ -81,6 +86,7 @@ describe("new words", () => {
     // 01:00 in Seoul now: learned, it is due at the next midnight.
     expect(await answer(true)).toEqual({ status: "learned", due: "2026-10-20T15:00:00.000Z" });
     expect((await t.request(`/cards/${id}`)).json.card.queued).toBe(false);
+    expect((await t.request("/reviews/stats")).json).toMatchObject({ learned: 1, learnedToday: 1 });
     expect((await answer(true)).status).toBeUndefined();
     expect((await t.request(`/cards/${id}/learning`, { body: { ok: true } })).status).toBe(409);
     expect((await t.request("/cards/999/learning", { body: { ok: true } })).status).toBe(404);
@@ -96,7 +102,7 @@ describe("new words", () => {
     const res = await t.request("/cards/learned", { body: { cardIds: [a!.id, b!.id], missed: [b!.id] } });
     expect(res.json.introduced.sort()).toEqual([a!.id, b!.id].sort());
     expect((await t.request("/cards/learned", { body: { cardIds: [a!.id] } })).json.introduced).toEqual([]);
-    expect((await t.request("/reviews/stats")).json.newCards).toEqual({ queued: 1 });
+    expect((await t.request("/reviews/stats")).json.newCards).toMatchObject({ queued: 1 });
     t.clock.now = new Date(t.clock.now.getTime() + 2 * HOUR);
     expect((await t.request("/reviews/queue?mode=meaning")).json.items.map((i: any) => i.card.id)).toEqual([b!.id]);
     expect((await t.request("/cards/learned", { body: { cardIds: [] } })).status).toBe(400);

@@ -159,10 +159,20 @@ export interface ReviewResult {
 
 export interface Stats {
   cards: number;
+  /** Tasks due per mode: a word due for meaning and by ear counts twice. */
   due: Record<ReviewMode, number>;
+  /** Words due in any mode, each once. */
+  dueWords: number;
+  /** Reviews answered today (learned words only; learning new ones isn't counted). */
   reviewedToday: number;
-  /** New words waiting to be learned (in the pool, being learned or waiting for their check). */
-  newCards: { queued: number };
+  /** Words past the new-word pool and not paused, and of them the ones learned today. */
+  learned: number;
+  learnedToday: number;
+  /**
+   * New words not learned yet: all of them (`queued`), the ones already being learned, and the
+   * Korean of the next few "Учить" comes to.
+   */
+  newCards: { queued: number; learning: number; next: string[] };
 }
 
 /** PATCH /api/cards/:id: any field; "" clears an optional one. */

@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { api, auth, lastToday, pendingReviewCount, remembered, rememberToday } from "../lib/api";
-import { cardsWord } from "../lib/plural";
+import { wordsWord } from "../lib/plural";
+import { NEW_AT_ONCE } from "../lib/session";
 import { hideSplash } from "../lib/splash";
 import type { QueueItem, Stats, StatsOverview } from "../lib/types";
 import { CardsIcon, CloseIcon, HeadphonesIcon, LearnIcon, MicIcon, MoreIcon, PlusIcon, ShuffleIcon } from "../ui/icons";
@@ -9,7 +10,31 @@ import { PracticeLinks } from "../ui/PracticeLinks";
 import { ScheduleSettings } from "./ScheduleSettings";
 import "../ui/today.css";
 
+/** Words on the wall at most: the ones due first, then the next new ones. */
 const PREVIEW = 14;
+/** Syllables the wall holds, so a few long phrases don't push everything else off the screen. */
+const WALL_SYLLABLES = 34;
+/** Longer than this, a phrase stays off the wall (it is still counted in "+N"). */
+const LONG = 9;
+
+/** Each due word once (the queue lists a word due in two modes twice), short ones only. */
+function dueWords(items: QueueItem[]): QueueItem[] {
+  const seen = new Set<number>();
+  return items
+    .filter(({ card }) => !seen.has(card.id) && (seen.add(card.id), true) && card.korean.length <= LONG)
+    .slice(0, PREVIEW);
+}
+
+/** The first of `words` that fit in `budget` syllables. */
+function fitting<T>(words: T[], korean: (w: T) => string, budget: number): T[] {
+  const out: T[] = [];
+  for (const w of words) {
+    budget -= korean(w).length;
+    if (budget < 0) break;
+    out.push(w);
+  }
+  return out;
+}
 
 export function TodayScreen() {
   // Last launch's numbers first, so the screen is never empty while the server answers.
@@ -22,10 +47,10 @@ export function TodayScreen() {
 
   useEffect(() => {
     document.title = "KQuiz";
-    // The whole queue, not just the preview: the review screen takes this answer instead of asking again.
-    Promise.all([api.stats(), api.queue("meaning")]).then(
+    // The whole queue, not just the preview: the session takes this answer instead of asking again.
+    Promise.all([api.stats(), api.queue("mixed", 200)]).then(
       ([s, q]) => {
-        const items = q.items.slice(0, PREVIEW);
+        const items = dueWords(q.items);
         setStats(s);
         setPreview(items);
         setError(undefined);
@@ -43,6 +68,18 @@ export function TodayScreen() {
   }, [stats, error]);
 
   const due = stats?.due.meaning ?? 0;
+  const dueCount = stats?.dueWords ?? 0;
+  const learning = stats?.newCards.learning ?? 0;
+  const wall = fitting(preview, (i) => i.card.korean, WALL_SYLLABLES);
+  const moreDue = Math.max(dueCount - wall.length, 0);
+  // Room left on the wall goes to the new words, so it is never one lonely word.
+  const left = WALL_SYLLABLES - wall.reduce((n, i) => n + i.card.korean.length, 0);
+  const upcoming = fitting(
+    (stats?.newCards.next ?? []).filter((k) => k.length <= LONG),
+    (k) => k,
+    left,
+  ).slice(0, Math.max(PREVIEW - wall.length, 0));
+  const portion = Math.min(NEW_AT_ONCE, stats?.newCards.queued ?? 0);
   const speechDue = stats?.due.speech ?? 0;
   const listenDue = stats?.due.listening ?? 0;
   const restDue = speechDue + listenDue;
@@ -67,41 +104,37 @@ export function TodayScreen() {
 
       {fresh && <FirstWords />}
 
-      {/* The words themselves are the hero: today's queue as a wall of Hangul. */}
-      <section hidden={fresh} className="word-wall" aria-label="Слова к повторению" aria-busy={!stats && !error}>
-        {stats && due > 0 && (
-          <p className="word-wall-words" lang="ko">
-            {preview.map(({ card }, i) => (
-              <span key={card.id} style={{ opacity: Math.max(1 - i * 0.065, 0.22), "--i": i } as CSSProperties}>
-                {card.korean}
-              </span>
-            ))}
-            {due > preview.length && (
-              <span className="word-wall-more" style={{ "--i": preview.length } as CSSProperties}>
-                +{due - preview.length}
-              </span>
+      {/* The words themselves are the hero: the ones to go over, then the new ones coming up. */}
+      <section hidden={fresh} className="word-wall" aria-label="Слова на сегодня" aria-busy={!stats && !error}>
+        {stats && (wall.length + upcoming.length > 0 ? <WordWall due={wall} more={moreDue} fresh={upcoming} /> : <AllDone />)}
+        {stats && wall.length + upcoming.length > 0 && (
+          <ul className="word-wall-legend">
+            {dueCount > 0 && (
+              <li data-kind="due">
+                <b>
+                  Повторить {dueCount} {wordsWord(dueCount)}
+                </b>
+                <span className="muted"> — уже знакомые, пора освежить</span>
+              </li>
             )}
-          </p>
-        )}
-        {stats && due === 0 && (
-          <p className="word-wall-empty">
-            <DoneMark />
-            <span lang="ko" className="word-wall-done">
-              다 했어요
-            </span>
-            <span className="muted">
-              {restDue > 0
-                ? `Значения повторены. Осталось ${[
-                    speechDue > 0 && `проговорить вслух: ${speechDue}`,
-                    listenDue > 0 && `узнать на слух: ${listenDue}`,
-                  ]
-                    .filter(Boolean)
-                    .join(", ")}.`
-                : queued > 0
-                  ? `Повторять нечего. Новых слов ждут ${queued}: «Учить» возьмёт по 5.`
-                  : "На сейчас всё повторено. Новые слова можно добавить в любой момент."}
-            </span>
-          </p>
+            {dueCount === 0 && !fresh && (
+              <li data-kind="done">
+                <b>Повторять пока нечего</b>
+                <span className="muted"> — всё выученное освежено</span>
+              </li>
+            )}
+            {queued > 0 && (
+              <li data-kind="new">
+                <b>
+                  Новые: {queued} {wordsWord(queued)} в очереди
+                </b>
+                <span className="muted">
+                  {" "}
+                  — {learning > 0 ? `${learning} уже учите, ` : ""}«Учить» берёт по {NEW_AT_ONCE}
+                </span>
+              </li>
+            )}
+          </ul>
         )}
         {!stats && !error && <div className="skeleton" />}
       </section>
@@ -131,7 +164,9 @@ export function TodayScreen() {
           <a className="button primary session-button" href="#/session">
             <span>Учить</span>
             <span className="session-button-sub">
-              {[totalDue > 0 && `повторить ${totalDue}`, queued > 0 && `новых слов ${queued}`].filter(Boolean).join(" · ")}
+              {[dueCount > 0 && `повторить ${dueCount} ${wordsWord(dueCount)}`, portion > 0 && `выучить ${portion} ${portion === 1 ? "новое" : "новых"}`]
+                .filter(Boolean)
+                .join(" · ")}
             </span>
           </a>
         )}
@@ -163,18 +198,21 @@ function TodayStats({ stats }: { stats: Stats }) {
     <a className="today-stats" href="#/stats" aria-label="Статистика">
       <dl className="today-stats-facts">
         <div>
-          <dt>Серия</dt>
+          <dt>Дней подряд</dt>
           <dd>
-            {streak} <span className="muted">{daysWord(streak)}</span>
+            {streak}
           </dd>
         </div>
         <div>
-          <dt>Сегодня</dt>
+          <dt>Повторено сегодня</dt>
           <dd>{stats.reviewedToday}</dd>
         </div>
         <div>
-          <dt>Новых слов</dt>
-          <dd>{stats.newCards.queued}</dd>
+          <dt>Выучено слов</dt>
+          <dd>
+            {stats.learned}
+            {stats.learnedToday > 0 && <span className="today-stats-plus"> +{stats.learnedToday}</span>}
+          </dd>
         </div>
       </dl>
       <div className="today-stats-chart" aria-hidden="true">
@@ -187,7 +225,9 @@ function TodayStats({ stats }: { stats: Stats }) {
           />
         ))}
       </div>
-      <p className="today-stats-caption muted small">Повторения за две недели ›</p>
+      <p className="today-stats-caption muted small">
+        Повторения по дням, последние две недели <span aria-hidden="true">›</span>
+      </p>
     </a>
   );
 }
@@ -237,10 +277,6 @@ const PeopleIcon = () => (
   </svg>
 );
 
-function daysWord(n: number): string {
-  return { карточку: "день", карточки: "дня", карточек: "дней" }[cardsWord(n)]!;
-}
-
 /** Everything besides "Учить": each kind of review on its own, practice, and the settings. */
 function MoreSheet({
   onClose,
@@ -287,6 +323,46 @@ function MoreSheet({
         <ScheduleSettings />
       </div>
     </div>
+  );
+}
+
+/** Today's words as a wall of Hangul: the ones due bright and fading, the new ones after them in the accent. */
+function WordWall({ due, more, fresh }: { due: QueueItem[]; more: number; fresh: string[] }) {
+  return (
+    <p className="word-wall-words" lang="ko">
+      {due.map(({ card }, i) => (
+        <span key={card.id} style={{ opacity: Math.max(1 - i * 0.065, 0.3), "--i": i } as CSSProperties}>
+          {card.korean}
+        </span>
+      ))}
+      {more > 0 && (
+        <span className="word-wall-more" style={{ "--i": due.length } as CSSProperties}>
+          +{more}
+        </span>
+      )}
+      {fresh.map((korean, i) => (
+        <span
+          key={`new-${korean}`}
+          className="word-wall-new"
+          style={{ opacity: Math.max(0.85 - i * 0.07, 0.25), "--i": due.length + i + 1 } as CSSProperties}
+        >
+          {korean}
+        </span>
+      ))}
+    </p>
+  );
+}
+
+/** Nothing due and no new words: the one celebratory moment. */
+function AllDone() {
+  return (
+    <p className="word-wall-empty">
+      <DoneMark />
+      <span lang="ko" className="word-wall-done">
+        다 했어요
+      </span>
+      <span className="muted">Всё выученное повторено, новых слов в очереди нет. Добавьте слова с занятия, когда будут.</span>
+    </p>
   );
 }
 
