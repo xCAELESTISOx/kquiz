@@ -52,7 +52,8 @@ export interface KeyValueStorage {
 
 const KEY = "kquiz.mock.v5";
 
-const ACTIVE_WORDS = 5;
+const ACTIVE_WORDS = 3;
+const IN_PROGRESS_LIMIT = 5;
 const LADDER_STEPS = 3;
 const CHECK_AFTER = 3 * 3_600_000;
 const MINUTE = 60_000;
@@ -303,6 +304,16 @@ export class MockApi {
     return { introduced };
   }
 
+  /** How many new words may start: a free place on the ladder, and few enough unfinished. */
+  private room(): number {
+    const learn = this.state.learn ?? {};
+    const waiting = this.state.cards.filter((c) => c.queued && !c.suspended);
+    const active = waiting.filter((c) => learn[c.id]?.at && !learn[c.id]!.passedAt).length;
+    const passed = waiting.filter((c) => learn[c.id]?.passedAt).length;
+    const pool = waiting.filter((c) => !learn[c.id]).length;
+    return Math.max(0, Math.min(ACTIVE_WORDS - active, IN_PROGRESS_LIMIT - active - passed, pool));
+  }
+
   learning(): { items: LearningItem[]; pool: number } {
     const learn = (this.state.learn ??= {});
     const waiting = this.state.cards.filter((c) => c.queued && !c.suspended).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id - b.id);
@@ -310,7 +321,7 @@ export class MockApi {
     const checks = waiting.filter((c) => learn[c.id]?.passedAt && now - Date.parse(learn[c.id]!.passedAt!) >= CHECK_AFTER);
     const active = waiting.filter((c) => learn[c.id]?.at && !learn[c.id]!.passedAt);
     for (const card of waiting) {
-      if (active.length >= ACTIVE_WORDS) break;
+      if (this.room() <= 0) break;
       if (learn[card.id]) continue;
       learn[card.id] = { at: this.now().toISOString(), step: 0, passedAt: null };
       active.push(card);
@@ -343,9 +354,11 @@ export class MockApi {
       word.step++;
       word.passedAt = at;
       word.at = null;
-      const next = this.state.cards
-        .filter((c) => c.queued && !c.suspended && !learn[c.id])
-        .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id - b.id)[0];
+      const next = this.room() > 0
+        ? this.state.cards
+            .filter((c) => c.queued && !c.suspended && !learn[c.id])
+            .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id - b.id)[0]
+        : undefined;
       if (next) learn[next.id] = { at, step: 0, passedAt: null };
       answer = { status: "passed", next: next ? { card: next, step: 0 } : null };
     }
@@ -494,8 +507,13 @@ export class MockApi {
         next: this.state.cards
           .filter((c) => c.queued && !c.suspended)
           .sort((a, b) => Number(!this.state.learn?.[a.id]?.at) - Number(!this.state.learn?.[b.id]?.at) || a.id - b.id)
+          .filter((c) => this.state.learn?.[c.id]?.at)
+          .concat(this.state.cards.filter((c) => c.queued && !c.suspended && !this.state.learn?.[c.id]).slice(0, this.room()))
           .slice(0, 12)
           .map((c) => c.korean),
+        started: this.state.cards.filter((c) => c.queued && !c.suspended && this.state.learn?.[c.id]?.at).length,
+        fresh: this.room(),
+        pool: this.state.cards.filter((c) => c.queued && !c.suspended && !this.state.learn?.[c.id]).length,
       },
     };
   }

@@ -1,7 +1,6 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { api, auth, lastToday, pendingReviewCount, remembered, rememberToday } from "../lib/api";
 import { wordsWord } from "../lib/plural";
-import { NEW_AT_ONCE } from "../lib/session";
 import { hideSplash } from "../lib/splash";
 import type { QueueItem, Stats, StatsOverview } from "../lib/types";
 import { CardsIcon, CloseIcon, HeadphonesIcon, LearnIcon, MicIcon, MoreIcon, PlusIcon, ShuffleIcon } from "../ui/icons";
@@ -78,7 +77,11 @@ export function TodayScreen() {
     (k) => k,
     left,
   ).slice(0, Math.max(PREVIEW - wall.length, 0));
-  const portion = Math.min(NEW_AT_ONCE, stats?.newCards.queued ?? 0);
+  // What "Учить" goes on with: words already started first, new ones only when few are unfinished.
+  const started = stats?.newCards.started ?? 0;
+  const portion = stats?.newCards.fresh ?? 0;
+  const learning = stats?.newCards.learning ?? 0;
+  const pool = stats?.newCards.pool ?? 0;
   const speechDue = stats?.due.speech ?? 0;
   const listenDue = stats?.due.listening ?? 0;
   const restDue = speechDue + listenDue;
@@ -109,7 +112,8 @@ export function TodayScreen() {
         {stats && wall.length + upcoming.length > 0 && (
           <ul className="word-wall-legend">
             {dueCount > 0 && <li data-kind="due">повторить {dueCount}</li>}
-            {queued > 0 && <li data-kind="new">новых в очереди {queued}</li>}
+            {learning > 0 && <li data-kind="new">учатся {learning}</li>}
+            {pool > 0 && <li data-kind="pool">в очереди {pool}</li>}
           </ul>
         )}
         {!stats && !error && <div className="skeleton" />}
@@ -140,7 +144,11 @@ export function TodayScreen() {
           <a className="button primary session-button" href="#/session">
             <span>Учить</span>
             <span className="session-button-sub">
-              {[dueCount > 0 && `повторить ${dueCount} ${wordsWord(dueCount)}`, portion > 0 && `выучить ${portion} ${portion === 1 ? "новое" : "новых"}`]
+              {[
+                dueCount > 0 && `повторить ${dueCount} ${wordsWord(dueCount)}`,
+                started > 0 && `доучить ${started}`,
+                portion > 0 && `выучить ${portion} ${portion === 1 ? "новое" : "новых"}`,
+              ]
                 .filter(Boolean)
                 .join(" · ")}
             </span>

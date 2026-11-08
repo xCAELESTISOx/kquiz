@@ -113,7 +113,7 @@ export interface QueueItem {
   /** Listening only: other voices the word can be heard in besides the default one (lib/voices.ts). */
   voices?: string[];
   /** In a session only: a step of learning a new word, not a review (lib/session.ts). */
-  learn?: { kind: "intro" | "pick" | "build" | "dictation" | "write"; check?: boolean };
+  learn?: { kind: "intro" | "choose" | "build" | "aloud" | "dictation" | "write"; check?: boolean };
 }
 
 /** A wrong option on the "pick the Korean word" screen: another of the user's words. */
@@ -182,7 +182,12 @@ export interface Stats {
    * New words not learned yet: all of them (`queued`), the ones already being learned, and the
    * Korean of the next few "Учить" comes to.
    */
-  newCards: { queued: number; learning: number; next: string[] };
+  /**
+   * New words not learned yet (apps/api newCards.ts): `learning` started and unfinished, of them
+   * `started` on the ladder or due for their check, `fresh` the new ones the next session takes,
+   * `pool` not started; `next` the Korean of what "Учить" comes to.
+   */
+  newCards: { queued: number; learning: number; next: string[]; started: number; fresh: number; pool: number };
 }
 
 /** PATCH /api/cards/:id: any field; "" clears an optional one. */
