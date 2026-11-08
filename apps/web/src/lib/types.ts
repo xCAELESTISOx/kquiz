@@ -201,7 +201,10 @@ export interface StatsOverview {
   today: string;
   streak: { current: number; best: number; reviewedToday: boolean };
   activity: { day: string; reviews: number }[];
-  forecast: { day: string; due: Record<string, number> }[];
+  /** words: distinct words due that day (a word due in two modes counts once). */
+  forecast: { day: string; due: Record<string, number>; words?: number }[];
+  /** Words past the new-word pool ("Учить") and not paused. */
+  learned?: number;
   retention: Record<string, { reviews: number; recalled: number }>;
   targetRetention: Record<string, number>;
   cards: { total: number; byMode: Record<string, { new: number; learning: number; young: number; mature: number }> };

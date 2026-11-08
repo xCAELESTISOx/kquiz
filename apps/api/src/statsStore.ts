@@ -30,7 +30,9 @@ export type StatsOverview = {
   /** Reviews per local day, oldest first, ending today. */
   activity: { day: string; reviews: number }[];
   /** Reviews coming due per local day, today first; today includes everything overdue. New cards are not counted. */
-  forecast: { day: string; due: ByMode<number> }[];
+  forecast: { day: string; due: ByMode<number>; words: number }[];
+  /** Words (cards) already learned: past the new-word pool in at least one mode and not paused. */
+  learned: number;
   /** Share of reviews in the last 30 days not rated "again", leaving out first sightings and learning steps. */
   retention: ByMode<{ reviews: number; recalled: number }>;
   /** Retention FSRS schedules for, per mode (set on the FSRS settings screen). */
@@ -99,12 +101,28 @@ export function statsOverview(db: Db, userId: number, now = new Date(), tzOffset
   });
 
   const dueDay = sql<number>`max(cast((${reviewStates.due} + ${shift}) / ${DAY} as integer), ${today})`;
-  const forecast = Array.from({ length: FORECAST_DAYS }, (_, i) => ({ day: dateOf(today + i), due: {} as ByMode<number> }));
+  const forecast = Array.from({ length: FORECAST_DAYS }, (_, i) => ({ day: dateOf(today + i), due: {} as ByMode<number>, words: 0 }));
+  const dueSoon = and(mine, reviewable, ne(reviewStates.state, 0), sql`${reviewStates.due} < ${startOf(today + FORECAST_DAYS).getTime()}`);
+  // A word due in two modes on one day is still one word to go over.
+  const wordRows = db
+    .select({ day: dueDay, n: sql<number>`count(distinct ${reviewStates.cardId})` })
+    .from(reviewStates)
+    .innerJoin(cards, sql`${cards.id} = ${reviewStates.cardId}`)
+    .where(dueSoon)
+    .groupBy(dueDay)
+    .all();
+  const learned =
+    db
+      .select({ n: sql<number>`count(distinct ${reviewStates.cardId})` })
+      .from(reviewStates)
+      .innerJoin(cards, sql`${cards.id} = ${reviewStates.cardId}`)
+      .where(and(mine, reviewable, ne(reviewStates.state, 0)))
+      .get()?.n ?? 0;
   const dueRows = db
     .select({ mode: reviewStates.mode, day: dueDay, n: sql<number>`count(*)` })
     .from(reviewStates)
     .innerJoin(cards, sql`${cards.id} = ${reviewStates.cardId}`)
-    .where(and(mine, reviewable, ne(reviewStates.state, 0), sql`${reviewStates.due} < ${startOf(today + FORECAST_DAYS).getTime()}`))
+    .where(dueSoon)
     .groupBy(reviewStates.mode, dueDay)
     .all();
   const modes = new Set<string>();
@@ -134,6 +152,10 @@ export function statsOverview(db: Db, userId: number, now = new Date(), tzOffset
     const entry = forecast[day - today];
     if (entry) entry.due[mode] = (entry.due[mode] ?? 0) + n;
   }
+  for (const { day, n } of wordRows) {
+    const entry = forecast[day - today];
+    if (entry) entry.words += n;
+  }
 
   const retention: StatsOverview["retention"] = {};
   for (const mode of modes) retention[mode] = { reviews: 0, recalled: 0 };
@@ -160,6 +182,7 @@ export function statsOverview(db: Db, userId: number, now = new Date(), tzOffset
     streak: { current, best, reviewedToday: reviewDays[0] === today },
     activity,
     forecast,
+    learned,
     retention,
     targetRetention: Object.fromEntries([...modes].map((mode) => [mode, getFsrsSetup(db, userId, mode as ReviewMode).desiredRetention])),
     cards: { total: db.select({ n: sql<number>`count(*)` }).from(cards).where(mine).get()?.n ?? 0, byMode },

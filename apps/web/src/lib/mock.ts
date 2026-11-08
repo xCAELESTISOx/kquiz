@@ -483,19 +483,20 @@ export class MockApi {
       const skip = age > 60 ? rand() < 0.6 : age === 9 || age === 23 || rand() < 0.08;
       return { day: day(-age), reviews: skip || age === 0 ? 0 : Math.round(8 + rand() * 50 * (1 - age / 200)) };
     });
-    const forecast = Array.from({ length: 30 }, (_, i) => ({
-      day: day(i),
-      due: {
-        meaning: Math.round((i === 0 ? 34 : 6 + rand() * 22) * (i === 9 ? 2.4 : 1)),
-        speech: Math.round(i === 0 ? 12 : 2 + rand() * 10),
-        listening: Math.round(i === 0 ? 8 : 1 + rand() * 8),
-      },
-    }));
+    // A small deck, like the owner's after a couple of lessons: reviews thin out as intervals grow.
+    const forecast = Array.from({ length: 30 }, (_, i) => {
+      const fade = 1 / (1 + i / 6);
+      const meaning = i === 0 ? 4 : rand() < 0.35 ? 0 : Math.round(1 + rand() * 6 * fade);
+      const speech = i === 0 ? 3 : Math.round(rand() * 3 * fade);
+      const listening = i === 0 ? 2 : Math.round(rand() * 2 * fade);
+      return { day: day(i), due: { meaning, speech, listening }, words: Math.max(meaning, speech, listening, i === 0 ? 5 : 0) };
+    });
     return {
       today: day(0),
       streak: { current: 8, best: 21, reviewedToday: false },
       activity,
       forecast,
+      learned: 12,
       retention: { meaning: { reviews: 412, recalled: 361 }, speech: { reviews: 96, recalled: 88 }, listening: { reviews: 64, recalled: 51 } },
       targetRetention: { meaning: 0.9, speech: 0.9, listening: 0.88 },
       cards: {

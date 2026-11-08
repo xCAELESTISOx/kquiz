@@ -273,6 +273,76 @@
   text-align: left;
 }
 
+/* ---------- Forecast: today (known) vs. the days ahead (FSRS forecast) ---------- */
+
+.forecast-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.forecast-tile {
+  display: grid;
+  gap: 2px;
+  padding: 12px 12px 11px;
+  border-radius: 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.forecast-tile[data-kind="ahead"] {
+  border-style: dashed;
+  border-color: var(--border-strong);
+}
+
+.forecast-tile-value {
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+
+.forecast-tile[data-kind="now"] .forecast-tile-value {
+  color: var(--accent-hi);
+}
+
+.forecast-tile-label {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.forecast-tile-hint {
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}
+
+.readout-modes {
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}
+
+/* Today is a known number: solid. Every later day is a forecast: hatched and outlined. */
+.forecast-bars .bar-stack {
+  background:
+    repeating-linear-gradient(135deg, rgb(124 140 255 / 0.42) 0 3px, rgb(124 140 255 / 0.16) 3px 6px);
+  box-shadow: inset 0 0 0 1px rgb(124 140 255 / 0.55);
+}
+
+.forecast-bars .bar[data-today="true"] .bar-stack {
+  background: linear-gradient(to bottom, var(--accent-hi), var(--accent));
+  box-shadow: 0 0 16px rgb(124 140 255 / 0.35);
+}
+
+.forecast-legend i[data-kind="now"] {
+  background: linear-gradient(to bottom, var(--accent-hi), var(--accent));
+}
+
+.forecast-legend i[data-kind="ahead"] {
+  background: repeating-linear-gradient(135deg, rgb(124 140 255 / 0.5) 0 2px, rgb(124 140 255 / 0.15) 2px 4px);
+  box-shadow: inset 0 0 0 1px rgb(124 140 255 / 0.6);
+}
+
 /* ---------- Retention meters ---------- */
 
 .retention,
