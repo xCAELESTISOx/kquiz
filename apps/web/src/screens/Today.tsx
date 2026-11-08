@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { api, auth, lastToday, pendingReviewCount, remembered, rememberToday } from "../lib/api";
 import { wordsWord } from "../lib/plural";
-import { hideSplash } from "../lib/splash";
+import { bootDeadline, hideSplash, splashShown } from "../lib/splash";
 import type { QueueItem, Stats, StatsOverview } from "../lib/types";
 import { CardsIcon, CloseIcon, HeadphonesIcon, LearnIcon, MicIcon, MoreIcon, PlusIcon, ShuffleIcon } from "../ui/icons";
 import { FirstWords } from "../ui/FirstWords";
@@ -38,7 +38,11 @@ function fitting<T>(words: T[], korean: (w: T) => string, budget: number): T[] {
 export function TodayScreen() {
   // Last launch's numbers first, so the screen is never empty while the server answers.
   const [saved] = useState(lastToday);
-  const [stats, setStats] = useState<Stats | undefined>(saved?.stats);
+  const [loaded, setLoaded] = useState<Stats | undefined>(saved?.stats);
+  const [overview, setOverview] = useState<StatsOverview | undefined>(remembered.statsOverview);
+  // On launch the screen stays behind the splash until everything on it is in, so nothing shifts
+  // after it shows; last launch's numbers are only the fallback for a server too slow to answer.
+  const [ready, setReady] = useState(() => !splashShown());
   const [preview, setPreview] = useState<QueueItem[]>(saved?.preview ?? []);
   const [error, setError] = useState<string>();
   const [leeches, setLeeches] = useState(() => remembered.leeches()?.items.length ?? 0);
@@ -47,24 +51,39 @@ export function TodayScreen() {
   useEffect(() => {
     document.title = "KQuiz";
     // The whole queue, not just the preview: the session takes this answer instead of asking again.
-    Promise.all([api.stats(), api.queue("mixed", 200)]).then(
-      ([s, q]) => {
+    Promise.all([api.stats(), api.queue("mixed", 200), api.statsOverview().catch(() => undefined)]).then(
+      ([s, q, o]) => {
         const items = dueWords(q.items);
-        setStats(s);
+        setLoaded(s);
+        if (o) setOverview(o);
+        setReady(true);
         setPreview(items);
         setError(undefined);
         rememberToday({ stats: s, preview: items });
         if (s.due.speech > 0) api.queue("speech").catch(() => {});
       },
-      (e: Error) => setError(e.message),
+      (e: Error) => {
+        setError(e.message);
+        setReady(true);
+      },
     );
     api.leeches().then(({ items }) => setLeeches(items.length), () => {});
     auth.status().then((s) => setOwner(s.user?.role === "owner"), () => {});
   }, []);
 
   useEffect(() => {
-    if (stats || error) hideSplash();
-  }, [stats, error]);
+    let live = true;
+    void bootDeadline().then(() => live && setReady(true));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (ready) hideSplash();
+  }, [ready]);
+
+  const stats = ready ? loaded : undefined;
 
   const due = stats?.due.meaning ?? 0;
   const dueCount = stats?.dueWords ?? 0;
@@ -119,7 +138,7 @@ export function TodayScreen() {
         {!stats && !error && <div className="skeleton" />}
       </section>
 
-      {stats && !fresh && <TodayStats stats={stats} />}
+      {stats && !fresh && <TodayStats stats={stats} overview={overview} />}
 
       <div aria-live="polite">
         {error && <p className="notice notice-error">Не получилось загрузить данные: {error}. Обнови страницу.</p>}
@@ -170,11 +189,7 @@ export function TodayScreen() {
 const DAYS = 14;
 
 /** A glance at how it goes: the streak, today, and the last two weeks of reviews as bars. */
-function TodayStats({ stats }: { stats: Stats }) {
-  const [overview, setOverview] = useState<StatsOverview | undefined>(remembered.statsOverview);
-  useEffect(() => {
-    api.statsOverview().then(setOverview, () => undefined);
-  }, [stats]);
+function TodayStats({ stats, overview }: { stats: Stats; overview?: StatsOverview }) {
   const days = overview?.activity.slice(-DAYS) ?? [];
   const top = Math.max(...days.map((d) => d.reviews), 1);
   const streak = overview?.streak.current ?? 0;

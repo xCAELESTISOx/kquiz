@@ -2482,6 +2482,13 @@ p {
 
 /* ---------- Motion ---------- */
 
+/* Behind the loading splash every entrance waits at its first frame, and plays as the splash fades. */
+.booting #root *,
+.booting #root *::before,
+.booting #root *::after {
+  animation-play-state: paused !important;
+}
+
 /* Screens arrive with a short fade and lift; the review sheets rise a little further, like a card being dealt. */
 .screen,
 .login {
