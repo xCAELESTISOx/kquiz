@@ -5,7 +5,7 @@ import { api, holdReview, isConnectionError, releaseHeldReview, takeBackReview }
 import { clozeFor } from "../lib/cloze";
 import { useLeechIds } from "../lib/leeches";
 import { everyKind, mixWays, serverModes } from "../lib/mix";
-import { afterIntro, buildable, firstTasks, insertAfter, interleave, introTask, learnTask, SESSION_TASKS } from "../lib/session";
+import { afterIntro, buildable, firstTasks, insertAfter, insertNext, interleave, introTask, learnTask, SESSION_TASKS } from "../lib/session";
 import { navigate } from "../lib/router";
 import { canRecord, type Recorder } from "../lib/recorder";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
@@ -296,7 +296,10 @@ export function ReviewScreen({
         .answerLearning(word.id, ok)
         .then(
           (res) => {
-            if (res.status === "climbed" || res.status === "missed") setQueue((q) => insertAfter(q ?? [], learnTask(word, res.step, canSpeak())));
+            // Built (or met, with nothing to build): typing it comes at once, after saying it aloud.
+            if (res.status === "climbed" && res.step === 1 && (kind === "build" || kind === "intro"))
+              setQueue((q) => insertNext(q ?? [], learnTask(word, 1, canSpeak())));
+            else if (res.status === "climbed" || res.status === "missed") setQueue((q) => insertAfter(q ?? [], learnTask(word, res.step, canSpeak())));
             else if (res.status === "passed") {
               note("climbed", word.id);
               if (res.next) {

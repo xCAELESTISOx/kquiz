@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { afterIntro, buildable, firstTasks, insertAfter, interleave, learnTask } from "./session";
+import { afterIntro, buildable, firstTasks, insertAfter, insertNext, interleave, learnTask } from "./session";
 import type { Card, QueueItem } from "./types";
 
 const card = (id: number) => ({ id, korean: `단어${id}`, meaning: `слово ${id}` }) as Card;
@@ -56,5 +56,18 @@ describe("right after meeting a word", () => {
     expect(buildable({ ...card(1), korean: "눈" })).toBe(false);
     // A phrase is built, not said.
     expect(kinds({ ...card(1), kind: "phrase" })).toEqual(["choose", "build"]);
+  });
+});
+
+describe("typing right after", () => {
+  it("comes after the word's own tasks ahead, or next after the card on screen", () => {
+    const w = card(1);
+    const [choose, , aloud] = afterIntro(w, [{ id: 2, korean: "x", meaning: "y" }], { hear: true, say: true });
+    const typed = learnTask(w, 1, true);
+    expect(insertNext([choose!, aloud!, review(5)], typed).map((i) => i.learn?.kind ?? "review")).toEqual(["choose", "aloud", "dictation", "review"]);
+    expect(insertNext([aloud!, review(5)], typed).map((i) => i.learn?.kind ?? "review")).toEqual(["aloud", "dictation", "review"]);
+    expect(insertNext([review(4), review(5)], typed).map((i) => i.card.id)).toEqual([4, 1, 5]);
+    // A pick put back further on is not waited for.
+    expect(insertNext([aloud!, review(5), choose!], typed).map((i) => i.learn?.kind ?? "review")).toEqual(["aloud", "dictation", "review", "choose"]);
   });
 });

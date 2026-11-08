@@ -73,6 +73,17 @@ export function interleave(reviews: QueueItem[], learning: QueueItem[], every = 
   return out;
 }
 
+/**
+ * `item` right after the word's own tasks still ahead (picked, said aloud), or right after the card on
+ * screen: the first step typed on the keyboard follows meeting a word at once.
+ */
+export function insertNext(queue: QueueItem[], item: QueueItem): QueueItem[] {
+  let at = Math.min(1, queue.length);
+  // Only the run right ahead: a missed pick put back a few cards on stays where it is.
+  while (at < queue.length && queue[at]!.card.id === item.card.id && (queue[at]!.learn?.kind === "choose" || queue[at]!.learn?.kind === "aloud")) at++;
+  return [...queue.slice(0, at), item, ...queue.slice(at)];
+}
+
 /** `item` put back `gap` cards after the one on screen (queue[0]), or at the end of a shorter queue. */
 export function insertAfter(queue: QueueItem[], item: QueueItem, gap = LEARN_GAP): QueueItem[] {
   const at = Math.min(gap + 1, queue.length);
