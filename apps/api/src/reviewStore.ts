@@ -285,5 +285,5 @@ export function getStats(db: Db, userId: number, now = new Date(), timeZone = "U
       .from(cards)
       .where(and(introduced, eq(cards.introduction, "learned"), sql`${cards.introducedAt} >= ${dayStart.getTime()}`))
       .get()?.n ?? 0;
-  return { cards: total, due, dueWords, reviewedToday, learned, learnedToday, newCards: newCards(db, userId) };
+  return { cards: total, due, dueWords, reviewedToday, learned, learnedToday, newCards: newCards(db, userId, now) };
 }
