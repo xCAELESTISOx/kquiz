@@ -1,31 +1,39 @@
 /**
- * The real screen height for the Home Screen app on iPhone.
+ * The strip iOS leaves under a Home Screen app.
  *
- * In standalone mode iOS sometimes lays the page out against a viewport shorter than the screen
- * (on launch, after the keyboard, after coming back from the background): 100%, 100dvh and
- * `position: fixed; bottom: 0` all end short, and an empty strip stays under the tab bar and the
- * buttons. The app fills the whole screen there anyway, so its height is taken from the screen
- * itself as `--app-h`, and `html.app-h` pins the layout to it (theme.css).
+ * iOS 26 sizes a standalone web app with `black-translucent` + `viewport-fit=cover` a status bar's
+ * height short of the screen (59 pt with a Dynamic Island) and paints nothing fixed below that, so
+ * the tab bar and the buttons stop above an empty band. Nothing can be drawn there; what can be done
+ * is not to leave the home-indicator inset on top of it. A fixed probe pinned top and bottom shows
+ * where iOS thinks the bottom is, the screen shows the real one, and the difference goes to
+ * `--vp-gap` with `html.vp-gap` (theme.css). It is re-measured on resize, since iOS sometimes
+ * corrects itself (after a scroll, a rotation, coming back from the background).
+ *
+ * See https://github.com/campeterson/ultrapilot/pull/12 and https://github.com/jessemorley/Invoice/pull/109.
  */
 
-export function standaloneHeight(screenW: number, screenH: number, portrait: boolean): number {
+const MAX_GAP = 80;
+
+export function viewportGap(screenW: number, screenH: number, portrait: boolean, laidOut: number): number {
   // iOS keeps screen.width/height in portrait terms whatever the orientation.
-  const long = Math.max(screenW, screenH);
-  const short = Math.min(screenW, screenH);
-  return portrait ? long : short;
+  const real = portrait ? Math.max(screenW, screenH) : Math.min(screenW, screenH);
+  const gap = Math.round(real - laidOut);
+  return gap > 0 && gap <= MAX_GAP ? gap : 0;
 }
 
-export function watchAppHeight() {
-  const standalone = (navigator as Navigator & { standalone?: boolean }).standalone === true;
-  if (!standalone) return;
+export function watchViewportGap() {
+  if ((navigator as Navigator & { standalone?: boolean }).standalone !== true) return;
   const root = document.documentElement;
   const portrait = matchMedia("(orientation: portrait)");
+  const probe = document.createElement("div");
+  probe.setAttribute("aria-hidden", "true");
+  probe.style.cssText = "position:fixed;top:0;bottom:0;left:0;width:0;visibility:hidden;pointer-events:none";
+  document.body.append(probe);
 
   function update() {
-    const height = standaloneHeight(screen.width, screen.height, portrait.matches);
-    // Never shorter than what the browser itself reports, in case the screen numbers are off.
-    root.style.setProperty("--app-h", `${Math.max(height, innerHeight)}px`);
-    root.classList.add("app-h");
+    const gap = viewportGap(screen.width, screen.height, portrait.matches, probe.getBoundingClientRect().height);
+    root.style.setProperty("--vp-gap", `${gap}px`);
+    root.classList.toggle("vp-gap", gap > 0);
   }
 
   update();
@@ -33,4 +41,5 @@ export function watchAppHeight() {
   addEventListener("pageshow", update);
   portrait.addEventListener("change", update);
   document.addEventListener("visibilitychange", update);
+  window.visualViewport?.addEventListener("resize", update);
 }

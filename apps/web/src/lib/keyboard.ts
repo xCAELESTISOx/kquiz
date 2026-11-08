@@ -4,8 +4,8 @@
  * iOS Safari doesn't shrink the layout (or 100dvh) when the keyboard opens: only the visual viewport
  * gets shorter, and a full-height task screen keeps its answer field behind the keyboard until it is
  * closed and opened again. So while the keyboard is up, the visible height goes to `--vvh` and
- * `html.kb-open` is set: the app's scroller (#root) and a task screen (`.review`) shrink to it, the
- * pan iOS made is undone, and on a scrolling page the field is scrolled into the visible part.
+ * `html.kb-open` is set: a task screen (`.review`) shrinks to it and the pan iOS made is undone, and
+ * on a scrolling page the field is scrolled into the visible part.
  */
 
 const OPEN_AT = 120; // px of height lost before it counts as the keyboard rather than browser bars
@@ -32,16 +32,18 @@ export function watchKeyboard() {
 
   function reveal(el: HTMLElement) {
     if (!vv) return;
-    // The app now fits the visible part exactly; undo the pan iOS made to find the field.
-    if (window.scrollY !== 0) window.scrollTo(0, 0);
+    if (el.closest(".review")) {
+      // The task screen now fits the visible part exactly; undo the pan iOS made to find the field.
+      if (window.scrollY !== 0) window.scrollTo(0, 0);
+      return;
+    }
     // A page the user scrolls themselves is left alone; only a new keyboard or field is chased.
-    const scroller = document.getElementById("root");
-    if (!moved || !scroller || el.closest(".review")) return;
+    if (!moved) return;
     const rect = el.getBoundingClientRect();
-    const top = GAP;
-    const bottom = vv.height - GAP;
-    if (rect.bottom > bottom) scroller.scrollBy(0, rect.bottom - bottom);
-    else if (rect.top < top) scroller.scrollBy(0, rect.top - top);
+    const top = vv.offsetTop + GAP;
+    const bottom = vv.offsetTop + vv.height - GAP;
+    if (rect.bottom > bottom) window.scrollBy(0, rect.bottom - bottom);
+    else if (rect.top < top) window.scrollBy(0, rect.top - top);
   }
 
   function update() {
