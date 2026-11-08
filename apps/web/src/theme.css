@@ -79,8 +79,23 @@ body::before {
   background: radial-gradient(90% 70% at 50% -20%, rgb(124 140 255 / 0.09), transparent 70%);
 }
 
+/*
+ * The page itself never scrolls: #root is a fixed, screen-sized scroller. iOS lays out a scrolling
+ * document lazily on launch (a gap under the tab bar or the buttons until the first scroll) and pans
+ * it under the keyboard; with nothing to scroll at the top level neither happens.
+ */
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
 #root {
   isolation: isolate;
+  position: fixed;
+  inset: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 /* Kill rubber-banding only with a mouse; keep native touch scrolling physics on iPhone. */
@@ -2896,4 +2911,32 @@ p {
   align-items: center;
   gap: 8px;
   animation: answer-in var(--dur-3) var(--ease-out) backwards;
+}
+
+/* ---------- On-screen keyboard ---------- */
+
+/* iOS keeps 100dvh under the keyboard: the app takes only the visible part (lib/keyboard.ts). */
+html.kb-open #root {
+  bottom: auto;
+  height: var(--vvh, 100%);
+}
+
+html.kb-open .review {
+  height: var(--vvh, 100dvh);
+  padding-bottom: 10px;
+}
+
+html.kb-open .review .review-stage {
+  padding: 10px 0 12px;
+}
+
+html.kb-open .review .review-card {
+  padding: 20px;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+/* The tab bar would ride on top of the keyboard and cover the field. */
+html.kb-open .tabbar {
+  display: none;
 }

@@ -5,8 +5,10 @@ import { registerServiceWorker } from "./lib/serviceWorker";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "./theme.css";
 import { scheduleSplashTimeout } from "./lib/splash";
+import { watchKeyboard } from "./lib/keyboard";
 
 scheduleSplashTimeout();
+watchKeyboard();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
