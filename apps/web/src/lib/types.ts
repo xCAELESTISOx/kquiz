@@ -230,6 +230,8 @@ export interface StatsOverview {
   forecast: { day: string; due: Record<string, number>; words?: number }[];
   /** Words past the new-word pool ("Learn") and not paused. */
   learned?: number;
+  /** New words taken into "Learn" and not learned yet: not in the forecast until they are. */
+  learning?: number;
   retention: Record<string, { reviews: number; recalled: number }>;
   targetRetention: Record<string, number>;
   cards: { total: number; byMode: Record<string, { new: number; learning: number; young: number; mature: number }> };

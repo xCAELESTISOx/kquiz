@@ -210,7 +210,7 @@ function TodayStats({ stats, overview }: { stats: Stats; overview?: StatsOvervie
           <dt>Words learned</dt>
           <dd>
             {stats.learned}
-            {stats.learnedToday > 0 && <span className="today-stats-plus"> +{stats.learnedToday}</span>}
+            {stats.learnedToday > 0 && <span className="today-stats-plus"> +{stats.learnedToday} today</span>}
           </dd>
         </div>
       </dl>

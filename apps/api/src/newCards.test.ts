@@ -88,6 +88,10 @@ describe("new words", () => {
     expect(await answer(true)).toEqual({ status: "learned", due: "2026-10-20T15:00:00.000Z" });
     expect((await t.request(`/cards/${id}`)).json.card.queued).toBe(false);
     expect((await t.request("/reviews/stats")).json).toMatchObject({ learned: 1, learnedToday: 1 });
+    // Statistics agree with Today, and the word is in tomorrow's forecast; three more are being learned.
+    const overview = (await t.request("/stats?tz=540")).json;
+    expect(overview).toMatchObject({ learned: 1, learning: 3 });
+    expect(overview.forecast[1]).toMatchObject({ words: 1 });
     expect((await answer(true)).status).toBeUndefined();
     expect((await t.request(`/cards/${id}/learning`, { body: { ok: true } })).status).toBe(409);
     expect((await t.request("/cards/999/learning", { body: { ok: true } })).status).toBe(404);

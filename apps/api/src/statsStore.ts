@@ -1,7 +1,8 @@
-import { and, desc, eq, gte, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import type { Db } from "./db/client.js";
 import { attempts, cards, phoneStats, reviewLog, reviewStates } from "./db/schema.js";
 import { getFsrsSetup } from "./fsrs.js";
+import { newCards } from "./newCards.js";
 import type { ReviewMode } from "./review.js";
 import { reviewable } from "./reviewStore.js";
 
@@ -29,10 +30,16 @@ export type StatsOverview = {
   streak: { current: number; best: number; reviewedToday: boolean };
   /** Reviews per local day, oldest first, ending today. */
   activity: { day: string; reviews: number }[];
-  /** Reviews coming due per local day, today first; today includes everything overdue. New cards are not counted. */
+  /**
+   * Reviews coming due per local day, today first; today includes everything overdue. Words still
+   * in the new-word pool or being learned have no review states yet, so they are not counted; a
+   * word just learned is (its first review is due the next day).
+   */
   forecast: { day: string; due: ByMode<number>; words: number }[];
-  /** Words (cards) already learned: past the new-word pool in at least one mode and not paused. */
+  /** Words (cards) already learned: past the new-word pool and not paused, as on Today. */
   learned: number;
+  /** New words taken into "Learn" and not learned yet: they join the forecast once learned. */
+  learning: number;
   /** Share of reviews in the last 30 days not rated "again", leaving out first sightings and learning steps. */
   retention: ByMode<{ reviews: number; recalled: number }>;
   /** Retention FSRS schedules for, per mode (set on the FSRS settings screen). */
@@ -102,7 +109,9 @@ export function statsOverview(db: Db, userId: number, now = new Date(), tzOffset
 
   const dueDay = sql<number>`max(cast((${reviewStates.due} + ${shift}) / ${DAY} as integer), ${today})`;
   const forecast = Array.from({ length: FORECAST_DAYS }, (_, i) => ({ day: dateOf(today + i), due: {} as ByMode<number>, words: 0 }));
-  const dueSoon = and(mine, reviewable, ne(reviewStates.state, 0), sql`${reviewStates.due} < ${startOf(today + FORECAST_DAYS).getTime()}`);
+  // Every state belongs to a learned word (newCards.ts), so a "new" one (state 0) is a word just
+  // learned, waiting for its first review: it counts like any other.
+  const dueSoon = and(mine, reviewable, sql`${reviewStates.due} < ${startOf(today + FORECAST_DAYS).getTime()}`);
   // A word due in two modes on one day is still one word to go over.
   const wordRows = db
     .select({ day: dueDay, n: sql<number>`count(distinct ${reviewStates.cardId})` })
@@ -116,7 +125,7 @@ export function statsOverview(db: Db, userId: number, now = new Date(), tzOffset
       .select({ n: sql<number>`count(distinct ${reviewStates.cardId})` })
       .from(reviewStates)
       .innerJoin(cards, sql`${cards.id} = ${reviewStates.cardId}`)
-      .where(and(mine, reviewable, ne(reviewStates.state, 0)))
+      .where(and(mine, reviewable))
       .get()?.n ?? 0;
   const dueRows = db
     .select({ mode: reviewStates.mode, day: dueDay, n: sql<number>`count(*)` })
@@ -183,6 +192,7 @@ export function statsOverview(db: Db, userId: number, now = new Date(), tzOffset
     activity,
     forecast,
     learned,
+    learning: newCards(db, userId, now).learning,
     retention,
     targetRetention: Object.fromEntries([...modes].map((mode) => [mode, getFsrsSetup(db, userId, mode as ReviewMode).desiredRetention])),
     cards: { total: db.select({ n: sql<number>`count(*)` }).from(cards).where(mine).get()?.n ?? 0, byMode },
