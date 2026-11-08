@@ -11,7 +11,7 @@ jobs:
   node:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -28,7 +28,7 @@ jobs:
       run:
         working-directory: services/scorer
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -43,7 +43,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: shellcheck deploy/*.sh
       - run: command -v sqlite3 || (sudo apt-get update && sudo apt-get install -y sqlite3)
       - run: deploy/smoke-test.sh
@@ -62,7 +62,7 @@ jobs:
       matrix:
         image: [api, caddy, scorer]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # GHCR wants a lowercase path, and a fork publishes under its own owner.
       - run: echo "IMAGE=ghcr.io/${OWNER,,}/kquiz-${{ matrix.image }}" >> "$GITHUB_ENV"
         env:
