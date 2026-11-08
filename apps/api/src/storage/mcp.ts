@@ -1,16 +1,16 @@
 // SQLite implementations of the stores the MCP server needs; `index.ts` passes them to createMcpApp.
-import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import type { Context } from "hono";
 import { readSession } from "../auth/sessions.js";
 import { cardConditions, createCards, getCard, toCardDto, updateCard, type CardDto, type CardSource } from "../cardStore.js";
 import { koreanKey, normalizeKorean, type CardPatch, type NewCard, type Root } from "../cards.js";
 import type { Config } from "../config.js";
 import type { Db } from "../db/client.js";
-import { cards, oauthClients, oauthCodes, oauthGrants, phoneStats, reviewLog } from "../db/schema.js";
+import { cards, oauthClients, oauthCodes, oauthGrants, phoneStats, reviewLog, users } from "../db/schema.js";
 import { activeUser } from "../users.js";
 import type { OwnerAuth, UserStores } from "../mcp/app.js";
 import type { OAuthStore } from "../mcp/oauth-store.js";
-import type { CardQuery, CardStore, DrillStore, NewDrill, SimilarPair, SimilarResult } from "../mcp/store.js";
+import type { CardQuery, CardStore, DrillStore, Member, NewDrill, SharingStore, ShareResult, SimilarPair, SimilarResult } from "../mcp/store.js";
 import { linkSimilar, unlinkSimilar, withSimilar } from "../similar.js";
 import { findLeeches } from "../leeches.js";
 import { addDrills, listDrills } from "../practice.js";
@@ -338,9 +338,87 @@ export class SqliteOAuthStore implements OAuthStore {
 }
 
 /** Each active user's own stores; a disabled user's connector stops working at once. */
+/** The owner's copies of their cards for the people they invited (mcp/tools.ts share_cards). */
+export class SqliteSharingStore implements SharingStore {
+  constructor(
+    private readonly db: Db,
+    private readonly ownerId: number,
+  ) {}
+
+  async members(): Promise<Member[]> {
+    return this.db
+      .select({ id: users.id, name: users.name, cards: sql<number>`(select count(*) from ${cards} where ${cards.userId} = ${users.id})` })
+      .from(users)
+      .where(and(eq(users.role, "member"), isNull(users.disabledAt)))
+      .orderBy(users.id)
+      .all()
+      .map((m) => ({ id: String(m.id), name: m.name, cards: m.cards }));
+  }
+
+  async share(memberId: string, cardIds: string[]): Promise<ShareResult | null> {
+    const id = Number(memberId);
+    const member = Number.isSafeInteger(id) && id !== this.ownerId ? activeUser(this.db, id) : undefined;
+    if (!member || member.role !== "member") return null;
+
+    const wanted = [...new Set(cardIds.map(Number).filter((n) => Number.isSafeInteger(n) && n > 0))];
+    const rows = wanted.length
+      ? this.db
+          .select()
+          .from(cards)
+          .where(and(eq(cards.userId, this.ownerId), inArray(cards.id, wanted)))
+          .all()
+      : [];
+    const byId = new Map(withSimilar(this.db, this.ownerId, rows.map(toCardDto)).map((c) => [c.id, c]));
+    const notFound = cardIds.filter((raw) => !byId.has(Number(raw)));
+    const shared = wanted.flatMap((n) => byId.get(n) ?? []);
+
+    // Only what the card says; the schedule, history, pause and audio stay with the owner.
+    const copies: NewCard[] = shared.map((c) => ({
+      korean: c.korean,
+      meaning: c.meaning,
+      ...(c.pronunciation ? { pronunciation: c.pronunciation } : {}),
+      ...(c.romanization ? { romanization: c.romanization } : {}),
+      examples: c.examples,
+      ...(c.notes ? { notes: c.notes } : {}),
+      tags: c.tags,
+      ...(c.roots ? { roots: c.roots } : {}),
+      kind: c.kind,
+      ...(c.parts ? { parts: c.parts } : {}),
+      ...(c.register ? { register: c.register } : {}),
+      speakable: c.speakable,
+    }));
+    const { created, duplicates } = createCards(this.db, id, copies, "claude");
+
+    // Links whose both words were shared now, with the owner's note on how they differ.
+    const keys = new Set(shared.map((c) => c.id));
+    const pairs: SimilarPair[] = [];
+    for (const card of shared) {
+      for (const other of card.similar) {
+        if (keys.has(other.id) && card.id < other.id) pairs.push({ korean: card.korean, other: other.korean, note: other.note ?? undefined });
+      }
+    }
+    const similar = pairs.length ? await new SqliteCardStore(this.db, id).linkSimilar(pairs) : undefined;
+
+    return {
+      member: member.name,
+      created: created.map(({ korean, meaning }) => ({ korean, meaning })),
+      duplicates: duplicates.map((d) => d.korean),
+      notFound,
+      ...(similar ? { similar } : {}),
+    };
+  }
+}
+
 export function sqliteStores(db: Db, timeZone: string): UserStores {
-  return (userId) =>
-    activeUser(db, userId) ? { cards: new SqliteCardStore(db, userId, timeZone), drills: new SqliteDrillStore(db, userId) } : null;
+  return (userId) => {
+    const user = activeUser(db, userId);
+    if (!user) return null;
+    return {
+      cards: new SqliteCardStore(db, userId, timeZone),
+      drills: new SqliteDrillStore(db, userId),
+      ...(user.role === "owner" ? { sharing: new SqliteSharingStore(db, userId) } : {}),
+    };
+  };
 }
 
 /**

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { CARD_KINDS, EXAMPLES_PER_CARD, MAX_PARTS, MAX_ROOTS, newCardSchema, normalizeKorean, phrasePartSchema, REGISTERS, rootSchema, type NewCard, type Root } from "../cards.js";
 import { MAX_DRILLS_PER_CALL, newDrillSchema } from "../practice.js";
 import { MAX_SIMILAR, similarNoteSchema } from "../similar.js";
-import type { CardStore, DrillStore, NewDrill, SimilarPair } from "./store.js";
+import type { CardStore, DrillStore, NewDrill, SharingStore, SimilarPair } from "./store.js";
 
 export const MAX_CARDS_PER_CALL = 50;
 
@@ -153,7 +153,7 @@ async function addAll<T extends { korean: string; similar?: { korean: string; no
   });
 }
 
-export function createMcpServer(store: CardStore, drills?: DrillStore): McpServer {
+export function createMcpServer(store: CardStore, drills?: DrillStore, sharing?: SharingStore): McpServer {
   const server = new McpServer({ name: "kquiz", version: "0.1.0" }, { instructions });
 
   server.registerTool(
@@ -320,8 +320,43 @@ export function createMcpServer(store: CardStore, drills?: DrillStore): McpServe
   );
 
   if (drills) registerDrillTools(server, drills);
+  if (sharing) registerSharingTools(server, sharing);
 
   return server;
+}
+
+// Only the owner's connector: the owner starts a friend's deck with copies of their own words.
+function registerSharingTools(server: McpServer, sharing: SharingStore) {
+  server.registerTool(
+    "list_members",
+    {
+      title: "List members",
+      description: "The people the owner invited to KQuiz, with how many cards each has. Use the id with share_cards.",
+      annotations: { readOnlyHint: true },
+    },
+    async () => json({ members: await sharing.members() }),
+  );
+
+  server.registerTool(
+    "share_cards",
+    {
+      title: "Share cards with a member",
+      description: `Copies up to ${MAX_CARDS_PER_CALL} of the owner's cards (ids from find_cards) into a member's deck as fresh new words, in the order given: everything on the card (meaning, examples, notes, tags, roots, phrase parts) but no schedule or review history, so the member learns them from scratch. Similar-word links between the shared cards are copied too. Words the member already has are left alone and reported as duplicates. The owner's cards don't change. Only the owner can share.`,
+      inputSchema: {
+        member_id: z.string().min(1).describe("From list_members"),
+        card_ids: z.array(z.string().min(1)).min(1).max(MAX_CARDS_PER_CALL),
+      },
+      annotations: { destructiveHint: false, idempotentHint: true },
+    },
+    async ({ member_id, card_ids }) => {
+      try {
+        const result = await sharing.share(member_id, card_ids);
+        return result ? json(result) : error(`No active member ${member_id}; see list_members`);
+      } catch (e) {
+        return error(e instanceof Error ? e.message : String(e));
+      }
+    },
+  );
 }
 
 // Sound drills: the app plays one word of a set aloud and the user picks which one it was.
