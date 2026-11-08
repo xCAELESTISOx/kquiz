@@ -61,9 +61,15 @@ export function introduce(tx: Tx, ids: number[], how: "direct" | "daily" | "earl
     .run();
 }
 
-export type NewCards = { queued: number };
+/**
+ * New words not learned yet. `queued`: all of them (in the pool, being learned, or waiting for
+ * their check). `learning`: of those, the ones already taken into learning. `next`: the Korean of
+ * the words "Учить" comes to first (being learned, then the pool, oldest added first), for Today.
+ */
+export type NewCards = { queued: number; learning: number; next: string[] };
 
-/** How many new words wait to be learned (in the pool, being learned, or waiting for their check). */
+const NEXT_PREVIEW = 12;
+
 export function newCards(db: Db, userId: number): NewCards {
   const queued =
     db
@@ -71,7 +77,22 @@ export function newCards(db: Db, userId: number): NewCards {
       .from(cards)
       .where(and(eq(cards.userId, userId), isNull(cards.introducedAt)))
       .get()?.n ?? 0;
-  return { queued };
+  const taken = sql`(${cards.learningAt} is not null or ${cards.learnPassedAt} is not null)`;
+  const learning =
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(cards)
+      .where(and(waiting(userId), taken))
+      .get()?.n ?? 0;
+  const next = db
+    .select({ korean: cards.korean })
+    .from(cards)
+    .where(waiting(userId))
+    .orderBy(sql`case when ${taken} then 0 else 1 end`, asc(cards.id))
+    .limit(NEXT_PREVIEW)
+    .all()
+    .map((row) => row.korean);
+  return { queued, learning, next };
 }
 
 /** A word being learned: the ladder step it is on (0 to LADDER_STEPS - 1), or "check" once it waited. */

@@ -8,6 +8,8 @@ import type { Card, ChoiceOption, LearningItem, QueueItem } from "./types";
 
 /** How many answers a session runs to (about five minutes); "Ещё" adds as many again. */
 export const SESSION_TASKS = 20;
+/** New words learned at once in a session (ACTIVE_WORDS in apps/api newCards.ts). */
+export const NEW_AT_ONCE = 5;
 
 /** Other cards between two steps of one word, so it isn't answered from the screen just seen. */
 export const LEARN_GAP = 3;

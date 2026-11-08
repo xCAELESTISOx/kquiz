@@ -1,5 +1,6 @@
 import { shownPronunciation } from "../lib/korean";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
+import { wordsWord } from "../lib/plural";
 import { api, holdReview, isConnectionError, releaseHeldReview, takeBackReview } from "../lib/api";
 import { shuffled } from "../lib/choice";
 import { clozeFor } from "../lib/cloze";
@@ -95,7 +96,19 @@ export function ReviewScreen({
   const [goal, setGoal] = useState(SESSION_TASKS);
   const [over, setOver] = useState(false);
   const [round, setRound] = useState(0);
-  const [learnt, setLearnt] = useState({ learned: 0, climbed: 0, fresh: 0, steps: 0 });
+  // New words of this session by where they got to, and the known words reviewed: ids, so a word
+  // answered in two ways or on two steps counts once.
+  const [learnt, setLearnt] = useState<Record<"met" | "climbed" | "learned" | "reviewed", ReadonlySet<number>>>(() => ({
+    met: new Set(),
+    climbed: new Set(),
+    learned: new Set(),
+    reviewed: new Set(),
+  }));
+  const note = useCallback(
+    (kind: "met" | "climbed" | "learned" | "reviewed", id: number) =>
+      setLearnt((l) => (l[kind].has(id) ? l : { ...l, [kind]: new Set(l[kind]).add(id) })),
+    [],
+  );
   const [answering, setAnswering] = useState(0);
 
   useEffect(() => {
@@ -231,12 +244,13 @@ export function ReviewScreen({
       // Inside the tap, where iOS still lets audio play.
       if (next?.[0]?.mode === "listening") speak(heard(next[0]));
       if (rating !== "again") setDone((n) => n + 1);
+      note("reviewed", card.id);
       setRevealed(false);
       setStep((n) => n + 1);
       shownAt.current = performance.now();
       count();
     },
-    [item, card, revealed, step, queue, done, speaking, count],
+    [item, card, revealed, step, queue, done, speaking, count, note],
   );
 
   /** A card said aloud has sent its own rating; the session moves on. */
@@ -252,12 +266,13 @@ export function ReviewScreen({
       setQueue(next);
       if (next[0]?.mode === "listening") speak(heard(next[0]));
       if (rating !== "again") setDone((n) => n + 1);
+      note("reviewed", queue[0]!.card.id);
       setRevealed(false);
       setStep((n) => n + 1);
       shownAt.current = performance.now();
       count();
     },
-    [queue, count],
+    [queue, count, note],
   );
 
   /** Look-alikes and blocks for a new word that joins the session midway. */
@@ -280,6 +295,7 @@ export function ReviewScreen({
       setExit(undefined);
       const rest = queue.slice(1);
       const word = item.card;
+      note("met", word.id);
       const kind = item.learn.kind;
       // Meeting a word is followed at once by tasks on it; a missed pick comes back a few cards on.
       const next =
@@ -299,7 +315,6 @@ export function ReviewScreen({
       count();
       // Picking the meaning is practice on the spot; the ladder on the server starts with building.
       if (kind === "pick") return;
-      setLearnt((l) => ({ ...l, steps: l.steps + 1 }));
       setAnswering((n) => n + 1);
       api
         .answerLearning(word.id, ok)
@@ -307,12 +322,12 @@ export function ReviewScreen({
           (res) => {
             if (res.status === "climbed" || res.status === "missed") setQueue((q) => insertAfter(q ?? [], learnTask(word, res.step, canSpeak())));
             else if (res.status === "passed") {
-              setLearnt((l) => ({ ...l, climbed: l.climbed + 1, fresh: l.fresh + (res.next ? 1 : 0) }));
+              note("climbed", word.id);
               if (res.next) {
                 prepare(res.next.card);
                 setQueue((q) => insertAfter(q ?? [], introTask(res.next!.card)));
               }
-            } else setLearnt((l) => ({ ...l, learned: l.learned + 1 }));
+            } else note("learned", word.id);
           },
           // No connection even after a second try: the word stays where it was and comes up again
           // next time, which is not worth a red banner over the session.
@@ -320,7 +335,7 @@ export function ReviewScreen({
         )
         .finally(() => setAnswering((n) => n - 1));
     },
-    [queue, item, prepare, count, options],
+    [queue, item, prepare, count, options, note],
   );
 
   /** "Ещё": as many answers again; the same queue goes on, or a fresh one if it ran out. */
@@ -404,7 +419,7 @@ export function ReviewScreen({
 
       {!queue && !error && (mode !== "mixed" || kinds) && <div className="review-stage" aria-busy="true" />}
 
-      {summary && <SessionDone reviewed={done} {...learnt} onMore={more} empty={!card} />}
+      {summary && <SessionDone {...learnt} onMore={more} empty={!card} />}
 
       {!session && queue && !card && <Finished count={done} />}
 
@@ -616,59 +631,65 @@ function LearnStep({
   return <TypeCard item={item} ask={kind === "dictation" ? "sound" : "meaning"} practice onDone={(r) => onDone(r === "good")} />;
 }
 
-/** The end of a session's stretch: what it did, and "Ещё" for another. */
+/** The end of a session's stretch: where its words got to, in words, and "Ещё" for another. */
 function SessionDone({
-  reviewed,
-  learned,
+  met,
   climbed,
-  fresh,
-  steps,
+  learned,
+  reviewed,
   empty,
   onMore,
-}: {
-  reviewed: number;
-  learned: number;
-  climbed: number;
-  fresh: number;
-  steps: number;
-  empty: boolean;
-  onMore: () => void;
-}) {
-  const facts: [number, string][] = (
+}: Record<"met" | "climbed" | "learned" | "reviewed", ReadonlySet<number>> & { empty: boolean; onMore: () => void }) {
+  // A word checked and learned climbed its ladder in an earlier session; one that climbed now waits.
+  const waiting = [...climbed].filter((id) => !learned.has(id)).length;
+  const learning = [...met].filter((id) => !climbed.has(id) && !learned.has(id)).length;
+  const rows = (
     [
-      [learned, "выучено слов"],
-      [climbed, "прошли все шаги"],
-      [steps, "заданий с новыми"],
-      [reviewed, "повторено"],
-    ] as [number, string][]
-  ).filter(([n]) => n > 0);
+      ["learned", learned.size, "выучено", one(learned.size, "прошло проверку и теперь в повторении", "прошли проверку и теперь в повторении")],
+      [
+        "climbed",
+        waiting,
+        "почти выучено",
+        one(
+          waiting,
+          "прошло все шаги. Через 3 часа спрошу ещё раз, и оно станет выученным",
+          "прошли все шаги. Через 3 часа спрошу ещё раз, и они станут выученными",
+        ),
+      ],
+      ["learning", learning, "в процессе", "в следующем подходе продолжите с того же шага"],
+      ["reviewed", reviewed.size, "повторено", "из уже выученных: освежили в памяти"],
+    ] as const
+  ).filter(([, n]) => n > 0);
   return (
     <div className="review-stage">
       <div className="finished session-done">
         <p className="finished-mark" lang="ko">
           {empty ? "다 했어요" : "잘했어요!"}
         </p>
-        {facts.length > 0 && (
-          <dl className="session-facts">
-            {facts.map(([n, label]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>{n}</dd>
-              </div>
+        {rows.length > 0 && (
+          <ul className="session-rows">
+            {rows.map(([kind, n, what, why]) => (
+              <li key={kind} data-kind={kind}>
+                <span className="session-rows-n">{n}</span>
+                <span>
+                  <b>
+                    {wordsWord(n)} {what}
+                  </b>
+                  <span className="muted">{why}</span>
+                </span>
+              </li>
             ))}
-          </dl>
+          </ul>
         )}
         <p className="finished-text muted">
           {empty
             ? "Сейчас учить и повторять больше нечего. Новые слова можно добавить в любой момент."
-            : climbed > 0
-              ? "Слова, прошедшие все шаги, проверю ещё раз через 3 часа."
-              : "Можно остановиться или продолжить."}
+            : "Можно остановиться или пройти ещё один подход."}
         </p>
         <div className="session-done-actions">
           {!empty && (
             <button type="button" className="button primary" onClick={onMore}>
-              Ещё
+              Ещё подход
             </button>
           )}
           <a className={`button${empty ? " primary" : ""}`} href="#/">
@@ -678,6 +699,11 @@ function SessionDone({
       </div>
     </div>
   );
+}
+
+/** Singular for one word, plural otherwise (21 is "one" too). */
+function one(n: number, singular: string, plural: string): string {
+  return n % 10 === 1 && n % 100 !== 11 ? singular : plural;
 }
 
 /** A phrase is built from blocks: from its translation, or from what is heard when typed by ear would be asked. */

@@ -1,4 +1,4 @@
-import { and, asc, count, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { isKoreanOnly } from "./cards.js";
 import { cardConditions, toCardDto, type CardDto, type CardQuery } from "./cardStore.js";
 import type { Db } from "./db/client.js";
@@ -230,7 +230,19 @@ function applyOne(
   return { id: review.id, status: "applied", due: next.due.toISOString() };
 }
 
-export type Stats = { cards: number; due: Record<ReviewMode, number>; reviewedToday: number; newCards: NewCards };
+/**
+ * `due` counts tasks (a word due for meaning and by ear is two); `dueWords` counts the words.
+ * `learned`: words past the new-word pool and not paused; `learnedToday`: those learned today.
+ */
+export type Stats = {
+  cards: number;
+  due: Record<ReviewMode, number>;
+  dueWords: number;
+  reviewedToday: number;
+  learned: number;
+  learnedToday: number;
+  newCards: NewCards;
+};
 
 /** `timeZone` sets where "today" starts for reviewedToday and which day each lesson is. */
 export function getStats(db: Db, userId: number, now = new Date(), timeZone = "UTC"): Stats {
@@ -258,5 +270,20 @@ export function getStats(db: Db, userId: number, now = new Date(), timeZone = "U
       .innerJoin(cards, eq(cards.id, reviewLog.cardId))
       .where(and(eq(cards.userId, userId), sql`${reviewLog.reviewedAt} >= ${dayStart.getTime()}`))
       .get()?.n ?? 0;
-  return { cards: total, due, reviewedToday, newCards: newCards(db, userId) };
+  const dueWords =
+    db
+      .select({ n: sql<number>`count(distinct ${reviewStates.cardId})` })
+      .from(reviewStates)
+      .innerJoin(cards, eq(cards.id, reviewStates.cardId))
+      .where(and(eq(cards.userId, userId), lte(reviewStates.due, now), reviewable))
+      .get()?.n ?? 0;
+  const introduced = and(eq(cards.userId, userId), isNotNull(cards.introducedAt), eq(cards.suspended, false));
+  const learned = db.select({ n: count() }).from(cards).where(introduced).get()?.n ?? 0;
+  const learnedToday =
+    db
+      .select({ n: count() })
+      .from(cards)
+      .where(and(introduced, eq(cards.introduction, "learned"), sql`${cards.introducedAt} >= ${dayStart.getTime()}`))
+      .get()?.n ?? 0;
+  return { cards: total, due, dueWords, reviewedToday, learned, learnedToday, newCards: newCards(db, userId) };
 }

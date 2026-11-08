@@ -22,6 +22,8 @@
 .today-stats-facts div {
   display: flex;
   flex-direction: column-reverse;
+  /* Numbers in one line on top, even when a label takes two lines. */
+  justify-content: flex-end;
   gap: 2px;
 }
 
@@ -33,6 +35,7 @@
 .today-stats-facts dt {
   color: var(--text-muted);
   font-size: var(--fs-xs);
+  line-height: 1.3;
 }
 
 .today-stats-facts dd {
@@ -257,4 +260,110 @@
   display: grid;
   gap: 12px;
   width: 100%;
+}
+
+/* The wall is words and, under them, what they are. */
+.word-wall:has(.word-wall-legend) {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+/* New words coming up: the accent, quieter, so the ones due read first. */
+.word-wall-words > .word-wall-new {
+  color: var(--accent-hi);
+  font-weight: 600;
+}
+
+.word-wall-legend {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-sm);
+  line-height: 1.35;
+  animation: answer-in var(--dur-3) var(--ease-out) 260ms backwards;
+}
+
+.word-wall-legend li {
+  position: relative;
+  padding-left: 18px;
+}
+
+.word-wall-legend b {
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* The dot is the colour of its words on the wall. */
+.word-wall-legend li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0.5em;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text);
+}
+
+.word-wall-legend li[data-kind="new"]::before {
+  background: var(--accent-hi);
+}
+
+.word-wall-legend li[data-kind="done"]::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--text-muted);
+}
+
+.today-stats-plus {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--accent-hi);
+}
+
+/* A session's summary: each line a number and what it means. */
+.session-rows {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  margin: 0;
+  padding: 18px 0;
+  list-style: none;
+  text-align: left;
+  border-block: 1px solid var(--border);
+  animation: answer-in var(--dur-3) var(--ease-out) 120ms backwards;
+}
+
+.session-rows li {
+  display: grid;
+  grid-template-columns: 3.2ch 1fr;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.session-rows-n {
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  line-height: 1;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.session-rows li[data-kind="learned"] .session-rows-n {
+  color: var(--accent-hi);
+}
+
+.session-rows b {
+  display: block;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.session-rows .muted {
+  font-size: var(--fs-sm);
+  line-height: 1.35;
 }
