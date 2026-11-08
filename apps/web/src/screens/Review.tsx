@@ -6,7 +6,7 @@ import { clozeFor } from "../lib/cloze";
 import { guessHints, isFirstShow, splitAt, type GuessHint } from "../lib/guess";
 import { useLeechIds } from "../lib/leeches";
 import { everyKind, mixWays, serverModes } from "../lib/mix";
-import { firstTasks, insertAfter, interleave, introTask, learnTask, SESSION_TASKS } from "../lib/session";
+import { afterIntro, firstTasks, insertAfter, interleave, introTask, learnTask, SESSION_TASKS } from "../lib/session";
 import { navigate } from "../lib/router";
 import { canRecord, type Recorder } from "../lib/recorder";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
@@ -15,9 +15,10 @@ import type { Card, ChoiceOption, GroupFilter, MixKind, PhraseTiles, QueueItem, 
 import { CloseIcon, SpeakerIcon, UndoIcon } from "../ui/icons";
 import { LeechBadge } from "../ui/LeechBadge";
 import { useGlide } from "../ui/motion";
+import { SimilarList } from "../ui/Similar";
 import { useFamily, WordFamily } from "../ui/WordFamily";
 import { ChoiceCard } from "./Choice";
-import { BuildCard, IntroCard } from "./Learn";
+import { BuildCard, IntroCard, PickMeaningCard } from "./Learn";
 import { MixSetup } from "./MixSetup";
 import { PhraseCard } from "./Phrase";
 import { PhraseParts, RegisterBadge } from "../ui/PhraseParts";
@@ -294,7 +295,14 @@ export function ReviewScreen({
       const rest = queue.slice(1);
       const word = item.card;
       note("met", word.id);
-      const next = item.learn.kind === "intro" ? insertAfter([item, ...rest], learnTask(word, 0, canSpeak())).slice(1) : rest;
+      const kind = item.learn.kind;
+      // Meeting a word is followed at once by tasks on it; a missed pick comes back a few cards on.
+      const next =
+        kind === "intro"
+          ? [...afterIntro(word, options[word.id] ?? [], canSpeak()), ...rest]
+          : kind === "pick" && !ok
+            ? insertAfter([item, ...rest], item).slice(1)
+            : rest;
       setQueue(next);
       // Inside the tap, where iOS still lets audio play.
       if (next[0]?.mode === "listening") speak(heard(next[0]));
@@ -302,8 +310,10 @@ export function ReviewScreen({
       shownAt.current = performance.now();
       // Meeting a word is a screen of the session too, so the count moves from the first tap.
       count();
-      if (item.learn.kind === "intro") return;
+      if (kind === "intro") return;
       count();
+      // Picking the meaning is practice on the spot; the ladder on the server starts with building.
+      if (kind === "pick") return;
       setAnswering((n) => n + 1);
       api
         .answerLearning(word.id, ok)
@@ -324,7 +334,7 @@ export function ReviewScreen({
         )
         .finally(() => setAnswering((n) => n - 1));
     },
-    [queue, item, prepare, count],
+    [queue, item, prepare, count, options, note],
   );
 
   /** "Ещё": as many answers again; the same queue goes on, or a fresh one if it ran out. */
@@ -531,6 +541,7 @@ export function ReviewScreen({
                 )}
                 <WordFamily card={card} families={families} />
                 {card.notes && <p className="review-notes muted">{card.notes}</p>}
+                <SimilarList card={card} />
               </div>
             ) : guessing ? (
               <GuessHints hints={hints} />
@@ -613,6 +624,7 @@ function LearnStep({
   const kind = item.learn!.kind;
   const { card } = item;
   if (kind === "intro") return <IntroCard card={card} onDone={() => onDone(true)} />;
+  if (kind === "pick") return <PickMeaningCard card={card} options={options} onDone={onDone} />;
   if (card.kind === "phrase")
     return <PhraseCard item={item} tiles={tiles} ask={kind === "dictation" ? "sound" : "meaning"} practice onDone={(r) => onDone(r !== "again")} />;
   if (kind === "build") return <BuildCard card={card} options={options} onDone={onDone} />;

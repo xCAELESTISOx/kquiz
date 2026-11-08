@@ -307,6 +307,22 @@ export const api = {
     return { status: "saved", card: res.card };
   },
 
+  /** Links two cards as similar words, or changes the note on how they differ; returns the card. */
+  async linkSimilar(id: number, otherId: number, note?: string) {
+    const res = await request<{ card: Card }>("PUT", `/cards/${id}/similar/${otherId}`, {
+      body: note === undefined ? {} : { note },
+      fallback: (m) => ({ card: m.linkSimilar(id, otherId, note) }),
+    });
+    rememberCard(id, res.card);
+    return res.card;
+  },
+
+  async unlinkSimilar(id: number, otherId: number) {
+    const res = await request<{ card: Card }>("DELETE", `/cards/${id}/similar/${otherId}`, { fallback: (m) => ({ card: m.unlinkSimilar(id, otherId) }) });
+    rememberCard(id, res.card);
+    return res.card;
+  },
+
   async deleteCard(id: number) {
     const res = await request<{ ok: true }>("DELETE", `/cards/${id}`, { fallback: (m) => m.deleteCard(id) });
     rememberCard(id, null);

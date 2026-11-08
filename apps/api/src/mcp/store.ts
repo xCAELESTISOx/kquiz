@@ -3,8 +3,32 @@ import { isSpeakable, normalizeKorean, type CardKind, type NewCard, type Root } 
 
 export type CardSource = "app" | "claude" | "bulk";
 
+/** A word linked to a card as easy to mix up with it (apps/api/src/similar.ts). */
+export interface SimilarLink {
+  id: string;
+  korean: string;
+  meaning: string;
+  note?: string;
+}
+
+/** Link (or unlink) two cards, each named by its Korean text. */
+export interface SimilarPair {
+  korean: string;
+  other: string;
+  note?: string;
+  remove?: boolean;
+}
+
+export interface SimilarResult {
+  linked: { korean: string; other: string }[];
+  unlinked: { korean: string; other: string }[];
+  rejected: { korean: string; other: string; reason: string }[];
+}
+
 export interface StoredCard extends NewCard {
   id: string;
+  /** Left out when the card has none. */
+  similar?: SimilarLink[];
   speakable: boolean;
   /** Waiting to be learned, not yet in reviews. */
   queued: boolean;
@@ -72,6 +96,8 @@ export interface CardStore {
   update(id: string, patch: CardPatch): Promise<StoredCard | null>;
   /** Sets roots only; unlike update it is not an edit, so a hard card stays on the hard list. */
   setRoots(items: { id: string; roots: Root[] }[]): Promise<{ saved: string[]; notFound: string[] }>;
+  /** Links or unlinks pairs of the user's cards as similar words; not an edit of either card. */
+  linkSimilar(pairs: SimilarPair[]): Promise<SimilarResult>;
   stats(now: Date): Promise<Stats>;
   weakSounds(limit: number): Promise<WeakSound[]>;
   hardCards(limit: number): Promise<HardCard[]>;
@@ -79,6 +105,41 @@ export interface CardStore {
 
 export class MemoryCardStore implements CardStore {
   readonly cards = new Map<string, StoredCard>();
+  /** "idA|idB" (sorted) → note. */
+  readonly links = new Map<string, string | undefined>();
+
+  private withLinks(card: StoredCard): StoredCard {
+    const similar: SimilarLink[] = [];
+    for (const [key, note] of this.links) {
+      const [a, b] = key.split("|");
+      const otherId = a === card.id ? b : b === card.id ? a : undefined;
+      const other = otherId && this.cards.get(otherId);
+      if (other) similar.push({ id: other.id, korean: other.korean, meaning: other.meaning, ...(note ? { note } : {}) });
+    }
+    const { similar: _old, ...rest } = card;
+    return similar.length ? { ...rest, similar } : rest;
+  }
+
+  async linkSimilar(pairs: SimilarPair[]): Promise<SimilarResult> {
+    const result: SimilarResult = { linked: [], unlinked: [], rejected: [] };
+    const byKorean = (text: string) => [...this.cards.values()].find((c) => c.korean === normalizeKorean(text));
+    for (const pair of pairs) {
+      const [a, b] = [byKorean(pair.korean), byKorean(pair.other)];
+      const names = { korean: pair.korean, other: pair.other };
+      if (!a || !b) result.rejected.push({ ...names, reason: `no card ${!a ? pair.korean : pair.other}` });
+      else if (a === b) result.rejected.push({ ...names, reason: "same card" });
+      else {
+        const key = [a.id, b.id].sort().join("|");
+        if (pair.remove) {
+          if (this.links.delete(key)) result.unlinked.push(names);
+        } else {
+          this.links.set(key, pair.note ?? this.links.get(key));
+          result.linked.push(names);
+        }
+      }
+    }
+    return result;
+  }
 
   async findByKorean(korean: string[]): Promise<Map<string, StoredCard>> {
     const wanted = new Set(korean.map(normalizeKorean));
@@ -110,7 +171,8 @@ export class MemoryCardStore implements CardStore {
   }
 
   async get(id: string): Promise<StoredCard | null> {
-    return this.cards.get(id) ?? null;
+    const card = this.cards.get(id);
+    return card ? this.withLinks(card) : null;
   }
 
   async find({ text, tag, root, withoutRoots, kind, limit }: CardQuery): Promise<StoredCard[]> {
@@ -126,7 +188,7 @@ export class MemoryCardStore implements CardStore {
         const haystack = [card.korean, card.meaning, card.pronunciation, card.romanization];
         if (!haystack.some((field) => field?.toLocaleLowerCase().includes(needle))) continue;
       }
-      result.push(card);
+      result.push(this.withLinks(card));
       if (result.length >= limit) break;
     }
     return result;

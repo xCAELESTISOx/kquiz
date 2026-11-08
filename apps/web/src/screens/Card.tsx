@@ -8,6 +8,7 @@ import { BackIcon, LearnIcon, SpeakerIcon } from "../ui/icons";
 import { Menu, MenuItem } from "../ui/Menu";
 import { Spinner } from "../ui/Spinner";
 import { PhraseParts } from "../ui/PhraseParts";
+import { SimilarEditor } from "../ui/Similar";
 import { useFamily, WordFamily } from "../ui/WordFamily";
 import { lastCardsHash } from "./Cards";
 
@@ -304,6 +305,14 @@ export function CardScreen({ id }: { id: number }) {
                 </div>
               ))}
             </fieldset>
+          )}
+
+          {card.kind === "word" && (
+            <div className="field">
+              <span className="field-label">Похожие слова</span>
+              <p className="muted small field-hint">Легко спутать. Если ответишь похожим словом, приложение подскажет, а не засчитает ошибку.</p>
+              <SimilarEditor card={card} onChange={(next) => setCard({ ...card, similar: next.similar, updatedAt: next.updatedAt })} />
+            </div>
           )}
 
           <label className="field">

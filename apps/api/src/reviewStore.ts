@@ -6,6 +6,7 @@ import { cardAudio, cards, reviewLog, reviewStates } from "./db/schema.js";
 import { introduce, newCards, startOfDay, type NewCards } from "./newCards.js";
 import { getFsrsSetup, schedulerFor } from "./fsrs.js";
 import { applyRating, fromStateRow, toStateRow, type RatingName, type ReviewMode } from "./review.js";
+import { withSimilar } from "./similar.js";
 import { voicesFor, type ExtraVoice } from "./voices.js";
 
 export type QueueItem = {
@@ -77,6 +78,7 @@ export function dueQueue(db: Db, userId: number, mode: QueueMode, now = new Date
     .all()
     .map(toQueueItem);
   withVoices(db, items);
+  withSimilar(db, userId, items.map((i) => i.card));
   return isMixed(mode) ? spreadCards(items, random) : shuffle(items, random);
 }
 
@@ -128,6 +130,7 @@ export function groupQueue(
     for (const row of rows) byId.set(row.card.id, [...(byId.get(row.card.id) ?? []), row]);
     const items = picked.flatMap(({ id }) => (byId.get(id) ?? []).map(toQueueItem));
     withVoices(tx, items);
+    withSimilar(tx as unknown as Db, userId, items.map((i) => i.card));
     return { items: isMixed(mode) ? spreadCards(items, random) : items, total: matched.length };
   });
 }

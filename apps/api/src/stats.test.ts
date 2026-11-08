@@ -86,6 +86,9 @@ describe("GET /stats", () => {
     const meaningDue = seoul.forecast.reduce((n: number, f: { due: Record<string, number> }) => n + f.due.meaning, 0);
     expect(meaningDue).toBe(1); // only the reviewed card; 물 is still new
     expect(seoul.forecast[0].due).toHaveProperty("speech");
+    // 국물 is due in two modes; 물 has not been learned yet.
+    expect(seoul.forecast.reduce((n: number, f: { words: number }) => n + f.words, 0)).toBeGreaterThanOrEqual(1);
+    expect(seoul.learned).toBe(1);
 
     expect(seoul.retention.meaning).toEqual({ reviews: 2, recalled: 1 });
     expect(seoul.retention.speech).toEqual({ reviews: 0, recalled: 0 });

@@ -31,6 +31,14 @@ export interface Family extends Root {
   total: number;
 }
 
+/** Another of the user's cards easy to mix up with this one, and how the two differ. */
+export interface SimilarWord {
+  id: number;
+  korean: string;
+  meaning: string;
+  note: string | null;
+}
+
 /** A word, or a set phrase learned whole (안녕히 가세요). */
 export type CardKind = "word" | "phrase";
 
@@ -89,6 +97,8 @@ export interface Card {
   suspended: boolean;
   /** Waiting in the new-card queue (cards from Claude), not yet in reviews. */
   queued: boolean;
+  /** Words easy to mix up with this one (휴지통 / 쓰레기통), linked both ways. */
+  similar?: SimilarWord[];
   createdAt: string;
   updatedAt: string;
 }
@@ -103,7 +113,7 @@ export interface QueueItem {
   /** Listening only: other voices the word can be heard in besides the default one (lib/voices.ts). */
   voices?: string[];
   /** In a session only: a step of learning a new word, not a review (lib/session.ts). */
-  learn?: { kind: "intro" | "build" | "dictation" | "write"; check?: boolean };
+  learn?: { kind: "intro" | "pick" | "build" | "dictation" | "write"; check?: boolean };
 }
 
 /** A wrong option on the "pick the Korean word" screen: another of the user's words. */
@@ -211,7 +221,10 @@ export interface StatsOverview {
   today: string;
   streak: { current: number; best: number; reviewedToday: boolean };
   activity: { day: string; reviews: number }[];
-  forecast: { day: string; due: Record<string, number> }[];
+  /** words: distinct words due that day (a word due in two modes counts once). */
+  forecast: { day: string; due: Record<string, number>; words?: number }[];
+  /** Words past the new-word pool ("Учить") and not paused. */
+  learned?: number;
   retention: Record<string, { reviews: number; recalled: number }>;
   targetRetention: Record<string, number>;
   cards: { total: number; byMode: Record<string, { new: number; learning: number; young: number; mature: number }> };

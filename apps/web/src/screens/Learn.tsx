@@ -10,11 +10,13 @@ import {
   type LearnStep,
 } from "../lib/learn";
 import { phrasesWord, wordsWord } from "../lib/plural";
+import { pickMeanings } from "../lib/session";
 import { canRecord, type Recorder } from "../lib/recorder";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
 import type { Card, ChoiceOption, GroupFilter, PhraseTiles, QueueItem, RatingName } from "../lib/types";
 import { CloseIcon, SpeakerIcon } from "../ui/icons";
 import { HiddenTranslation } from "../ui/HiddenTranslation";
+import { SimilarList } from "../ui/Similar";
 import { useFamily, WordFamily } from "../ui/WordFamily";
 import { PhraseCard } from "./Phrase";
 import { SpeechCard } from "./Speech";
@@ -314,6 +316,7 @@ export function IntroCard({ card, onDone }: { card: Card; onDone: () => void }) 
             </div>
           )}
           {card.notes && <p className="review-notes muted">{card.notes}</p>}
+          <SimilarList card={card} />
           {canSpeak() && (
             <button type="button" className="icon-button speak-button" aria-label="Послушать" onClick={() => speak(card)}>
               <SpeakerIcon />
@@ -326,6 +329,94 @@ export function IntroCard({ card, onDone }: { card: Card; onDone: () => void }) 
           Запомнил, дальше
         </button>
         <p className="review-tip muted small">Послушай пару раз и прочитай пример вслух</p>
+      </footer>
+    </>
+  );
+}
+
+/**
+ * Right after meeting a word: what it means, picked among the translations of its look-alikes. The
+ * word is read, not heard, so the eye links the spelling to the meaning; after the pick it is heard.
+ */
+export function PickMeaningCard({ card, options, onDone }: { card: Card; options: ChoiceOption[]; onDone: (ok: boolean) => void }) {
+  const meanings = useMemo(() => pickMeanings(card, options), [card, options]);
+  // The index picked, or -1 for "Не знаю".
+  const [picked, setPicked] = useState<number>();
+  const answered = picked !== undefined;
+  const right = answered && meanings[picked] === card.meaning;
+
+  const pick = useCallback(
+    (i: number) => {
+      if (answered) return;
+      setPicked(i);
+      if (canSpeak()) speak(card);
+    },
+    [answered, card],
+  );
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!answered && /^[1-4]$/.test(e.key) && meanings[Number(e.key) - 1]) pick(Number(e.key) - 1);
+      else if (answered && (e.key === "Enter" || e.key === " ")) {
+        e.preventDefault();
+        onDone(right);
+      }
+    }
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, [answered, meanings, pick, onDone, right]);
+
+  return (
+    <>
+      <div className="review-stage">
+        <div className="review-card pick-card">
+          <p className="speech-ask">Что значит</p>
+          <p className="intro-word" lang="ko">
+            {card.korean}
+          </p>
+          {answered && canSpeak() && (
+            <button type="button" className="icon-button speak-button" aria-label="Послушать" onClick={() => speak(card)}>
+              <SpeakerIcon />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div aria-live="polite">
+        {answered && (
+          <p className={`sounds-feedback tone-${right ? "ok" : "wrong"}`}>
+            {right ? "Верно" : <>Правильно: {card.meaning}</>}
+          </p>
+        )}
+      </div>
+
+      <footer className="review-actions">
+        <div className="sounds-options choice-options pick-options" data-count={meanings.length}>
+          {meanings.map((m, i) => {
+            const state = !answered ? undefined : m === card.meaning ? "right" : i === picked ? "wrong" : "other";
+            return (
+              <button
+                key={m}
+                type="button"
+                className="sounds-option"
+                data-state={state}
+                style={{ "--i": i } as CSSProperties}
+                onClick={() => pick(i)}
+              >
+                <span className="pick-option-meaning">{m}</span>
+              </button>
+            );
+          })}
+        </div>
+        {answered ? (
+          <button type="button" className="button primary" onClick={() => onDone(right)}>
+            Дальше
+          </button>
+        ) : (
+          <button type="button" className="chip-button dont-know" onClick={() => pick(-1)}>
+            Не знаю
+          </button>
+        )}
       </footer>
     </>
   );

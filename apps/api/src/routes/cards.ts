@@ -7,6 +7,7 @@ import { CARD_KINDS, newCardSchema, parseBulk } from "../cards.js";
 import type { Db } from "../db/client.js";
 import { answerLearning, introduceEarly, introduceLearned, learningWords } from "../newCards.js";
 import { linkParts } from "../phrases.js";
+import { linkSimilar, similarNoteSchema, unlinkSimilar } from "../similar.js";
 import { isExtraVoice } from "../voices.js";
 
 export const MAX_BATCH = 50;
@@ -137,6 +138,30 @@ export function cardRoutes(db: Db, now: () => Date, timeZone: string) {
     if ("card" in result) return c.json(result);
     if (result.error === "duplicate") return c.json(result, 409);
     return c.json(result, 404);
+  });
+
+  // Links two cards as easy to mix up (similar.ts), or changes the note on how they differ.
+  app.put("/:id/similar/:otherId", async (c) => {
+    const id = idParam.safeParse(c.req.param("id"));
+    const otherId = idParam.safeParse(c.req.param("otherId"));
+    if (!id.success || !otherId.success) return c.json({ error: "not_found" }, 404);
+    const body = z.object({ note: similarNoteSchema.optional() }).safeParse(await c.req.json().catch(() => ({})));
+    if (!body.success) return c.json({ error: "invalid_request", issues: body.error.issues }, 400);
+    const userId = c.get("user").id;
+    const result = linkSimilar(db, userId, id.data, otherId.data, body.data.note, now());
+    if (result === "not_found") return c.json({ error: "not_found" }, 404);
+    if (result !== "linked") return c.json({ error: result }, 400);
+    return c.json({ card: getCard(db, userId, id.data) });
+  });
+
+  app.delete("/:id/similar/:otherId", (c) => {
+    const id = idParam.safeParse(c.req.param("id"));
+    const otherId = idParam.safeParse(c.req.param("otherId"));
+    if (!id.success || !otherId.success) return c.json({ error: "not_found" }, 404);
+    const userId = c.get("user").id;
+    unlinkSimilar(db, userId, id.data, otherId.data);
+    const card = getCard(db, userId, id.data);
+    return card ? c.json({ card }) : c.json({ error: "not_found" }, 404);
   });
 
   // One answer for a word being learned: up the ladder, one step down, or into reviews (newCards.ts).

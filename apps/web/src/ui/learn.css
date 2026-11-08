@@ -240,3 +240,27 @@
     animation: none;
   }
 }
+
+/* Picking what a word just met means: translations instead of words, so text-sized and centred. */
+.choice-options.pick-options .sounds-option {
+  min-height: 64px;
+  justify-content: center;
+  padding-inline: 10px;
+}
+
+.pick-option-meaning {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.pick-options .sounds-option[data-state="right"] .pick-option-meaning {
+  color: var(--ok);
+}
+
+.pick-options .sounds-option[data-state="wrong"] .pick-option-meaning {
+  color: var(--wrong);
+}
