@@ -55,7 +55,7 @@ export function StatsScreen() {
       {stats && (
         <>
           <Streak stats={stats} />
-          <Section i={1} title="Прогноз повторений">
+          <Section i={1} title="Прогноз по выученным словам">
             <Forecast stats={stats} modes={modes} />
           </Section>
           <Section i={2} title="Запоминание" aside="за 30 дней">
@@ -118,24 +118,71 @@ function Streak({ stats }: { stats: StatsOverview }) {
   );
 }
 
-function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
-  const [range, setRange] = useState<7 | 30>(7);
-  const items = stats.forecast.slice(0, range);
-  const totals = items.map((f) => sum(modes.map((m) => f.due[m.mode] ?? 0)));
-  const max = Math.max(...totals, 1);
-  const [selected, select] = useState<number>();
-  const pick = usePointerPick(items.length, select);
+const RANGE_KEY = "kq:forecast-range";
 
-  const peak = totals.indexOf(Math.max(...totals));
+function savedRange(): 7 | 30 {
+  try {
+    return localStorage.getItem(RANGE_KEY) === "7" ? 7 : 30;
+  } catch {
+    return 30;
+  }
+}
+
+function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
+  // A month by default: the owner plans lessons around it; the week stays one tap away and is remembered.
+  const [range, setRangeState] = useState<7 | 30>(savedRange);
+  const setRange = (r: 7 | 30) => {
+    setRangeState(r);
+    try {
+      localStorage.setItem(RANGE_KEY, String(r));
+    } catch {
+      /* private mode: the choice just isn't remembered */
+    }
+  };
+  const [selected, select] = useState<number>();
+  const items = stats.forecast.slice(0, range);
+  // Words, not mode-reviews: a word due for meaning and pronunciation on one day is one word.
+  const totals = items.map((f) => f.words ?? sum(modes.map((m) => f.due[m.mode] ?? 0)));
+  const max = Math.max(...totals, 1);
+  const pick = usePointerPick(items.length, select);
+  const learned = stats.learned ?? 0;
+
+  if (learned === 0) {
+    return (
+      <p className="stats-note forecast-empty">
+        Выученных слов пока нет. Прогноз появится, когда пройдёшь первые слова через «Учить».
+      </p>
+    );
+  }
+
+  const now = totals[0] ?? 0;
+  const ahead = sum(totals.slice(1));
+  const future = totals.slice(1);
+  const peak = future.length ? future.indexOf(Math.max(...future)) + 1 : 0;
   const shown = selected ?? 1;
   const day = items[shown];
 
   return (
     <>
-      <div className="segmented segmented-small" role="tablist" aria-label="Период" data-mode={range === 30 ? "bulk" : "single"}>
-        {([7, 30] as const).map((r) => (
+      <div className="forecast-summary">
+        <div className="forecast-tile" data-kind="now">
+          <span className="forecast-tile-value">{now}</span>
+          <span className="forecast-tile-label">
+            {plural(now, "слово", "слова", "слов")} на сегодня
+          </span>
+          <span className="forecast-tile-hint">включая просроченные</span>
+        </div>
+        <div className="forecast-tile" data-kind="ahead">
+          <span className="forecast-tile-value">{ahead}</span>
+          <span className="forecast-tile-label">{plural(ahead, "повторение", "повторения", "повторений")} впереди</span>
+          <span className="forecast-tile-hint">прогноз на {range === 30 ? "месяц" : "неделю"}</span>
+        </div>
+      </div>
+
+      <div className="segmented segmented-small" role="tablist" aria-label="Период" data-mode={range === 30 ? "single" : "bulk"}>
+        {([30, 7] as const).map((r) => (
           <button key={r} role="tab" aria-selected={range === r} onClick={() => (setRange(r), select(undefined))}>
-            {r} дней
+            {r === 30 ? "Месяц" : "Неделя"}
           </button>
         ))}
       </div>
@@ -144,15 +191,15 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
         {day && (
           <>
             <span className="readout-value">{totals[shown]}</span>
-            <span className="readout-label">{dayName(day.day, shown)}</span>
-            {modes.length > 1 && (
-              <span className="readout-parts">
-                {modes.map((m) => (
-                  <span key={m.mode}>
-                    <i style={{ background: m.color }} />
-                    {day.due[m.mode] ?? 0}
-                  </span>
-                ))}
+            <span className="readout-label">
+              {plural(totals[shown]!, "слово", "слова", "слов")} · {dayName(day.day, shown).toLowerCase()}
+            </span>
+            {modes.length > 1 && totals[shown]! > 0 && (
+              <span className="readout-parts readout-modes">
+                {modes
+                  .filter((m) => day.due[m.mode])
+                  .map((m) => `${m.label.toLowerCase()} ${day.due[m.mode]}`)
+                  .join(" · ")}
               </span>
             )}
           </>
@@ -160,22 +207,16 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
       </div>
 
       <div
-        className="bars"
+        className="bars forecast-bars"
         data-range={range}
         data-picking={selected !== undefined}
         role="img"
-        aria-label={`Повторений по дням: ${items.map((f, i) => `${shortDate(f.day)} — ${totals[i]}`).join(", ")}`}
+        aria-label={`Слов к повторению по дням: ${items.map((f, i) => `${shortDate(f.day)} — ${totals[i]}`).join(", ")}`}
         {...pick}
       >
         {items.map((f, i) => (
-          <div key={f.day} className="bar" data-selected={i === selected} data-today={i === 0}>
-            <div className="bar-stack" style={{ height: `${(totals[i]! / max) * 100}%` }}>
-              {modes.map((m) =>
-                f.due[m.mode] ? (
-                  <span key={m.mode} style={{ flexGrow: f.due[m.mode], background: m.color }} />
-                ) : null,
-              )}
-            </div>
+          <div key={f.day} className="bar" data-selected={i === selected} data-today={i === 0} data-empty={totals[i] === 0}>
+            <div className="bar-stack" style={{ height: `${(totals[i]! / max) * 100}%` }} />
           </div>
         ))}
       </div>
@@ -185,12 +226,19 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
         ))}
       </div>
 
-      {modes.length > 1 && <Legend modes={modes} />}
+      <div className="legend forecast-legend">
+        <span>
+          <i data-kind="now" />
+          сегодня
+        </span>
+        <span>
+          <i data-kind="ahead" />
+          прогноз
+        </span>
+      </div>
       <p className="stats-note">
-        {totals[0] ? `Сегодня ${totals[0]}, включая просроченные. ` : ""}
-        За {range} дней — {sum(totals)}
-        {totals[peak]! > 0 && peak > 0 ? `, больше всего ${dayName(items[peak]!.day, peak).toLowerCase()}: ${totals[peak]}` : ""}.
-        Новые карточки сюда не входят.
+        Выучено {learned} {plural(learned, "слово", "слова", "слов")}: только они и попадают в прогноз, новые слова — после «Учить».
+        {totals[peak]! > 0 ? ` Больше всего ${dayName(items[peak]!.day, peak).toLowerCase()}: ${totals[peak]} ${plural(totals[peak]!, "слово", "слова", "слов")}.` : ""}
       </p>
     </>
   );
