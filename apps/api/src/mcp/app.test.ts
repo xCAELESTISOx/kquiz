@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { beforeEach, describe, expect, it } from "vitest";
-import { CLAUDE_REDIRECT_URIS, createMcpApp } from "./app.js";
+import { CLAUDE_REDIRECT_URIS, createMcpApp, isLoopback } from "./app.js";
 import { MemoryOAuthStore } from "./oauth-store.js";
 import { MemoryCardStore, MemoryDrillStore } from "./store.js";
 
@@ -121,10 +121,22 @@ describe("oauth", () => {
     expect(res.headers.get("www-authenticate")).toContain(`${ORIGIN}/.well-known/oauth-protected-resource/mcp`);
   });
 
-  it("registers only Claude's callbacks", async () => {
-    const { res, body } = await register({ redirect_uris: ["https://evil.example/cb"] });
-    expect(res.status).toBe(400);
-    expect(body.error).toBe("invalid_redirect_uri");
+  it("registers only Claude's callbacks and loopback ones", async () => {
+    for (const uri of ["https://evil.example/cb", "https://localhost/cb", "http://localhost.evil.example/cb", "http://user@127.0.0.1/cb"]) {
+      const { res, body } = await register({ redirect_uris: [uri] });
+      expect(res.status, uri).toBe(400);
+      expect(body.error).toBe("invalid_redirect_uri");
+    }
+    for (const uri of ["http://localhost:53682/callback", "http://127.0.0.1:1455/auth/callback", "http://[::1]:8080/cb"]) {
+      expect((await register({ redirect_uris: [uri] })).res.status, uri).toBe(201);
+    }
+  });
+
+  it("isLoopback accepts only plain-http callbacks on this machine", () => {
+    expect(isLoopback("http://localhost:3000/callback")).toBe(true);
+    expect(isLoopback("https://localhost/callback")).toBe(false);
+    expect(isLoopback("http://10.0.0.1/callback")).toBe(false);
+    expect(isLoopback("not a url")).toBe(false);
   });
 
   it("evicts unapproved clients instead of growing past the cap", async () => {

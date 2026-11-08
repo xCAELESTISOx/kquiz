@@ -138,7 +138,7 @@ Tools:
 
 There is no delete over MCP: cards are deleted only in the app.
 
-Access: Claude supports remote MCP servers with OAuth and Dynamic Client Registration ([Anthropic's guide](https://support.anthropic.com/en/articles/11503834-building-custom-connectors-via-remote-mcp-servers)). The API runs a minimal OAuth 2.1 server: Claude registers as a client, opens the consent page, the user confirms with a passkey, and Claude gets a token. Tokens are short-lived with refresh and can be revoked. Client registrations are capped so dynamic registration can't be used to fill the database. Allowed redirect URIs default to Claude's callbacks and can be changed with `MCP_REDIRECT_URIS`.
+Access: Claude supports remote MCP servers with OAuth and Dynamic Client Registration ([Anthropic's guide](https://support.anthropic.com/en/articles/11503834-building-custom-connectors-via-remote-mcp-servers)). The API runs a minimal OAuth 2.1 server: Claude registers as a client, opens the consent page, the user confirms with a passkey, and Claude gets a token. Tokens are short-lived with refresh and can be revoked. Client registrations are capped so dynamic registration can't be used to fill the database. Allowed redirect URIs default to Claude's callbacks and can be changed with `MCP_REDIRECT_URIS`; loopback callbacks on any port (RFC 8252) are accepted too, for command-line clients like Claude Code and Codex, unless `MCP_ALLOW_LOOPBACK=0`. PKCE is required for every client.
 
 ## 7. Security and cost control
 

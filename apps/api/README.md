@@ -15,6 +15,7 @@ pnpm db:generate    # after editing src/db/schema.ts; migrations in drizzle/ app
 | `DATABASE_PATH` | `./data/kquiz.db` | SQLite file |
 | `ORIGIN` | `http://localhost:5173` | Public origin of the app; passkeys are bound to its host, and it is the MCP/OAuth issuer. https in production |
 | `MCP_REDIRECT_URIS` | Claude's callbacks | Comma-separated OAuth redirect URIs a client may register |
+| `MCP_ALLOW_LOOPBACK` | `1` | `0` refuses loopback callbacks (`http://localhost:<port>/…`), which command-line clients such as Claude Code and Codex use |
 | `ORIGIN_SECRET` | — | Required in production, at least 32 characters. The reverse proxy (Caddy in `deploy/`) sends it as header `x-kquiz-origin`; requests without it get 403 |
 | `SETUP_CODE` | random, printed to the log | Code (16+ characters) for binding the first passkey; useless once one is bound |
 | `TIME_ZONE` | `Asia/Seoul` | Where "today" starts: reviewed today and the midnight a learned word is first due |

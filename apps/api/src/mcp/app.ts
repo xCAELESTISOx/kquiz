@@ -30,6 +30,12 @@ export interface McpAppOptions {
   owner: OwnerAuth;
   /** Redirect URIs a registering client may use. Defaults to Claude's OAuth callbacks. */
   redirectUris?: string[];
+  /**
+   * Also accept loopback callbacks (http://localhost:<any port>/…, 127.0.0.1, [::1]), as used by
+   * command-line clients such as Claude Code and Codex (RFC 8252 §7.3). Safe: the code only ever
+   * reaches the machine of the person who approved it, and PKCE is required. On by default.
+   */
+  allowLoopback?: boolean;
   maxClients?: number;
   now?: () => number;
 }
@@ -84,6 +90,8 @@ export function createMcpApp(options: McpAppOptions) {
   const resource = `${issuer}/mcp`;
   const resourceMetadataUrl = `${issuer}/.well-known/oauth-protected-resource/mcp`;
   const allowedRedirects = new Set(options.redirectUris ?? CLAUDE_REDIRECT_URIS);
+  const allowLoopback = options.allowLoopback ?? true;
+  const redirectAllowed = (uri: string) => allowedRedirects.has(uri) || (allowLoopback && isLoopback(uri));
   // Pending consent screens; short-lived, so memory is enough even across restarts.
   const consents = new Map<string, { params: AuthorizeParams; expiresAt: number }>();
 
@@ -123,13 +131,13 @@ export function createMcpApp(options: McpAppOptions) {
     }),
   );
 
-  // Dynamic Client Registration (RFC 7591). Only Claude's callbacks are accepted and the number
-  // of clients is capped, so registering cannot grow the database or point codes elsewhere.
+  // Dynamic Client Registration (RFC 7591). Only Claude's callbacks and loopback ones are accepted
+  // and the number of clients is capped, so registering cannot grow the database or point codes elsewhere.
   app.post("/oauth/register", rateLimit(10, 60 * 60_000, now), async (c) => {
     const parsed = registration.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return oauthError(c, "invalid_client_metadata", z.prettifyError(parsed.error));
     const meta = parsed.data;
-    const bad = meta.redirect_uris.find((uri) => !allowedRedirects.has(uri));
+    const bad = meta.redirect_uris.find((uri) => !redirectAllowed(uri));
     if (bad) return oauthError(c, "invalid_redirect_uri", `Redirect URI not allowed: ${bad}`);
 
     if ((await oauth.countClients()) >= maxClients && !(await oauth.evictOldestUnapprovedClient())) {
@@ -372,6 +380,17 @@ export function createMcpApp(options: McpAppOptions) {
   });
 
   return app;
+}
+
+/** A callback on this very machine: plain http is fine there, any port. */
+export function isLoopback(uri: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(uri);
+  } catch {
+    return false;
+  }
+  return url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) && !url.username && !url.password;
 }
 
 function consentPage(clientName: string, ticket: string) {

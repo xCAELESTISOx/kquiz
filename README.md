@@ -48,7 +48,16 @@ Pronunciation scoring and TTS need the Python service, which runs separately: se
 
 A VPS with 4 GB of RAM and Ubuntu 24.04 is enough. Docker Compose runs Caddy (automatic HTTPS), the API and the scorer; a systemd timer pulls updates and backs the database up every night. See [docs/DEPLOY.md](docs/DEPLOY.md).
 
-To connect Claude, add `https://<your-domain>/mcp` as a custom connector in Claude's settings and sign in with your passkey when asked.
+
+## Adding cards from Claude, Codex and other AI assistants
+
+KQuiz speaks MCP over Streamable HTTP at `https://<your-domain>/mcp`, with OAuth 2.1 (dynamic client registration, PKCE). Any client that supports remote MCP servers with OAuth can connect; you approve it once on a consent page with your passkey. Each person who connects sees only their own cards, and no client can delete cards.
+
+- **Claude (claude.ai, desktop and mobile apps):** Settings → Connectors → **Add custom connector**, URL `https://<your-domain>/mcp`, then **Connect** and approve. A connector added on the web shows up in the desktop and mobile apps too.
+- **Claude Code:** `claude mcp add --transport http kquiz https://<your-domain>/mcp`, then run `/mcp` in Claude Code and choose kquiz to sign in.
+- **Codex CLI:** `codex mcp add kquiz --url https://<your-domain>/mcp`, then `codex mcp login kquiz`.
+
+Then just ask, for example: "Add the words from today's lesson to KQuiz: 지하철, 영수증, 편의점."
 
 ## Status
 
