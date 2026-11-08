@@ -31,6 +31,14 @@ export interface Family extends Root {
   total: number;
 }
 
+/** Another of the user's cards easy to mix up with this one, and how the two differ. */
+export interface SimilarWord {
+  id: number;
+  korean: string;
+  meaning: string;
+  note: string | null;
+}
+
 /** A word, or a set phrase learned whole (안녕히 가세요). */
 export type CardKind = "word" | "phrase";
 
@@ -89,6 +97,8 @@ export interface Card {
   suspended: boolean;
   /** Waiting in the new-card queue (cards from Claude), not yet in reviews. */
   queued: boolean;
+  /** Words easy to mix up with this one (휴지통 / 쓰레기통), linked both ways. */
+  similar?: SimilarWord[];
   createdAt: string;
   updatedAt: string;
 }

@@ -14,6 +14,7 @@ import type { Card, ChoiceOption, GroupFilter, MixKind, PhraseTiles, QueueItem, 
 import { CloseIcon, SpeakerIcon, UndoIcon } from "../ui/icons";
 import { LeechBadge } from "../ui/LeechBadge";
 import { useGlide } from "../ui/motion";
+import { SimilarList } from "../ui/Similar";
 import { useFamily, WordFamily } from "../ui/WordFamily";
 import { ChoiceCard } from "./Choice";
 import { BuildCard, IntroCard } from "./Learn";
@@ -516,6 +517,7 @@ export function ReviewScreen({
                 )}
                 <WordFamily card={card} families={families} />
                 {card.notes && <p className="review-notes muted">{card.notes}</p>}
+                <SimilarList card={card} />
               </div>
             ) : guessing ? (
               <GuessHints hints={hints} />

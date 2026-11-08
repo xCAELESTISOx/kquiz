@@ -3,11 +3,13 @@ import { submitReview } from "../lib/api";
 import type { Cloze } from "../lib/cloze";
 import { useLeechIds } from "../lib/leeches";
 import { canSpeak, speak } from "../lib/speech";
+import { afterNudge, similarAnswer } from "../lib/similar";
 import { heard } from "../lib/voices";
-import type { QueueItem, RatingName } from "../lib/types";
+import type { QueueItem, RatingName, SimilarWord } from "../lib/types";
 import { checkTyped, joinMarks, typingRating, wrongKeyboard, type TypingCheck } from "../lib/typing";
 import { HiddenTranslation } from "../ui/HiddenTranslation";
 import { LeechBadge } from "../ui/LeechBadge";
+import { SimilarList, SimilarNudge } from "../ui/Similar";
 import { SpeakerIcon } from "../ui/icons";
 import "../ui/learn.css";
 
@@ -48,6 +50,10 @@ export function TypeCard({
   const shownAt = useRef(performance.now());
   const leeches = useLeechIds(item.mode);
   const expected = ask === "cloze" && cloze ? cloze.word : card.korean;
+  // The similar word typed instead (휴지통 for 쓰레기통): said so, and the answer asked for again.
+  const [nudge, setNudge] = useState<SimilarWord>();
+  const nudged = useRef(false);
+  const rate = useCallback((result: TypingCheck) => afterNudge(typingRating(result), nudged.current), []);
 
   useEffect(() => input.current?.focus({ preventScroll: true }), []);
 
@@ -62,6 +68,14 @@ export function TypeCard({
   const finish = useCallback(
     (typed: string) => {
       if (check) return;
+      const similar = ask === "meaning" ? similarAnswer(card, typed) : undefined;
+      if (similar) {
+        nudged.current = true;
+        setNudge(similar);
+        setText("");
+        input.current?.focus({ preventScroll: true });
+        return;
+      }
       const result = checkTyped(expected, typed);
       setCheck(result);
       input.current?.blur();
@@ -71,17 +85,17 @@ export function TypeCard({
           id: crypto.randomUUID(),
           cardId: card.id,
           mode: item.mode,
-          rating: typingRating(result),
+          rating: rate(result),
           reviewedAt: new Date().toISOString(),
           elapsedMs: Math.round(performance.now() - shownAt.current),
         }).catch((e: Error) => setError(e.message));
     },
-    [check, expected, card, item, practice],
+    [check, expected, card, item, practice, ask, rate],
   );
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (check) onDone(typingRating(check));
+    if (check) onDone(rate(check));
     else if (text.trim()) finish(text);
   }
 
@@ -89,12 +103,12 @@ export function TypeCard({
     function onKey(e: KeyboardEvent) {
       if (check && (e.key === "Enter" || e.key === " ") && !(e.target instanceof HTMLInputElement)) {
         e.preventDefault();
-        onDone(typingRating(check));
+        onDone(rate(check));
       }
     }
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [check, onDone]);
+  }, [check, onDone, rate]);
 
   const latin = !check && wrongKeyboard(text);
 
@@ -116,6 +130,7 @@ export function TypeCard({
               Послушать
             </button>
           )}
+          {nudge && !check && <SimilarNudge key={nudge.id} word={nudge} />}
           {ask === "cloze" && cloze && (
             <div className="speech-context type-context">
               <p lang="ko">
@@ -141,6 +156,7 @@ export function TypeCard({
                   <SpeakerIcon />
                 </button>
               )}
+              {nudge && <SimilarList card={card} />}
             </div>
           )}
         </div>
@@ -150,7 +166,7 @@ export function TypeCard({
         {error && <p className="notice notice-error speech-notice">{error}</p>}
         {check && (
           <p className={`sounds-feedback tone-${check.correct ? "ok" : "wrong"}`}>
-            {feedback(check, text)}
+            {feedback(check, text, nudged.current)}
           </p>
         )}
       </div>
@@ -193,8 +209,8 @@ export function TypeCard({
 }
 
 /** Letter by letter only while the answer was close; a different word is just shown right. */
-function feedback(check: TypingCheck, typed: string): string {
-  if (check.correct) return "Верно";
+function feedback(check: TypingCheck, typed: string, nudged: boolean): string {
+  if (check.correct) return nudged ? "Верно, с подсказкой" : "Верно";
   if (check.almost) return `Почти: ${check.slips[0]}`;
   if (!typed.trim()) return "Вот как пишется";
   const close = check.marks.filter((m) => m.status === "ok").length >= check.marks.length / 2;

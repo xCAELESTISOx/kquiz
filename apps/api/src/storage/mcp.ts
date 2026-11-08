@@ -10,7 +10,8 @@ import { cards, oauthClients, oauthCodes, oauthGrants, phoneStats, reviewLog } f
 import { activeUser } from "../users.js";
 import type { OwnerAuth, UserStores } from "../mcp/app.js";
 import type { OAuthStore } from "../mcp/oauth-store.js";
-import type { CardQuery, CardStore, DrillStore, NewDrill } from "../mcp/store.js";
+import type { CardQuery, CardStore, DrillStore, NewDrill, SimilarPair, SimilarResult } from "../mcp/store.js";
+import { linkSimilar, unlinkSimilar, withSimilar } from "../similar.js";
 import { findLeeches } from "../leeches.js";
 import { addDrills, listDrills } from "../practice.js";
 import { getStats } from "../reviewStore.js";
@@ -18,6 +19,7 @@ import { statsOverview, zoneOffset } from "../statsStore.js";
 
 export type StoredCard = NewCard & {
   id: string;
+  similar?: { id: string; korean: string; meaning: string; note?: string }[];
   speakable: boolean;
   /** Waiting to be learned (newCards.ts), not yet in reviews. */
   queued: boolean;
@@ -41,6 +43,9 @@ function toStoredCard(card: CardDto): StoredCard {
     kind: card.kind,
     ...(card.parts ? { parts: card.parts } : {}),
     ...(card.register ? { register: card.register } : {}),
+    ...(card.similar.length
+      ? { similar: card.similar.map((w) => ({ id: String(w.id), korean: w.korean, meaning: w.meaning, ...(w.note ? { note: w.note } : {}) })) }
+      : {}),
     speakable: card.speakable,
     queued: card.queued,
     source: card.source,
@@ -89,7 +94,7 @@ export class SqliteCardStore implements CardStore {
       .from(cards)
       .where(and(eq(cards.userId, this.userId), inArray(cards.koreanKey, [...keys.keys()])))
       .all();
-    for (const row of rows) found.set(keys.get(row.koreanKey)!, toStoredCard(toCardDto(row)));
+    for (const card of withSimilar(this.db, this.userId, rows.map(toCardDto))) found.set(keys.get(koreanKey(card.korean))!, toStoredCard(card));
     return found;
   }
 
@@ -115,14 +120,14 @@ export class SqliteCardStore implements CardStore {
       );
     }
     const where = sql.join(conditions, sql` and `);
-    return this.db
+    const rows = this.db
       .select()
       .from(cards)
       .where(where)
       .orderBy(desc(cards.id))
       .limit(Math.min(Math.max(limit, 1), 200))
-      .all()
-      .map((row) => toStoredCard(toCardDto(row)));
+      .all();
+    return withSimilar(this.db, this.userId, rows.map(toCardDto)).map(toStoredCard);
   }
 
   async update(id: string, patch: Partial<NewCard> & { speakable?: boolean }): Promise<StoredCard | null> {
@@ -152,6 +157,37 @@ export class SqliteCardStore implements CardStore {
       }
     });
     return { saved, notFound };
+  }
+
+  async linkSimilar(pairs: SimilarPair[]): Promise<SimilarResult> {
+    const result: SimilarResult = { linked: [], unlinked: [], rejected: [] };
+    const keys = [...new Set(pairs.flatMap((p) => [koreanKey(p.korean), koreanKey(p.other)]))];
+    const ids = new Map(
+      keys.length
+        ? this.db
+            .select({ id: cards.id, key: cards.koreanKey })
+            .from(cards)
+            .where(and(eq(cards.userId, this.userId), inArray(cards.koreanKey, keys)))
+            .all()
+            .map((r) => [r.key, r.id])
+        : [],
+    );
+    for (const pair of pairs) {
+      const names = { korean: pair.korean, other: pair.other };
+      const [a, b] = [ids.get(koreanKey(pair.korean)), ids.get(koreanKey(pair.other))];
+      if (a === undefined || b === undefined) {
+        result.rejected.push({ ...names, reason: `no card ${a === undefined ? pair.korean : pair.other}; add it first` });
+        continue;
+      }
+      if (pair.remove) {
+        if (unlinkSimilar(this.db, this.userId, a, b)) result.unlinked.push(names);
+        continue;
+      }
+      const outcome = linkSimilar(this.db, this.userId, a, b, pair.note);
+      if (outcome === "linked") result.linked.push(names);
+      else result.rejected.push({ ...names, reason: outcome === "same_card" ? "same card" : outcome === "too_many" ? "a card can have at most 8 similar words" : "not found" });
+    }
+    return result;
   }
 
   async stats(now: Date) {

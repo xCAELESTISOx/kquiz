@@ -1,5 +1,6 @@
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import { toCardDto, type CardDto } from "./cardStore.js";
+import { withSimilar } from "./similar.js";
 import type { Db } from "./db/client.js";
 import { cards, reviewLog } from "./db/schema.js";
 import type { ReviewMode } from "./review.js";
@@ -58,9 +59,11 @@ export function findLeeches(db: Db, userId: number, limit = 50): Leech[] {
     .slice(0, Math.min(Math.max(limit, 1), 200))
     .map(([id]) => id);
   const found = new Map(db.select().from(cards).where(inArray(cards.id, ids)).all().map((row) => [row.id, row]));
-  return ids.flatMap((id) => {
+  const items = ids.flatMap((id) => {
     const row = found.get(id);
     const entry = byCard.get(id)!;
     return row ? [{ card: toCardDto(row), forgotten: entry.forgotten, lastForgottenAt: new Date(entry.last).toISOString() }] : [];
   });
+  withSimilar(db, userId, items.map((i) => i.card));
+  return items;
 }

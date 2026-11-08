@@ -4,9 +4,11 @@ import { useLeechIds } from "../lib/leeches";
 import { groupHash, navigate } from "../lib/router";
 import { choiceRating, REVEAL_MS, shuffled } from "../lib/choice";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
-import type { ChoiceOption, GroupFilter, QueueItem, RatingName } from "../lib/types";
+import type { ChoiceOption, GroupFilter, QueueItem, RatingName, SimilarWord } from "../lib/types";
 import { CloseIcon, SpeakerIcon } from "../ui/icons";
 import { LeechBadge } from "../ui/LeechBadge";
+import { SimilarList, SimilarNudge } from "../ui/Similar";
+import { afterNudge } from "../lib/similar";
 import "../ui/practice.css";
 
 /**
@@ -122,6 +124,8 @@ export function ChoiceCard({
   const revealedAt = useRef(0);
   const rating = useRef<RatingName>("good");
   const leeches = useLeechIds("speech");
+  // Similar words picked instead (휴지통 for 쓰레기통): each is said so and set aside, the pick goes on.
+  const [nudges, setNudges] = useState<SimilarWord[]>([]);
 
   const choices = useMemo(
     () => shuffled([{ id: card.id, korean: card.korean, meaning: card.meaning }, ...options]),
@@ -147,11 +151,17 @@ export function ChoiceCard({
         if (other && canSpeak()) speak(other);
         return;
       }
+      if (nudges.some((w) => w.id === id)) return;
+      const similar = card.similar?.find((w) => w.id === id);
+      if (similar) {
+        setNudges((list) => [...list, similar]);
+        return;
+      }
       const correct = id === card.id;
       const now = performance.now();
       const elapsedMs = Math.round(now - shownAt.current);
       // "Не знаю" can come before the options; then there is no pick time to count.
-      rating.current = choiceRating(correct, revealedAt.current ? now - revealedAt.current : 0);
+      rating.current = afterNudge(choiceRating(correct, revealedAt.current ? now - revealedAt.current : 0), nudges.length > 0);
       setPicked(id);
       if (canSpeak()) speak(card);
       if (!practice)
@@ -164,7 +174,7 @@ export function ChoiceCard({
           elapsedMs,
         }).catch((e: Error) => setError(e.message));
     },
-    [card, picked, choices, practice],
+    [card, picked, choices, practice, nudges],
   );
 
   const next = useCallback(() => {
@@ -203,6 +213,8 @@ export function ChoiceCard({
               <SpeakerIcon />
             </button>
           )}
+          {!answered && nudges.length > 0 && <SimilarNudge key={nudges.at(-1)!.id} word={nudges.at(-1)!} />}
+          {answered && nudges.length > 0 && <SimilarList card={card} />}
         </div>
       </div>
 
@@ -210,7 +222,7 @@ export function ChoiceCard({
         {error && <p className="notice notice-error speech-notice">{error}</p>}
         {answered && (
           <p className={`sounds-feedback tone-${right ? "ok" : "wrong"}`}>
-            {right ? (rating.current === "hard" ? "Верно, но долго" : "Верно") : <>Правильно: <span lang="ko">{card.korean}</span></>}
+            {right ? (nudges.length ? "Верно, с подсказкой" : rating.current === "hard" ? "Верно, но долго" : "Верно") : <>Правильно: <span lang="ko">{card.korean}</span></>}
           </p>
         )}
       </div>
@@ -231,7 +243,8 @@ export function ChoiceCard({
         ) : (
           <div className="sounds-options choice-options" data-count={choices.length}>
             {choices.map((c, i) => {
-              const state = !answered ? undefined : c.id === card.id ? "right" : c.id === picked ? "wrong" : "other";
+              const set = nudges.some((w) => w.id === c.id);
+              const state = set && !answered ? "similar" : !answered ? undefined : c.id === card.id ? "right" : c.id === picked ? "wrong" : "other";
               return (
                 <button
                   key={c.id}
@@ -245,7 +258,7 @@ export function ChoiceCard({
                     {c.korean}
                   </span>
                   {/* Translations only after the pick, or they would give the answer away. */}
-                  {answered && <span className="sounds-option-meaning">{c.meaning}</span>}
+                  {(answered || set) && <span className="sounds-option-meaning">{c.meaning}</span>}
                 </button>
               );
             })}

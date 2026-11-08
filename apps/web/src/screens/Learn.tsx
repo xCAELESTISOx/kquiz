@@ -15,6 +15,7 @@ import { canSpeak, preloadSpeech, speak } from "../lib/speech";
 import type { Card, ChoiceOption, GroupFilter, PhraseTiles, QueueItem, RatingName } from "../lib/types";
 import { CloseIcon, SpeakerIcon } from "../ui/icons";
 import { HiddenTranslation } from "../ui/HiddenTranslation";
+import { SimilarList } from "../ui/Similar";
 import { useFamily, WordFamily } from "../ui/WordFamily";
 import { PhraseCard } from "./Phrase";
 import { SpeechCard } from "./Speech";
@@ -314,6 +315,7 @@ export function IntroCard({ card, onDone }: { card: Card; onDone: () => void }) 
             </div>
           )}
           {card.notes && <p className="review-notes muted">{card.notes}</p>}
+          <SimilarList card={card} />
           {canSpeak() && (
             <button type="button" className="icon-button speak-button" aria-label="Послушать" onClick={() => speak(card)}>
               <SpeakerIcon />
