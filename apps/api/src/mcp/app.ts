@@ -7,7 +7,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { z } from "zod";
 import { randomToken, sha256, type Grant, type OAuthClient, type OAuthStore } from "./oauth-store.js";
 import { rateLimit } from "./rate-limit.js";
-import type { CardStore, DrillStore } from "./store.js";
+import type { CardStore, DrillStore, SharingStore } from "./store.js";
 import { createMcpServer } from "./tools.js";
 
 /** The app's passkey login, provided by the API's auth module. */
@@ -19,7 +19,7 @@ export interface OwnerAuth {
 }
 
 /** One user's cards and drills; null when that user can no longer use the connector (disabled). */
-export type UserStores = (userId: number) => { cards: CardStore; drills?: DrillStore } | null;
+export type UserStores = (userId: number) => { cards: CardStore; drills?: DrillStore; sharing?: SharingStore } | null;
 
 export interface McpAppOptions {
   /** Public origin Claude reaches us at, e.g. https://kquiz.example.com */
@@ -350,7 +350,7 @@ export function createMcpApp(options: McpAppOptions) {
     const mine = stores(grant.userId);
     if (!mine) return c.json({ error: "invalid_token" }, 401);
     // Stateless: a fresh server per request, no sessions to keep or leak.
-    const server = createMcpServer(mine.cards, mine.drills);
+    const server = createMcpServer(mine.cards, mine.drills, mine.sharing);
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,

@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { openDb } from "../db/client.js";
-import { reviewLog } from "../db/schema.js";
+import { reviewLog, reviewStates, users } from "../db/schema.js";
 import { phoneStats } from "../db/schema.js";
-import { SqliteCardStore, SqliteOAuthStore, streakDays } from "./mcp.js";
+import { SqliteCardStore, SqliteOAuthStore, sqliteStores, streakDays } from "./mcp.js";
 import { introduceEarly } from "../newCards.js";
+import { eq } from "drizzle-orm";
 import { OWNER_ID } from "../users.js";
 
 const card = (korean: string, meaning: string) => ({ korean, meaning, tags: [] as string[] });
@@ -70,6 +71,42 @@ describe("SqliteCardStore", () => {
     expect(streakDays(db, OWNER_ID, new Date(now.getTime() + day))).toBe(3);
     expect(streakDays(db, OWNER_ID, new Date(now.getTime() + 2 * day))).toBe(0);
     expect(await store.weakSounds(1)).toEqual([{ phone: "ʌ", attempts: 10, errors: 6, errorRate: 0.6 }]);
+  });
+});
+
+describe("SqliteSharingStore", () => {
+  it("copies the owner's cards to a member as new words, with links between them", async () => {
+    const db = openDb(":memory:");
+    const friend = db.insert(users).values({ name: "Миша", role: "member", webauthnId: "friend", createdAt: new Date() }).returning().get();
+    const mine = new SqliteCardStore(db, OWNER_ID);
+    const examples = [1, 2, 3].map((i) => ({ ko: `물 ${i}`, ru: `вода ${i}` }));
+    const [water, fire, book] = await mine.insert(
+      [{ ...card("물", "вода"), examples, notes: "+ 물병 — бутылка", roots: [] }, card("불", "огонь"), card("책", "книга")],
+      "app",
+    );
+    await mine.linkSimilar([{ korean: "물", other: "불", note: "вода / огонь" }]);
+    introduceEarly(db, OWNER_ID, Number(water!.id), new Date());
+    const theirs = new SqliteCardStore(db, friend.id);
+    await theirs.insert([card("책", "книжка")], "app");
+
+    expect(sqliteStores(db, "UTC")(friend.id)?.sharing).toBeUndefined();
+    const sharing = sqliteStores(db, "UTC")(OWNER_ID)!.sharing!;
+    expect(await sharing.members()).toEqual([{ id: String(friend.id), name: "Миша", cards: 1 }]);
+    expect(await sharing.share(String(OWNER_ID), [water!.id])).toBeNull();
+
+    const result = await sharing.share(String(friend.id), [fire!.id, water!.id, book!.id, "999"]);
+    expect(result).toMatchObject({
+      member: "Миша",
+      created: [{ korean: "불" }, { korean: "물" }],
+      duplicates: ["책"],
+      notFound: ["999"],
+      similar: { linked: [{ korean: "물", other: "불" }] },
+    });
+    const [copy] = await theirs.find({ text: "물", limit: 5 });
+    expect(copy).toMatchObject({ meaning: "вода", examples, notes: "+ 물병 — бутылка", roots: [], queued: true, similar: [{ korean: "불", note: "вода / огонь" }] });
+    expect(db.select().from(reviewStates).where(eq(reviewStates.cardId, Number(copy!.id))).all()).toEqual([]);
+    expect((await theirs.find({ text: "책", limit: 5 }))[0]?.meaning).toBe("книжка");
+    expect((await mine.get(water!.id))?.queued).toBe(false);
   });
 });
 

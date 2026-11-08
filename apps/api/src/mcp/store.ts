@@ -103,6 +103,34 @@ export interface CardStore {
   hardCards(limit: number): Promise<HardCard[]>;
 }
 
+/** Someone the owner invited, as the owner sees them. */
+export interface Member {
+  id: string;
+  name: string;
+  cards: number;
+}
+
+export interface ShareResult {
+  member: string;
+  created: { korean: string; meaning: string }[];
+  /** Words the member already has; left as they are. */
+  duplicates: string[];
+  /** Ids that are not the owner's cards. */
+  notFound: string[];
+  /** Similar-word links between the shared cards, copied too. */
+  similar?: SimilarResult;
+}
+
+/**
+ * The owner's sharing: copies of their cards go to a member as fresh new words (no schedule,
+ * no history), so the owner can start a friend's deck. Only the owner's connector gets it.
+ */
+export interface SharingStore {
+  members(): Promise<Member[]>;
+  /** null when there is no such active member. */
+  share(memberId: string, cardIds: string[]): Promise<ShareResult | null>;
+}
+
 export class MemoryCardStore implements CardStore {
   readonly cards = new Map<string, StoredCard>();
   /** "idA|idB" (sorted) → note. */
