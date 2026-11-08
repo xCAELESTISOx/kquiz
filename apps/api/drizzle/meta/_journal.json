@@ -113,6 +113,13 @@
       "when": 1794119823859,
       "tag": "0015_similar_words",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1794120000000,
+      "tag": "0016_pronunciation_brackets",
+      "breakpoints": true
     }
   ]
 }

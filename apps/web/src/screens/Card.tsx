@@ -1,3 +1,4 @@
+import { NotesField } from "../ui/CardNotes";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { api, remembered } from "../lib/api";
 import { isKoreanOnly } from "../lib/korean";
@@ -315,10 +316,13 @@ export function CardScreen({ id }: { id: number }) {
             </div>
           )}
 
-          <label className="field">
-            <span className="field-label">{card.kind === "phrase" ? "Когда говорят" : "Заметка"}</span>
-            <textarea className="input textarea" rows={2} value={draft.notes} onChange={(e) => set("notes", e.target.value)} />
-          </label>
+          <NotesField
+            label={card.kind === "phrase" ? "Когда говорят" : "Заметка"}
+            value={draft.notes}
+            onChange={(value) => set("notes", value)}
+            similar={card.similar}
+            marks={card.kind !== "phrase"}
+          />
           <label className="field">
             <span className="field-label">Теги через запятую</span>
             <input

@@ -11,9 +11,15 @@ export const MAX_CARDS_PER_CALL = 50;
 const instructions = `KQuiz is the user's personal Korean flashcard deck; each person who connects it sees only their own cards. Cards are reviewed for meaning and, when speakable, for pronunciation.
 - korean: the word or phrase in Hangul only (no hanja, Latin letters or brackets). Use dictionary form for verbs and adjectives unless the user asks otherwise.
 - meaning: a short Russian translation, the most common sense first.
-- pronunciation (optional): how it is actually said, in Hangul, only when it differs from the spelling (e.g. 읽다 → [익따]).
+- pronunciation (optional): how it is actually said, in Hangul without brackets (the app adds them), only when it differs from the spelling (e.g. 읽다 → 익따). Leave it out when it sounds as written.
 - examples (required, exactly ${EXAMPLES_PER_CARD}): short natural Korean sentences that use the word, each with its Russian translation, as {"ko", "ru"}. Vary the forms and situations, keep them at the user's level. Every add_cards card and every update_card call must carry all ${EXAMPLES_PER_CARD}; when editing, send the card's current examples again if they stay as they are.
-- notes (optional): grammar, usage or anything else worth remembering.
+- notes (optional), in Russian, one point per line. The app lays them out by kind: a line opening with a mark goes under that mark's heading, any other line is a plain remark shown first. Marks: "≠" a word not to mix up with (Не путать), "↔" the opposite (Противоположность), "≈" a word near in meaning or a synonym (Близкие по смыслу), "+" a set expression or collocation with the word (Выражения), "=" the literal meaning (Дословно), "!" a trap: a homonym, an exception (Внимание). After ≠ ↔ ≈ + put the Korean first, then " — " and a short Russian gloss: "≠ 밑 — прямо под, вплотную", "↔ 위 — верх", "+ 아래층 — нижний этаж". Keep each line short; usage advice goes in a plain line. Example for 아래:
+Просто «ниже», пара к 위. Часто взаимозаменяемо с 밑.
+≠ 밑 — прямо под, вплотную; ещё «дно»
+↔ 위 — верх
++ 아래층 — нижний этаж
++ 아래요 — «ниже» (на кассе)
+A word linked with similar is already shown under Не путать with its note, so a ≠ line for it is only for what the pair's note doesn't say.
 - tags: lowercase topics such as "еда" or "глаголы".
 - roots: the Sino-Korean roots of the word, one per syllable that comes from hanja, as {"ko", "hanja", "meaning"}: the syllable, its character and a short Russian gloss of the character, e.g. 학교 → [{"ko":"학","hanja":"學","meaning":"учёба"},{"ko":"교","hanja":"校","meaning":"школа"}]. Use the traditional character the word is really written with, and the same gloss for the same character across cards, so the app can link a word to others with that root (its word family). A native Korean word (사랑, 먹다) or a loanword gets []. For a mixed word list only the hanja syllables (공부하다 → 공 工, 부 夫). Give roots for every card you add.
 - similar (optional): the user's other words easy to mix up with this one, as {"korean", "note"}: two words for near things (휴지통 / 쓰레기통, 아래 / 밑, 안 / 속, 책장 / 선반) or two words for one thing (공책 / 노트). note says in Russian how the two differ, the same note for both words of the pair, e.g. "휴지통 — корзина для бумаг у стола; 쓰레기통 — мусорное ведро на кухне или улице". A link goes both ways, so give it on one card of the pair. The app shows the pair on both cards, puts the other word among the options when the user picks the Korean for the Russian, and when the user answers with the other word it says which word that was and asks for the right one instead of counting a mistake. So keep each word's meaning distinct, and link the pair even when it is distinct. Whenever you add a word with such a neighbour, link them; to link or unlink words already in the deck, or change a note, use link_similar.
@@ -29,7 +35,7 @@ const cardInput = z.object({
   meaning: z.string(),
   pronunciation: z.string().optional(),
   romanization: z.string().optional(),
-  notes: z.string().optional(),
+  notes: z.string().optional().describe("Russian, one point per line; ≠ ↔ ≈ + = ! marks as in the server instructions"),
   tags: z.array(z.string()).optional(),
   roots: z
     .array(

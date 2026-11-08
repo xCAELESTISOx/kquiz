@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api } from "../lib/api";
 import type { Card, SimilarWord } from "../lib/types";
 import { CloseIcon } from "./icons";
+import { RichText } from "./CardNotes";
 import { Spinner } from "./Spinner";
 import "./similar.css";
 
@@ -31,7 +32,11 @@ export function SimilarNudge({ word }: { word: SimilarWord }) {
           — это «{word.meaning}»
         </span>
       </p>
-      {word.note && <p className="similar-nudge-note">{word.note}</p>}
+      {word.note && (
+        <p className="similar-nudge-note">
+          <RichText text={word.note} />
+        </p>
+      )}
       <p className="similar-nudge-ask">Похожее слово, но здесь нужно другое</p>
     </div>
   );
@@ -53,7 +58,11 @@ export function SimilarList({ card }: { card: Card }) {
             </span>
             <span className="similar-meaning">{w.meaning}</span>
           </p>
-          {w.note && <p className="similar-note">{w.note}</p>}
+          {w.note && (
+            <p className="similar-note">
+              <RichText text={w.note} />
+            </p>
+          )}
         </div>
       ))}
     </section>

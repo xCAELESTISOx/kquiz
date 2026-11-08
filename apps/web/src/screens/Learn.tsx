@@ -1,3 +1,4 @@
+import { shownPronunciation } from "../lib/korean";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { api } from "../lib/api";
 import {
@@ -16,7 +17,7 @@ import { canSpeak, preloadSpeech, speak } from "../lib/speech";
 import type { Card, ChoiceOption, GroupFilter, PhraseTiles, QueueItem, RatingName } from "../lib/types";
 import { CloseIcon, SpeakerIcon } from "../ui/icons";
 import { HiddenTranslation } from "../ui/HiddenTranslation";
-import { SimilarList } from "../ui/Similar";
+import { CardNotes } from "../ui/CardNotes";
 import { useFamily, WordFamily } from "../ui/WordFamily";
 import { PhraseCard } from "./Phrase";
 import { SpeechCard } from "./Speech";
@@ -301,9 +302,9 @@ export function IntroCard({ card, onDone }: { card: Card; onDone: () => void }) 
           <p className="intro-word" lang="ko">
             {card.korean}
           </p>
-          {((card.pronunciation && card.pronunciation !== card.korean) || card.romanization) && (
+          {(shownPronunciation(card) || card.romanization) && (
             <p className="review-pron">
-              {card.pronunciation && card.pronunciation !== card.korean && <span lang="ko">[{card.pronunciation}]</span>}
+              {shownPronunciation(card) && <span lang="ko">[{shownPronunciation(card)}]</span>}
               {card.romanization && <span className="muted">{card.romanization}</span>}
             </p>
           )}
@@ -315,8 +316,7 @@ export function IntroCard({ card, onDone }: { card: Card; onDone: () => void }) 
               <HiddenTranslation text={example.ru} />
             </div>
           )}
-          {card.notes && <p className="review-notes muted">{card.notes}</p>}
-          <SimilarList card={card} />
+          <CardNotes card={card} />
           {canSpeak() && (
             <button type="button" className="icon-button speak-button" aria-label="Послушать" onClick={() => speak(card)}>
               <SpeakerIcon />

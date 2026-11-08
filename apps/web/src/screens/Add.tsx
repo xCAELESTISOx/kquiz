@@ -1,3 +1,4 @@
+import { NotesField } from "../ui/CardNotes";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { api } from "../lib/api";
 import { isKoreanOnly, parseBulk } from "../lib/korean";
@@ -232,10 +233,7 @@ function SingleForm() {
               </label>
             </>
           )}
-          <label className="field">
-            <span className="field-label">{phrase ? "Когда говорят" : "Заметка"}</span>
-            <textarea className="input textarea" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </label>
+          <NotesField label={phrase ? "Когда говорят" : "Заметка"} value={notes} onChange={setNotes} marks={!phrase} />
           <label className="field">
             <span className="field-label">Теги через запятую</span>
             <input
