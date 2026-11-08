@@ -1537,6 +1537,8 @@ p {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  /* A long card (notes, family) scrolls from its top instead of spilling over both edges. */
+  justify-content: safe center;
   gap: 20px;
   padding: 32px 24px;
   border-radius: var(--radius-xl);

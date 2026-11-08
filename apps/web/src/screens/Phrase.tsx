@@ -1,3 +1,5 @@
+import { shownPronunciation } from "../lib/korean";
+import { CardNotes } from "../ui/CardNotes";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { submitReview } from "../lib/api";
 import { useLeechIds } from "../lib/leeches";
@@ -107,15 +109,15 @@ export function PhraseCard({
             <p className="phrase-whole" lang="ko">
               {card.korean}
             </p>
-            {card.pronunciation && card.pronunciation !== card.korean && (
+            {shownPronunciation(card) && (
               <p className="review-pron">
-                <span lang="ko">[{card.pronunciation}]</span>
+                <span lang="ko">[{shownPronunciation(card)}]</span>
               </p>
             )}
             <p className="review-meaning">{card.meaning}</p>
             <RegisterBadge card={card} />
             <PhraseParts card={card} />
-            {card.notes && <p className="review-notes muted">{card.notes}</p>}
+            <CardNotes card={card} />
             {canSpeak() && (
               <button type="button" className="icon-button speak-button" aria-label="Послушать" onClick={() => speak(card)}>
                 <SpeakerIcon />
@@ -184,7 +186,7 @@ export function PhraseCard({
               {ask === "sound" && <p className="review-meaning">{card.meaning}</p>}
               <RegisterBadge card={card} />
               <PhraseParts card={card} />
-              {card.notes && <p className="review-notes muted">{card.notes}</p>}
+              <CardNotes card={card} />
               {canSpeak() && (
                 <button type="button" className="icon-button speak-button" aria-label="Послушать фразу" onClick={() => speak(card)}>
                   <SpeakerIcon />

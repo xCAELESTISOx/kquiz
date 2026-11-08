@@ -46,6 +46,31 @@ describe("migrations", () => {
     expect(row).toMatchObject({ how: "direct", at: row?.created });
   });
 
+  it("0016 takes brackets off pronunciations and drops ones equal to the spelling", () => {
+    const db = openDb(":memory:");
+    createCards(db, OWNER_ID, [{ korean: "아래", meaning: "низ", tags: [] }, { korean: "읽다", meaning: "читать", tags: [] }, { korean: "물", meaning: "вода", tags: [] }], "claude");
+    db.$client.exec("update cards set pronunciation = '[아래]' where korean = '아래'; update cards set pronunciation = '[익따]' where korean = '읽다'");
+    db.$client.exec(readFileSync(new URL("../../drizzle/0016_pronunciation_brackets.sql", import.meta.url), "utf8"));
+    const rows = db.select({ korean: cards.korean, pronunciation: cards.pronunciation }).from(cards).all();
+    expect(Object.fromEntries(rows.map((r) => [r.korean, r.pronunciation]))).toEqual({ 아래: null, 읽다: "익따", 물: null });
+  });
+
+  it("stores pronunciation bare and only when it differs from the spelling", () => {
+    const db = openDb(":memory:");
+    const { created } = createCards(
+      db,
+      OWNER_ID,
+      [
+        { korean: "읽다", meaning: "читать", pronunciation: "[익따]", tags: [] },
+        { korean: "위", meaning: "верх", pronunciation: "[위]", tags: [] },
+      ],
+      "claude",
+    );
+    const rows = db.select({ id: cards.id, pronunciation: cards.pronunciation }).from(cards).all();
+    expect(rows.map((r) => r.pronunciation)).toEqual(["익따", null]);
+    expect(created).toHaveLength(2);
+  });
+
   it("0014 sends words never reviewed back to wait to be learned, and keeps the rest", () => {
     const db = openDb(":memory:");
     const { created } = createReviewing(db, OWNER_ID, [{ korean: "물", meaning: "вода", tags: [] }, { korean: "불", meaning: "огонь", tags: [] }], "app");

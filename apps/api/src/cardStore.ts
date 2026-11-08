@@ -68,6 +68,12 @@ export type Duplicate = { korean: string; existingId: number };
 export type CreateResult = { created: CardDto[]; duplicates: Duplicate[] };
 
 const emptyToNull = (value: string | undefined) => (value ? value : null);
+
+/** Pronunciation is kept bare (익따, not [익따]: the app adds the brackets), and only when it differs from the spelling. */
+export function cleanPronunciation(value: string | null | undefined, korean: string): string | null {
+  const bare = value?.replace(/^[\s\[]+|[\s\]]+$/g, "") ?? "";
+  return bare && bare !== korean ? bare : null;
+}
 const uniqueTags = (tags: string[]) => [...new Set(tags)];
 
 /**
@@ -98,7 +104,7 @@ export function createCards(db: Db, userId: number, inputs: NewCard[], source: C
           korean,
           koreanKey: key,
           meaning: input.meaning,
-          pronunciation: emptyToNull(input.pronunciation),
+          pronunciation: cleanPronunciation(input.pronunciation, korean),
           romanization: emptyToNull(input.romanization),
           examples: input.examples ?? [],
           notes: emptyToNull(input.notes),
@@ -269,7 +275,7 @@ export function updateCard(
         korean,
         koreanKey: key,
         meaning: patch.meaning ?? current.meaning,
-        pronunciation: optional(patch.pronunciation, current.pronunciation),
+        pronunciation: cleanPronunciation(optional(patch.pronunciation, current.pronunciation), korean),
         romanization: optional(patch.romanization, current.romanization),
         examples: patch.examples ?? current.examples,
         notes: optional(patch.notes, current.notes),

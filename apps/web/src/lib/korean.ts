@@ -53,3 +53,9 @@ export function parseBulk(input: string): BulkLine[] {
   });
   return result;
 }
+
+/** A card's pronunciation to show in brackets, or nothing when it is just the spelling. Stored bare; brackets typed in are dropped. */
+export function shownPronunciation(card: { korean: string; pronunciation?: string | null }): string | undefined {
+  const bare = card.pronunciation?.replace(/^[\s[]+|[\s\]]+$/g, "");
+  return bare && bare !== card.korean ? bare : undefined;
+}

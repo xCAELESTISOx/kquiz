@@ -1,0 +1,178 @@
+/* Card notes (CardNotes.tsx): a remark, then labelled groups — not to mix up, opposite, near words,
+   expressions, literally, watch out. Each group has its own tone; Korean stands out everywhere. */
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgb(148 160 200 / 0.05), rgb(148 160 200 / 0.015));
+  text-align: left;
+}
+
+.notes-remarks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.notes-remark {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.notes-ko {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.notes-group {
+  --tone: var(--accent-hi);
+  --tone-soft: var(--accent-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* A hairline between parts, so each group reads as its own. */
+.notes-remarks + .notes-group,
+.notes-group + .notes-group {
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.notes-tone-similar {
+  --tone: var(--weak);
+  --tone-soft: rgb(251 191 36 / 0.13);
+}
+
+.notes-tone-opposite {
+  --tone: #f0abfc;
+  --tone-soft: rgb(240 171 252 / 0.12);
+}
+
+.notes-tone-near {
+  --tone: #5eead4;
+  --tone-soft: rgb(94 234 212 / 0.12);
+}
+
+.notes-tone-phrase {
+  --tone: var(--accent-hi);
+  --tone-soft: var(--accent-soft);
+}
+
+.notes-tone-literal {
+  --tone: #cbd5e1;
+  --tone-soft: rgb(203 213 225 / 0.1);
+}
+
+.notes-tone-warn {
+  --tone: #fca5a5;
+  --tone-soft: rgb(252 165 165 / 0.12);
+}
+
+.notes-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--tone);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.notes-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 8px;
+  background: var(--tone-soft);
+  font-size: 14px;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.notes-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0 0 0 30px;
+  list-style: none;
+}
+
+.notes-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 8px;
+  row-gap: 2px;
+  line-height: 1.45;
+}
+
+.notes-head {
+  color: var(--text);
+  font-size: var(--fs-md);
+  font-weight: 700;
+}
+
+.notes-meaning {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.notes-text {
+  flex: 1 1 12ch;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  text-wrap: pretty;
+}
+
+.notes-text-block {
+  flex-basis: 100%;
+}
+
+
+/* Under the notes field: the marks a line can start with, in their tones. */
+.notes-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 2px 0 4px;
+}
+
+.notes-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.notes-legend-item .notes-mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  color: var(--tone);
+  font-size: 13px;
+}
+
+.notes-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Room for the round speaker button when the notes end a scrolled card. */
+.review-card > .notes:has(+ .speak-button),
+.review-card > .review-answer:has(> .notes:last-child):has(+ .speak-button) {
+  margin-bottom: 44px;
+}

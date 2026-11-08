@@ -1,3 +1,4 @@
+import { shownPronunciation } from "../lib/korean";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { api, holdReview, isConnectionError, releaseHeldReview, takeBackReview } from "../lib/api";
 import { shuffled } from "../lib/choice";
@@ -14,7 +15,7 @@ import type { Card, ChoiceOption, GroupFilter, MixKind, PhraseTiles, QueueItem, 
 import { CloseIcon, SpeakerIcon, UndoIcon } from "../ui/icons";
 import { LeechBadge } from "../ui/LeechBadge";
 import { useGlide } from "../ui/motion";
-import { SimilarList } from "../ui/Similar";
+import { CardNotes } from "../ui/CardNotes";
 import { useFamily, WordFamily } from "../ui/WordFamily";
 import { ChoiceCard } from "./Choice";
 import { BuildCard, IntroCard, PickMeaningCard } from "./Learn";
@@ -506,10 +507,10 @@ export function ReviewScreen({
                     {card.korean}
                   </p>
                 )}
-                {(card.pronunciation && card.pronunciation !== card.korean) || card.romanization ? (
+                {shownPronunciation(card) || card.romanization ? (
                   <p className="review-pron">
-                    {card.pronunciation && card.pronunciation !== card.korean && (
-                      <span lang="ko">[{card.pronunciation}]</span>
+                    {shownPronunciation(card) && (
+                      <span lang="ko">[{shownPronunciation(card)}]</span>
                     )}
                     {card.romanization && <span className="muted">{card.romanization}</span>}
                   </p>
@@ -525,8 +526,7 @@ export function ReviewScreen({
                   </ul>
                 )}
                 <WordFamily card={card} families={families} />
-                {card.notes && <p className="review-notes muted">{card.notes}</p>}
-                <SimilarList card={card} />
+                <CardNotes card={card} />
               </div>
             ) : guessing ? (
               <GuessHints hints={hints} />
