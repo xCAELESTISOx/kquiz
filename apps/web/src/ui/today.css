@@ -362,3 +362,77 @@
   font-size: var(--fs-sm);
   line-height: 1.35;
 }
+
+/* Before the mistakes of a session are gone over: a warm pause, then the words they were on. */
+.fix-intro {
+  gap: 14px;
+}
+
+.fix-intro-mark {
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  margin: 0 0 6px;
+  border-radius: 50%;
+  font-size: var(--fs-xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--weak);
+  background: radial-gradient(circle at 50% 35%, rgb(251 191 36 / 0.22), rgb(251 191 36 / 0.06) 70%);
+  box-shadow:
+    inset 0 0 0 1px rgb(251 191 36 / 0.28),
+    0 0 48px -12px rgb(251 191 36 / 0.45);
+  animation: finished-in 520ms var(--ease-spring) backwards;
+}
+
+.fix-intro-title {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  animation: answer-in var(--dur-3) var(--ease-out) 60ms backwards;
+}
+
+.fix-intro .finished-text {
+  max-width: 34ch;
+  margin-bottom: 4px;
+  text-wrap: pretty;
+}
+
+.fix-intro-words {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+}
+
+.fix-intro-words li {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-raised);
+  box-shadow: inset 0 0 0 1px var(--border);
+  overflow-wrap: anywhere;
+  animation: answer-in var(--dur-3) var(--ease-out) calc(160ms + var(--i, 0) * 40ms) backwards;
+}
+
+/* Going over the mistakes: the bar fills in the warm tone of the screen before it. */
+.progress.is-fix .progress-fill {
+  background: linear-gradient(to right, #f59e0b, var(--weak));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fix-intro-mark,
+  .fix-intro-title,
+  .fix-intro-words li {
+    animation: none;
+  }
+}

@@ -5,8 +5,11 @@
 // then checked once more from its translation. Reviews due in any mode fill the rest.
 import type { Card, ChoiceOption, LearningItem, QueueItem } from "./types";
 
-/** How many answers a session runs to (about five minutes); "Ещё" adds as many again. */
-export const SESSION_TASKS = 20;
+/**
+ * How many answers a session runs to (about five minutes); "Ещё" adds as many again. The tasks
+ * missed on the way are gone over once more at the end (mistakes below), which makes up the rest.
+ */
+export const SESSION_TASKS = 15;
 
 /** Other cards between two steps of one word, so it isn't answered from the screen just seen. */
 export const LEARN_GAP = 3;
@@ -77,4 +80,27 @@ export function interleave(reviews: QueueItem[], learning: QueueItem[], every = 
 export function insertAfter(queue: QueueItem[], item: QueueItem, gap = LEARN_GAP): QueueItem[] {
   const at = Math.min(gap + 1, queue.length);
   return [...queue.slice(0, at), item, ...queue.slice(at)];
+}
+
+/** One task as asked: a word's step of learning, or its review in one mode. */
+const taskKey = (item: QueueItem): string => `${item.card.id}:${item.learn ? item.learn.kind : item.mode}`;
+
+/**
+ * A task answered wrong joins the mistakes gone over at the end of the stretch, once: missing the
+ * same pick twice is still one thing to fix.
+ */
+export function withMistake(mistakes: readonly QueueItem[], item: QueueItem): QueueItem[] {
+  if (item.learn?.kind === "intro") return [...mistakes];
+  const key = taskKey(item);
+  return mistakes.some((m) => taskKey(m) === key) ? [...mistakes] : [...mistakes, item];
+}
+
+/**
+ * Going over the mistakes: a fixed one is done; one missed again goes to the back, so it comes up
+ * after the others (or at once when it is the last one left), until each is answered right.
+ */
+export function afterFix(fixes: readonly QueueItem[], ok: boolean): QueueItem[] {
+  const [first, ...rest] = fixes;
+  if (!first) return [];
+  return ok ? rest : [...rest, first];
 }
