@@ -324,3 +324,46 @@
   letter-spacing: 0;
   color: var(--accent-hi);
 }
+
+/* A session's summary: each line a number and what it means. */
+.session-rows {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  margin: 0;
+  padding: 18px 0;
+  list-style: none;
+  text-align: left;
+  border-block: 1px solid var(--border);
+  animation: answer-in var(--dur-3) var(--ease-out) 120ms backwards;
+}
+
+.session-rows li {
+  display: grid;
+  grid-template-columns: 3.2ch 1fr;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.session-rows-n {
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  line-height: 1;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.session-rows li[data-kind="learned"] .session-rows-n {
+  color: var(--accent-hi);
+}
+
+.session-rows b {
+  display: block;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.session-rows .muted {
+  font-size: var(--fs-sm);
+  line-height: 1.35;
+}
