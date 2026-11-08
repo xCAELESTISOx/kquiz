@@ -13,7 +13,7 @@ import "../ui/today.css";
 /** Words on the wall at most: the ones due first, then the next new ones. */
 const PREVIEW = 14;
 /** Syllables the wall holds, so a few long phrases don't push everything else off the screen. */
-const WALL_SYLLABLES = 34;
+const WALL_SYLLABLES = 28;
 /** Longer than this, a phrase stays off the wall (it is still counted in "+N"). */
 const LONG = 9;
 
@@ -69,7 +69,6 @@ export function TodayScreen() {
 
   const due = stats?.due.meaning ?? 0;
   const dueCount = stats?.dueWords ?? 0;
-  const learning = stats?.newCards.learning ?? 0;
   const wall = fitting(preview, (i) => i.card.korean, WALL_SYLLABLES);
   const moreDue = Math.max(dueCount - wall.length, 0);
   // Room left on the wall goes to the new words, so it is never one lonely word.
@@ -109,31 +108,8 @@ export function TodayScreen() {
         {stats && (wall.length + upcoming.length > 0 ? <WordWall due={wall} more={moreDue} fresh={upcoming} /> : <AllDone />)}
         {stats && wall.length + upcoming.length > 0 && (
           <ul className="word-wall-legend">
-            {dueCount > 0 && (
-              <li data-kind="due">
-                <b>
-                  Повторить {dueCount} {wordsWord(dueCount)}
-                </b>
-                <span className="muted"> — уже знакомые, пора освежить</span>
-              </li>
-            )}
-            {dueCount === 0 && !fresh && (
-              <li data-kind="done">
-                <b>Повторять пока нечего</b>
-                <span className="muted"> — всё выученное освежено</span>
-              </li>
-            )}
-            {queued > 0 && (
-              <li data-kind="new">
-                <b>
-                  Новые: {queued} {wordsWord(queued)} в очереди
-                </b>
-                <span className="muted">
-                  {" "}
-                  — {learning > 0 ? `${learning} уже учите, ` : ""}«Учить» берёт по {NEW_AT_ONCE}
-                </span>
-              </li>
-            )}
+            {dueCount > 0 && <li data-kind="due">повторить {dueCount}</li>}
+            {queued > 0 && <li data-kind="new">новых в очереди {queued}</li>}
           </ul>
         )}
         {!stats && !error && <div className="skeleton" />}

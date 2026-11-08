@@ -267,7 +267,7 @@
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-end;
-  gap: 14px;
+  gap: 10px;
 }
 
 /* New words coming up: the accent, quieter, so the ones due read first. */
@@ -277,45 +277,34 @@
 }
 
 .word-wall-legend {
-  display: grid;
-  gap: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: var(--fs-sm);
-  line-height: 1.35;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
   animation: answer-in var(--dur-3) var(--ease-out) 260ms backwards;
 }
 
 .word-wall-legend li {
-  position: relative;
-  padding-left: 18px;
-}
-
-.word-wall-legend b {
-  font-weight: 600;
-  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 7px;
 }
 
 /* The dot is the colour of its words on the wall. */
 .word-wall-legend li::before {
   content: "";
-  position: absolute;
-  left: 2px;
-  top: 0.5em;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--text);
 }
 
 .word-wall-legend li[data-kind="new"]::before {
   background: var(--accent-hi);
-}
-
-.word-wall-legend li[data-kind="done"]::before {
-  background: transparent;
-  box-shadow: inset 0 0 0 1.5px var(--text-muted);
 }
 
 .today-stats-plus {
