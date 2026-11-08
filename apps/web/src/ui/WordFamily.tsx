@@ -57,15 +57,14 @@ export function WordFamily({ card, families }: { card: Card; families: Family[] 
               <div className="family-body">
                 <p className="family-gloss">{root.meaning}</p>
                 {shown.length > 0 && (
-                  <p className="family-words">
-                    {shown.map((word, i) => (
-                      <span key={word.id} className="family-word">
-                        {i > 0 && <span className="family-sep">·</span>}
+                  <ul className="family-words" aria-label="Слова с тем же корнем">
+                    {shown.map((word) => (
+                      <li key={word.id} className="family-word">
                         <span lang="ko">{word.korean}</span> <span className="family-word-meaning">{word.meaning}</span>
-                      </span>
+                      </li>
                     ))}
-                    {more > 0 && <span className="family-more">и ещё {more}</span>}
-                  </p>
+                    {more > 0 && <li className="family-more">и ещё {more}</li>}
+                  </ul>
                 )}
               </div>
             </li>
