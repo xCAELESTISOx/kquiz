@@ -78,6 +78,24 @@ export const cards = sqliteTable(
   (t) => [uniqueIndex("cards_user_korean_key").on(t.userId, t.koreanKey), index("cards_introduced").on(t.introducedAt)],
 );
 
+// Words easy to mix up (휴지통 / 쓰레기통, 아래 / 밑), linked both ways (similar.ts). One row per pair,
+// the smaller card id first; `note` says how the two differ.
+export const similarWords = sqliteTable(
+  "similar_words",
+  {
+    userId: userId(),
+    cardId: integer("card_id")
+      .notNull()
+      .references(() => cards.id, { onDelete: "cascade" }),
+    otherId: integer("other_id")
+      .notNull()
+      .references(() => cards.id, { onDelete: "cascade" }),
+    note: text("note"),
+    createdAt: timestamp("created_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.cardId, t.otherId] }), index("similar_words_other").on(t.otherId)],
+);
+
 // Each user's settings as key → JSON value (settings.ts).
 export const settings = sqliteTable(
   "settings",

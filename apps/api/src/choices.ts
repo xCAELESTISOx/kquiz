@@ -3,10 +3,12 @@
 // quiet alternative to saying the word aloud. Wrong options are words that look alike: the same
 // kind of word (a verb in 다 next to a verb, a phrase next to a phrase), about as long, sharing a
 // topic or a syllable. Words whose translation overlaps the card's are left out, or two options
-// would both be right.
+// would both be right. A word linked as similar (similar.ts) does come in, as one of the options:
+// picking it is the confusion the link is about, and the app answers it with a hint, not a mistake.
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import type { Db } from "./db/client.js";
 import { cards } from "./db/schema.js";
+import { similarFor } from "./similar.js";
 
 export const CHOICE_OPTIONS = 4;
 
@@ -61,17 +63,21 @@ export function distractors(db: Db, userId: number, cardIds: number[], random = 
     .all();
   if (pool.length < CHOICE_OPTIONS) pool = db.select(pick).from(cards).where(eq(cards.userId, userId)).all();
 
+  const similar = similarFor(db, userId, targets.map((t) => t.id));
   const out: Record<number, ChoiceOption[]> = {};
   for (const target of targets) {
     const own = senses(target.meaning);
     const seen = new Set([target.korean]);
-    out[target.id] = pool
+    const lookalike = similar.get(target.id)?.[Math.floor(random() * similar.get(target.id)!.length)];
+    const first: ChoiceOption[] = lookalike ? [{ id: lookalike.id, korean: lookalike.korean, meaning: lookalike.meaning }] : [];
+    if (lookalike) seen.add(lookalike.korean);
+    out[target.id] = first.concat(pool
       .filter((w) => w.id !== target.id && !seen.has(w.korean) && ![...senses(w.meaning)].some((s) => own.has(s)))
       .map((w) => ({ w, d: distance(target, w, random) }))
       .sort((x, y) => x.d - y.d)
       .filter(({ w }) => !seen.has(w.korean) && Boolean(seen.add(w.korean)))
-      .slice(0, CHOICE_OPTIONS - 1)
-      .map(({ w }) => ({ id: w.id, korean: w.korean, meaning: w.meaning }));
+      .slice(0, CHOICE_OPTIONS - 1 - first.length)
+      .map(({ w }) => ({ id: w.id, korean: w.korean, meaning: w.meaning })));
   }
   return out;
 }

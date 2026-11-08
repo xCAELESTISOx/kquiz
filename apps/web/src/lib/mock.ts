@@ -250,8 +250,29 @@ export class MockApi {
     return card;
   }
 
+  linkSimilar(id: number, otherId: number, note?: string): Card {
+    const [card, other] = [this.card(id), this.card(otherId)];
+    if (id === otherId) throw new Error("same_card");
+    const old = card.similar?.find((s) => s.id === otherId)?.note ?? null;
+    const kept = note === undefined ? old : note.trim() || null;
+    card.similar = [...(card.similar ?? []).filter((s) => s.id !== otherId), { id: other.id, korean: other.korean, meaning: other.meaning, note: kept }];
+    other.similar = [...(other.similar ?? []).filter((s) => s.id !== id), { id: card.id, korean: card.korean, meaning: card.meaning, note: kept }];
+    this.save();
+    return card;
+  }
+
+  unlinkSimilar(id: number, otherId: number): Card {
+    const card = this.card(id);
+    card.similar = card.similar?.filter((s) => s.id !== otherId);
+    const other = this.state.cards.find((c) => c.id === otherId);
+    if (other) other.similar = other.similar?.filter((s) => s.id !== id);
+    this.save();
+    return card;
+  }
+
   deleteCard(id: number): { ok: true } {
     this.state.cards = this.state.cards.filter((c) => c.id !== id);
+    for (const c of this.state.cards) c.similar = c.similar?.filter((s) => s.id !== id);
     this.save();
     return { ok: true };
   }
@@ -387,18 +408,18 @@ export class MockApi {
       .slice(0, limit);
   }
 
-  /** Any three other cards; the server picks look-alike ones. */
+  /** A similar word, if any, then any other cards; the server picks look-alike ones. */
   choices(cardIds: number[]): Record<number, ChoiceOption[]> {
     const pool = this.state.cards.filter((c) => !c.queued);
     return Object.fromEntries(
-      cardIds.map((id) => [
-        id,
-        pool
-          .filter((c) => c.id !== id)
+      cardIds.map((id) => {
+        const similar = (this.state.cards.find((c) => c.id === id)?.similar ?? []).slice(0, 1);
+        const others = pool
+          .filter((c) => c.id !== id && !similar.some((s) => s.id === c.id))
           .sort(() => Math.random() - 0.5)
-          .slice(0, 3)
-          .map(({ id, korean, meaning }) => ({ id, korean, meaning })),
-      ]),
+          .slice(0, 3 - similar.length);
+        return [id, [...similar, ...others].map(({ id, korean, meaning }) => ({ id, korean, meaning }))];
+      }),
     );
   }
 

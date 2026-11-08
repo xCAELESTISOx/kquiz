@@ -3,6 +3,7 @@ import { and, count, desc, eq, isNull, lt, sql, type SQL } from "drizzle-orm";
 import { isKoreanOnly, isSpeakable, koreanKey, normalizeKorean, type CardKind, type CardPatch, type Example, type NewCard, type PhrasePart, type Register, type Root } from "./cards.js";
 import type { Db } from "./db/client.js";
 import { cards, reviewStates } from "./db/schema.js";
+import { withSimilar, type SimilarWord } from "./similar.js";
 import { cardsLeft, QuotaError } from "./users.js";
 
 export type CardSource = "app" | "claude" | "bulk";
@@ -32,6 +33,8 @@ export type CardDto = {
   suspended: boolean;
   /** Waiting in the new-card queue, not yet in reviews. */
   queued: boolean;
+  /** Words easy to mix up with this one (similar.ts); filled in by withSimilar, [] until then. */
+  similar: SimilarWord[];
   createdAt: string;
   updatedAt: string;
 };
@@ -55,6 +58,7 @@ export function toCardDto(row: CardRow): CardDto {
     source: row.source,
     suspended: row.suspended,
     queued: row.introducedAt === null,
+    similar: [],
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -119,7 +123,7 @@ export function createCards(db: Db, userId: number, inputs: NewCard[], source: C
 
 export function getCard(db: Db, userId: number, id: number): CardDto | undefined {
   const row = db.select().from(cards).where(and(eq(cards.id, id), eq(cards.userId, userId))).get();
-  return row && toCardDto(row);
+  return row && withSimilar(db, userId, [toCardDto(row)])[0];
 }
 
 export type CardQuery = {
@@ -173,7 +177,7 @@ export function listCards(db: Db, userId: number, query: CardQuery = {}): { card
     .filter((row) => !query.notReady || !isKoreanOnly(row.korean))
     .slice(0, limit + 1);
   const page = rows.slice(0, limit);
-  return { cards: page.map(toCardDto), nextBefore: rows.length > limit ? (page.at(-1)?.id ?? null) : null };
+  return { cards: withSimilar(db, userId, page.map(toCardDto)), nextBefore: rows.length > limit ? (page.at(-1)?.id ?? null) : null };
 }
 
 /** Every tag in use, most used first. */
@@ -281,7 +285,7 @@ export function updateCard(
       .where(eq(cards.id, id))
       .returning()
       .get();
-    return { card: toCardDto(row) };
+    return { card: withSimilar(tx as unknown as Db, userId, [toCardDto(row)])[0]! };
   });
 }
 

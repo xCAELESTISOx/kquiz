@@ -1,0 +1,232 @@
+/* Similar words (Similar.tsx): words easy to mix up, a nudge instead of a mistake, and the card editor. */
+.similar-mark {
+  flex: none;
+  color: var(--weak);
+}
+
+.similar-word {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.similar-meaning {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+.similar-note {
+  display: block;
+  margin: 2px 0 0;
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+  line-height: 1.45;
+}
+
+.similar-ne {
+  color: var(--weak);
+  font-weight: 700;
+}
+
+/* The nudge: amber, not red. It isn't a mistake, it is the pair the user mixed up. */
+.similar-nudge {
+  width: 100%;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid rgb(251 191 36 / 0.32);
+  background: linear-gradient(180deg, rgb(251 191 36 / 0.1), rgb(251 191 36 / 0.03));
+  text-align: left;
+  animation: similar-in var(--dur-2) var(--ease-out);
+}
+
+.similar-nudge-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+
+.similar-nudge-word {
+  font-size: var(--fs-md);
+  font-weight: 700;
+}
+
+.similar-nudge-note {
+  margin: 6px 0 0 24px;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  line-height: 1.45;
+}
+
+.similar-nudge-ask {
+  margin: 8px 0 0 24px;
+  color: var(--weak);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+@keyframes similar-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .similar-nudge {
+    animation: none;
+  }
+}
+
+/* A chosen option that was the similar word: dimmed and dashed, out of the running. */
+.sounds-option[data-state="similar"] {
+  border-style: dashed;
+  border-color: rgb(251 191 36 / 0.45);
+  background: rgb(251 191 36 / 0.06);
+  opacity: 0.75;
+}
+
+.sounds-option[data-state="similar"] .sounds-option-word {
+  color: var(--weak);
+}
+
+/* On the answer side. */
+.similar-list {
+  width: 100%;
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  text-align: left;
+}
+
+.similar-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 0;
+}
+
+/* Card screen editor. */
+.similar-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.similar-rows {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.similar-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 4px 4px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: linear-gradient(90deg, rgb(251 191 36 / 0.07), transparent 60%), var(--surface);
+}
+
+.similar-row-main {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.similar-row-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+
+.similar-remove svg {
+  width: 16px;
+  height: 16px;
+}
+
+.similar-add {
+  justify-self: start;
+}
+
+.chip-button.similar-add svg {
+  color: var(--weak);
+}
+
+.similar-picker {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  animation: similar-in var(--dur-2) var(--ease-out);
+}
+
+.similar-found {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.similar-found-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+}
+
+.similar-found-item:hover,
+.similar-found-item:focus-visible {
+  background: var(--surface-hover);
+}
+
+.similar-empty {
+  margin: 0;
+}
+
+.similar-pair {
+  display: grid;
+  gap: 8px;
+}
+
+.similar-pair-words {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: 700;
+}
+
+.similar-picker-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.chip-button.is-primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--on-accent);
+}

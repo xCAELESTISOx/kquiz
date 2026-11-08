@@ -11,6 +11,7 @@ import { and, asc, eq, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm"
 import type { Db } from "./db/client.js";
 import { cards, reviewStates } from "./db/schema.js";
 import { toCardDto, type CardDto } from "./cardStore.js";
+import { withSimilar } from "./similar.js";
 import { newReviewState, toStateRow, type ReviewMode } from "./review.js";
 
 export const reviewModes: ReviewMode[] = ["meaning", "speech", "listening"];
@@ -107,13 +108,12 @@ export function learningWords(db: Db, userId: number, now: Date): { items: Learn
         .from(cards)
         .where(and(waiting(userId), isNull(cards.learningAt), isNull(cards.learnPassedAt)))
         .get()?.n ?? 0;
-    return {
-      items: [
-        ...checks.map((row): LearningItem => ({ card: toCardDto(row), step: "check" })),
-        ...active.map((row): LearningItem => ({ card: toCardDto(row), step: Math.min(row.learnStep, LADDER_STEPS - 1) })),
-      ],
-      pool,
-    };
+    const items = [
+      ...checks.map((row): LearningItem => ({ card: toCardDto(row), step: "check" })),
+      ...active.map((row): LearningItem => ({ card: toCardDto(row), step: Math.min(row.learnStep, LADDER_STEPS - 1) })),
+    ];
+    withSimilar(tx as unknown as Db, userId, items.map((i) => i.card));
+    return { items, pool };
   });
 }
 
@@ -172,7 +172,7 @@ export function answerLearning(db: Db, userId: number, id: number, ok: boolean, 
     }
     tx.update(cards).set({ learnStep: step, learnPassedAt: now, learningAt: null }).where(where).run();
     const [next] = pick(tx as unknown as Db, userId, 1, now);
-    return { status: "passed", next: next ? { card: toCardDto(next), step: 0 } : null };
+    return { status: "passed", next: next ? { card: withSimilar(tx as unknown as Db, userId, [toCardDto(next)])[0]!, step: 0 } : null };
   });
 }
 

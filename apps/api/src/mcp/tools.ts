@@ -2,7 +2,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { CARD_KINDS, EXAMPLES_PER_CARD, MAX_PARTS, MAX_ROOTS, newCardSchema, normalizeKorean, phrasePartSchema, REGISTERS, rootSchema, type NewCard, type Root } from "../cards.js";
 import { MAX_DRILLS_PER_CALL, newDrillSchema } from "../practice.js";
-import type { CardStore, DrillStore, NewDrill } from "./store.js";
+import { MAX_SIMILAR, similarNoteSchema } from "../similar.js";
+import type { CardStore, DrillStore, NewDrill, SimilarPair } from "./store.js";
 
 export const MAX_CARDS_PER_CALL = 50;
 
@@ -15,9 +16,10 @@ const instructions = `KQuiz is the user's personal Korean flashcard deck; each p
 - notes (optional): grammar, usage or anything else worth remembering.
 - tags: lowercase topics such as "еда" or "глаголы".
 - roots: the Sino-Korean roots of the word, one per syllable that comes from hanja, as {"ko", "hanja", "meaning"}: the syllable, its character and a short Russian gloss of the character, e.g. 학교 → [{"ko":"학","hanja":"學","meaning":"учёба"},{"ko":"교","hanja":"校","meaning":"школа"}]. Use the traditional character the word is really written with, and the same gloss for the same character across cards, so the app can link a word to others with that root (its word family). A native Korean word (사랑, 먹다) or a loanword gets []. For a mixed word list only the hanja syllables (공부하다 → 공 工, 부 夫). Give roots for every card you add.
+- similar (optional): the user's other words easy to mix up with this one, as {"korean", "note"}: two words for near things (휴지통 / 쓰레기통, 아래 / 밑, 안 / 속, 책장 / 선반) or two words for one thing (공책 / 노트). note says in Russian how the two differ, the same note for both words of the pair, e.g. "휴지통 — корзина для бумаг у стола; 쓰레기통 — мусорное ведро на кухне или улице". A link goes both ways, so give it on one card of the pair. The app shows the pair on both cards, puts the other word among the options when the user picks the Korean for the Russian, and when the user answers with the other word it says which word that was and asks for the right one instead of counting a mistake. So keep each word's meaning distinct, and link the pair even when it is distinct. Whenever you add a word with such a neighbour, link them; to link or unlink words already in the deck, or change a note, use link_similar.
 Cards added here don't enter reviews at once: they wait in a pool of new words and the app teaches them a few at a time, in the order added; a word enters reviews only once the user has learned it. So adding many words at once is fine.
 Call find_cards before adding words the user may already have; add_cards also reports duplicates. To fix a card, use update_card instead of adding a new one: any field can be changed, and an empty string clears pronunciation, romanization or notes. Cards cannot be deleted from here.
-When the user asks to fix hard cards, call get_leeches and rework each with update_card: a clearer meaning, a mnemonic or the confusing neighbour in notes, ${EXAMPLES_PER_CARD} fresh examples. A card that mixes two senses can be split: narrow it with update_card and add the other sense with add_cards. If a card should go, tell the user; only they can delete it in the app.
+When the user asks to fix hard cards, call get_leeches and rework each with update_card: a clearer meaning, a mnemonic or the confusing neighbour in notes (and link it with link_similar when it is a similar word), ${EXAMPLES_PER_CARD} fresh examples. A card that mixes two senses can be split: narrow it with update_card and add the other sense with add_cards. If a card should go, tell the user; only they can delete it in the app.
 Older cards may have no roots yet: when the user asks to fill them in, page through find_cards with without_roots and send them with set_roots, 50 at a time, until none are left.
 When the user asks for practice on sounds they confuse (ㄱ/ㅋ/ㄲ, ㅓ/ㅗ…), add listening drills with add_sound_drills.
 Set phrases learned whole (안녕히 가세요, 잘 먹겠습니다, 화장실이 어디예요?) go in with add_phrases, not add_cards. A phrase has no examples: instead parts breaks it into its pieces in order, exactly as written in the phrase, each with its dictionary form (base) when that differs and a short Russian gloss, e.g. 어떻게 지내요? → [{"ko":"어떻게","meaning":"как"},{"ko":"지내요","base":"지내다","meaning":"поживать"}]. The app links each piece to the user's card for that word and builds the phrase from these pieces, mixed with wrong ones, in reviews (Russian → Korean, and by ear). register is how polite it is: formal (합쇼체), polite (해요체) or casual (반말); notes say when it is said and the reply it usually gets. Keep the phrase in the form it is really said, not the dictionary form. When editing a phrase with update_card, send parts instead of examples.`;
@@ -53,7 +55,24 @@ const examplesInput = z
   .length(EXAMPLES_PER_CARD)
   .describe(`Exactly ${EXAMPLES_PER_CARD} example sentences`);
 
-const newCardInput = cardInput.extend({ examples: examplesInput });
+const similarInput = z
+  .array(
+    z.object({
+      korean: z.string().describe("The other word, as on its card; it can be added in the same call"),
+      note: z.string().optional().describe("How the two differ, in Russian; the same note shows on both cards"),
+    }),
+  )
+  .max(MAX_SIMILAR)
+  .describe("Words of the user's easy to mix up with this one; linked both ways");
+
+const newCardInput = cardInput.extend({ examples: examplesInput, similar: similarInput.optional() });
+
+const similarPairInput = z.object({
+  korean: z.string().describe("One word of the pair, as on its card"),
+  other: z.string().describe("The other word, as on its card"),
+  note: z.string().optional().describe("How the two differ, in Russian; left out keeps the old note, empty clears it"),
+  remove: z.boolean().optional().describe("true takes the link off"),
+});
 
 const partsInput = z
   .array(
@@ -93,19 +112,22 @@ function error(message: string) {
 }
 
 /** Validates, drops repeats and existing cards, stores the rest as new words, waiting to be learned. */
-async function addAll<T extends { korean: string }>(
+async function addAll<T extends { korean: string; similar?: { korean: string; note?: string }[] }>(
   store: CardStore,
   inputs: T[],
   parse: (input: T) => { success: true; data: NewCard } | { success: false; error: z.ZodError },
 ) {
   const rejected: { korean: string; reason: string }[] = [];
   const valid = new Map<string, NewCard>();
+  const similarOf = new Map<NewCard, { korean: string; note?: string }[]>();
   for (const input of inputs) {
     const parsed = parse(input);
-    if (!parsed.success) {
-      rejected.push({ korean: input.korean, reason: z.prettifyError(parsed.error) });
+    const note = input.similar?.find((s) => !similarNoteSchema.safeParse(s.note ?? "").success);
+    if (!parsed.success || note) {
+      rejected.push({ korean: input.korean, reason: parsed.success ? "similar note: at most 300 characters" : z.prettifyError(parsed.error) });
       continue;
     }
+    if (input.similar?.length) similarOf.set(parsed.data, input.similar);
     const key = normalizeKorean(parsed.data.korean);
     if (valid.has(key)) rejected.push({ korean: input.korean, reason: "repeated in this batch" });
     else valid.set(key, parsed.data);
@@ -114,10 +136,14 @@ async function addAll<T extends { korean: string }>(
   const existing = await store.findByKorean([...valid.keys()]);
   const fresh = [...valid].filter(([key]) => !existing.has(key)).map(([, card]) => card);
   const created = await store.insert(fresh, "claude");
+  // Links once every card of the batch is in, so a pair added together links too.
+  const pairs = [...valid.values()].flatMap((card) => (similarOf.get(card) ?? []).map((s) => ({ korean: card.korean, other: s.korean, note: s.note })));
+  const similar = pairs.length ? await store.linkSimilar(pairs) : undefined;
   return json({
     created: created.map(({ id, korean, meaning, speakable, queued }) => ({ id, korean, meaning, speakable, queued })),
     duplicates: [...existing.values()].map(({ id, korean, meaning }) => ({ id, korean, meaning })),
     rejected,
+    ...(similar ? { similar } : {}),
   });
 }
 
@@ -128,7 +154,7 @@ export function createMcpServer(store: CardStore, drills?: DrillStore): McpServe
     "add_cards",
     {
       title: "Add cards",
-      description: `Adds up to ${MAX_CARDS_PER_CALL} Korean flashcards to the pool of new words: the app teaches them a few at a time, in the order added, and they enter reviews once learned. Every card needs exactly ${EXAMPLES_PER_CARD} examples. Returns created cards, duplicates of existing cards and rejected ones with the reason.`,
+      description: `Adds up to ${MAX_CARDS_PER_CALL} Korean flashcards to the pool of new words: the app teaches them a few at a time, in the order added, and they enter reviews once learned. Every card needs exactly ${EXAMPLES_PER_CARD} examples. similar links a card to the user's words easy to mix up with it (already in the deck or in this call). Returns created cards, duplicates of existing cards, rejected ones with the reason, and how the similar links went.`,
       inputSchema: { cards: z.array(newCardInput).min(1).max(MAX_CARDS_PER_CALL) },
       annotations: { destructiveHint: false, idempotentHint: true },
     },
@@ -154,7 +180,7 @@ export function createMcpServer(store: CardStore, drills?: DrillStore): McpServe
     "find_cards",
     {
       title: "Find cards",
-      description: "Searches cards by Korean text, translation or tag. With no filters, returns the most recent cards.",
+      description: "Searches cards by Korean text, translation or tag; each card comes with its similar words, if any. With no filters, returns the most recent cards.",
       inputSchema: {
         query: z.string().trim().max(200).optional().describe("Substring of korean, meaning, pronunciation or romanization"),
         kind: z.enum(CARD_KINDS).optional().describe("Only words, or only phrases"),
@@ -198,10 +224,30 @@ export function createMcpServer(store: CardStore, drills?: DrillStore): McpServe
   );
 
   server.registerTool(
+    "link_similar",
+    {
+      title: "Link similar words",
+      description: `Links pairs of the user's cards as similar words, easy to mix up (휴지통 / 쓰레기통, 아래 / 밑, 공책 / 노트), with a Russian note on how the two differ; or changes the note, or with remove takes a link off. Each word is named by its Korean text as on its card, and both must already be cards. A link goes both ways; a card can have at most ${MAX_SIMILAR}. It is not an edit of either card. Returns the pairs linked, unlinked and rejected with the reason. find_cards shows each card's similar words.`,
+      inputSchema: { pairs: z.array(similarPairInput).min(1).max(MAX_CARDS_PER_CALL) },
+      annotations: { destructiveHint: false, idempotentHint: true },
+    },
+    async ({ pairs }) => {
+      const rejected: { korean: string; other: string; reason: string }[] = [];
+      const valid: SimilarPair[] = [];
+      for (const pair of pairs) {
+        if (!similarNoteSchema.safeParse(pair.note ?? "").success) rejected.push({ korean: pair.korean, other: pair.other, reason: "note: at most 300 characters" });
+        else valid.push(pair);
+      }
+      const result = valid.length ? await store.linkSimilar(valid) : { linked: [], unlinked: [], rejected: [] };
+      return json({ ...result, rejected: [...rejected, ...result.rejected] });
+    },
+  );
+
+  server.registerTool(
     "update_card",
     {
       title: "Update card",
-      description: `Edits one card found with find_cards: Korean, meaning, pronunciation, romanization, notes, tags, examples or speakable, and for a phrase parts and register. Only the given fields change; tags replace the old list; an empty string clears pronunciation, romanization or notes. Every call on a word must include exactly ${EXAMPLES_PER_CARD} examples (resend the current ones if they stay); a phrase takes no examples.`,
+      description: `Edits one card found with find_cards: Korean, meaning, pronunciation, romanization, notes, tags, examples or speakable, and for a phrase parts and register. Only the given fields change; tags replace the old list; an empty string clears pronunciation, romanization or notes. Every call on a word must include exactly ${EXAMPLES_PER_CARD} examples (resend the current ones if they stay); a phrase takes no examples. Similar words are linked with link_similar, not here.`,
       inputSchema: {
         id: z.string().min(1),
         changes: cardInput

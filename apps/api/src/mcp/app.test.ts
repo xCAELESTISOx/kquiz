@@ -247,6 +247,7 @@ describe("mcp tools", () => {
       "get_leeches",
       "get_stats",
       "get_weak_sounds",
+      "link_similar",
       "list_sound_drills",
       "set_roots",
       "update_card",
@@ -276,6 +277,41 @@ describe("mcp tools", () => {
 
     const stored = [...cards.cards.values()].find((c) => c.korean === "읽다")!;
     expect(stored).toMatchObject({ source: "claude", examples, tags: ["глаголы"] });
+  });
+
+  it("links similar words when adding them and with link_similar", async () => {
+    const client = await mcpClient((await connect()).access_token);
+    await client.callTool({ name: "add_cards", arguments: { cards: [{ korean: "아래", meaning: "ниже, внизу", examples }] } });
+    const added = parse(
+      await client.callTool({
+        name: "add_cards",
+        arguments: {
+          cards: [
+            { korean: "휴지통", meaning: "корзина для бумаг", examples, similar: [{ korean: "쓰레기통", note: "휴지통 — у стола; 쓰레기통 — мусорное ведро" }] },
+            { korean: "쓰레기통", meaning: "мусорное ведро", examples },
+            { korean: "밑", meaning: "прямо под", examples, similar: [{ korean: "아래" }, { korean: "없다" }] },
+          ],
+        },
+      }),
+    );
+    expect(added.similar.linked).toEqual([
+      { korean: "휴지통", other: "쓰레기통" },
+      { korean: "밑", other: "아래" },
+    ]);
+    expect(added.similar.rejected).toEqual([expect.objectContaining({ korean: "밑", other: "없다" })]);
+
+    const found = parse(await client.callTool({ name: "find_cards", arguments: { query: "쓰레기통" } }));
+    expect(found.cards[0].similar).toEqual([{ id: expect.any(String), korean: "휴지통", meaning: "корзина для бумаг", note: "휴지통 — у стола; 쓰레기통 — мусорное ведро" }]);
+
+    const changed = parse(
+      await client.callTool({
+        name: "link_similar",
+        arguments: { pairs: [{ korean: "아래", other: "밑", note: "아래 — ниже; 밑 — прямо под" }, { korean: "휴지통", other: "쓰레기통", remove: true }] },
+      }),
+    );
+    expect(changed).toMatchObject({ linked: [{ korean: "아래", other: "밑" }], unlinked: [{ korean: "휴지통", other: "쓰레기통" }], rejected: [] });
+    const after = parse(await client.callTool({ name: "find_cards", arguments: { query: "휴지통" } }));
+    expect(after.cards[0].similar).toBeUndefined();
   });
 
   it("adds phrases with their parts, and edits them without examples", async () => {
