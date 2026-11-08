@@ -136,6 +136,7 @@ export function SpeechCard({
   onRated,
   quiet,
   practice,
+  onCantSpeak,
 }: {
   item: QueueItem;
   recorder: RefObject<Recorder | undefined>;
@@ -143,6 +144,8 @@ export function SpeechCard({
   quiet?: ReactNode;
   /** Learning one word: neither the rating nor the take is kept. */
   practice?: boolean;
+  /** "Не могу говорить": the word is passed over without saying it. */
+  onCantSpeak?: () => void;
 }) {
   const { card } = item;
   const [phase, setPhase] = useState<Phase>("prompt");
@@ -384,9 +387,16 @@ export function SpeechCard({
               onPress={() => void record()}
             />
             {phase === "prompt" && (
-              <button type="button" className="chip-button dont-know" onClick={skip}>
-                Не знаю
-              </button>
+              <div className="speech-skips">
+                <button type="button" className="chip-button dont-know" onClick={skip}>
+                  Не знаю
+                </button>
+                {onCantSpeak && (
+                  <button type="button" className="chip-button dont-know" onClick={onCantSpeak}>
+                    Не могу говорить
+                  </button>
+                )}
+              </div>
             )}
             {quiet && phase === "prompt" && <p className="review-tip muted small">Нельзя говорить? {quiet}</p>}
           </>

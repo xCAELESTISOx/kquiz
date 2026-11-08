@@ -2378,6 +2378,18 @@ p {
   color: var(--text-muted);
 }
 
+/* "Не знаю" and, while learning a word, "Не могу говорить" side by side. */
+.speech-skips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.speech-skips > .dont-know {
+  color: var(--text-muted);
+}
+
 .speech-again {
   display: flex;
   justify-content: center;

@@ -5,7 +5,7 @@ import { api, holdReview, isConnectionError, releaseHeldReview, takeBackReview }
 import { clozeFor } from "../lib/cloze";
 import { useLeechIds } from "../lib/leeches";
 import { everyKind, mixWays, serverModes } from "../lib/mix";
-import { afterFix, afterIntro, buildable, firstTasks, insertAfter, interleave, introTask, learnTask, SESSION_TASKS, withMistake } from "../lib/session";
+import { afterFix, afterIntro, buildable, firstTasks, insertAfter, insertNext, interleave, introTask, learnTask, SESSION_TASKS, withMistake } from "../lib/session";
 import { navigate } from "../lib/router";
 import { canRecord, type Recorder } from "../lib/recorder";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
@@ -307,8 +307,10 @@ export function ReviewScreen({
    * goes to the server, which says where the word stands now: its next step comes back a few cards
    * on, or it has climbed its ladder (and the next word from the pool joins), or it is learned.
    */
+  // Saying aloud turned off for this session ("Не могу говорить" on a new word).
+  const [silent, setSilent] = useState(false);
   const learned = useCallback(
-    (ok: boolean) => {
+    (ok: boolean, quiet = false) => {
       if (!queue || !item?.learn) return;
       // A mistake gone over is practice: the ladder on the server already has the miss.
       if (fixing) return fixed(ok);
@@ -316,14 +318,16 @@ export function ReviewScreen({
       setLast(undefined);
       void releaseHeldReview();
       setExit(undefined);
-      const rest = queue.slice(1);
+      // "Не могу говорить": no more saying aloud in this session.
+      if (quiet) setSilent(true);
+      const rest = quiet ? queue.slice(1).filter((i) => i.learn?.kind !== "aloud") : queue.slice(1);
       const word = item.card;
       note("met", word.id);
       const kind = item.learn.kind;
       // Meeting a word is followed at once by tasks on it; a missed pick comes back a few cards on.
       const next =
         kind === "intro"
-          ? [...afterIntro(word, options[word.id] ?? [], { hear: canSpeak(), say: canSay(word) }), ...rest]
+          ? [...afterIntro(word, options[word.id] ?? [], { hear: canSpeak(), say: !silent && canSay(word) }), ...rest]
           : kind === "choose" && !ok
             ? insertAfter([item, ...rest], item).slice(1)
             : rest;
@@ -343,7 +347,10 @@ export function ReviewScreen({
         .answerLearning(word.id, ok)
         .then(
           (res) => {
-            if (res.status === "climbed" || res.status === "missed") setQueue((q) => insertAfter(q ?? [], learnTask(word, res.step, canSpeak())));
+            // Built (or met, with nothing to build): typing it comes at once, after saying it aloud.
+            if (res.status === "climbed" && res.step === 1 && (kind === "build" || kind === "intro"))
+              setQueue((q) => insertNext(q ?? [], learnTask(word, 1, canSpeak())));
+            else if (res.status === "climbed" || res.status === "missed") setQueue((q) => insertAfter(q ?? [], learnTask(word, res.step, canSpeak())));
             else if (res.status === "passed") {
               note("climbed", word.id);
               if (res.next) {
@@ -358,7 +365,7 @@ export function ReviewScreen({
         )
         .finally(() => setAnswering((n) => n - 1));
     },
-    [queue, item, prepare, count, options, note, fixing, fixed],
+    [queue, item, prepare, count, options, note, silent, fixing, fixed],
   );
 
   /** "Ещё": as many answers again; the same queue goes on, or a fresh one if it ran out. */
@@ -645,13 +652,23 @@ function LearnStep({
   options: ChoiceOption[];
   tiles: PhraseTiles | undefined;
   recorder: RefObject<Recorder | undefined>;
-  onDone: (ok: boolean) => void;
+  /** `quiet`: the word can't be said now, and nothing more is to be said this session. */
+  onDone: (ok: boolean, quiet?: boolean) => void;
 }) {
   const kind = item.learn!.kind;
   const { card } = item;
   if (kind === "intro") return <IntroCard card={card} onDone={() => onDone(true)} />;
   if (kind === "choose") return <ChoiceCard item={item} options={options} practice instant onDone={(r) => onDone(r !== "again")} />;
-  if (kind === "aloud") return <SpeechCard item={item} recorder={recorder} practice onRated={(r) => onDone(r !== "again")} />;
+  if (kind === "aloud")
+    return (
+      <SpeechCard
+        item={item}
+        recorder={recorder}
+        practice
+        onRated={(r) => onDone(r !== "again")}
+        onCantSpeak={() => onDone(true, true)}
+      />
+    );
   if (card.kind === "phrase")
     return <PhraseCard item={item} tiles={tiles} ask={kind === "dictation" ? "sound" : "meaning"} practice onDone={(r) => onDone(r !== "again")} />;
   if (kind === "build") return <BuildCard card={card} options={options} onDone={onDone} />;
