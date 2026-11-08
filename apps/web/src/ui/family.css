@@ -61,6 +61,7 @@
 }
 
 .family-body {
+  flex: 1;
   min-width: 0;
   padding-top: 3px;
 }
@@ -71,13 +72,28 @@
   font-weight: 600;
 }
 
+/* Each related word is its own chip; chips wrap onto new lines inside the card. */
 .family-words {
-  margin: 2px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.35;
 }
 
 .family-word {
+  max-width: 100%;
+  padding: 3px 9px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  overflow-wrap: anywhere;
+}
+
+.family-word [lang="ko"] {
   white-space: nowrap;
 }
 
@@ -87,13 +103,9 @@
   font-size: var(--fs-xs);
 }
 
-.family-sep {
-  margin: 0 6px;
-  color: var(--text-faint);
-}
-
 .family-more {
-  margin-left: 8px;
+  align-self: center;
+  padding: 3px 2px;
   white-space: nowrap;
 }
 
