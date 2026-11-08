@@ -1,4 +1,4 @@
-// "Учить" on Today: a short session of new words and reviews together. New words come from the pool
+// "Learn" on Today: a short session of new words and reviews together. New words come from the pool
 // a few at a time (apps/api newCards.ts): met first, then a ladder of tasks, built from syllables,
 // picked out by ear, written from the translation. Right after meeting a word come quick tasks on it
 // (afterIntro), so it is used while still fresh. A word up the ladder waits a few hours and is
@@ -6,7 +6,7 @@
 import type { Card, ChoiceOption, LearningItem, QueueItem } from "./types";
 
 /**
- * How many answers a session runs to (about five minutes); "Ещё" adds as many again. The tasks
+ * How many answers a session runs to (about five minutes); "Another round" adds as many again. The tasks
  * missed on the way are gone over once more at the end (mistakes below), which makes up the rest.
  */
 export const SESSION_TASKS = 15;

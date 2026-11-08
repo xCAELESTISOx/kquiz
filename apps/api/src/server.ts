@@ -5,7 +5,7 @@ import { requireCloudflare } from "./security/origin.js";
 import { ownerAuth, SqliteOAuthStore, sqliteStores } from "./storage/mcp.js";
 
 /** The whole HTTP surface: the app's /api plus the MCP endpoint and its OAuth routes. */
-export function createServer(deps: AppDeps & { mcpRedirectUris?: string[] }) {
+export function createServer(deps: AppDeps & { mcpRedirectUris?: string[]; mcpAllowLoopback?: boolean }) {
   const { db, config, now = () => new Date() } = deps;
   const mcp = createMcpApp({
     // One domain for the app, the API and the MCP endpoint (docs/PLAN.md §3).
@@ -14,6 +14,7 @@ export function createServer(deps: AppDeps & { mcpRedirectUris?: string[] }) {
     oauth: new SqliteOAuthStore(db),
     owner: ownerAuth(db, config, now),
     redirectUris: deps.mcpRedirectUris,
+    allowLoopback: deps.mcpAllowLoopback,
     now: () => now().getTime(),
   });
   const cloudflare = requireCloudflare(config.originSecret);

@@ -1,4 +1,4 @@
-/* Today: a glance at the numbers, one button to learn, everything else behind "Ещё". */
+/* Today: a glance at the numbers, one button to learn, everything else behind "More". */
 
 .today-stats {
   display: grid;
@@ -105,7 +105,7 @@
   opacity: 0.7;
 }
 
-/* "Ещё" is the quiet way to the rest: lower and without a fill, so "Учить" reads first. */
+/* "More" is the quiet way to the rest: lower and without a fill, so "Learn" reads first. */
 .button.more-button {
   min-height: 48px;
   border-color: transparent;
@@ -125,7 +125,7 @@
   gap: 8px;
 }
 
-/* "Ещё": a sheet from the bottom with the rest. */
+/* "More": a sheet from the bottom with the rest. */
 .sheet-backdrop {
   position: fixed;
   inset: 0;

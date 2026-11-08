@@ -42,9 +42,9 @@ export function trailingPunctuation(korean: string): string {
 }
 
 export const REGISTER_LABELS = {
-  formal: "официально",
-  polite: "вежливо",
-  casual: "반말",
+  formal: "formal",
+  polite: "polite",
+  casual: "casual",
 } as const;
 
 /** A guess for the add form: several words, or a polite or formal ending (감사합니다, 괜찮아요). */

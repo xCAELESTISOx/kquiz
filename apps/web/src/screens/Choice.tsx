@@ -12,7 +12,7 @@ import { afterNudge } from "../lib/similar";
 import "../ui/practice.css";
 
 /**
- * The quiet alternative to saying the word aloud: the Russian is shown, pick the Korean among a few
+ * The quiet alternative to saying the word aloud: the translation is shown, pick the Korean among a few
  * of your own look-alike words. It reviews the same "speech" schedule, so on the subway the day's
  * words can be done here and at home out loud. The rating follows from the pick. With a group, the
  * cards picked on the cards screen come instead of the day's queue.
@@ -26,7 +26,7 @@ export function ChoiceScreen({ group }: { group?: GroupFilter }) {
   const [error, setError] = useState<string>();
 
   useEffect(() => {
-    document.title = "Выбор слова · KQuiz";
+    document.title = "Choose · KQuiz";
     (group ? api.group("speech", group) : api.queue("speech"))
       .then(async ({ items }) => {
         const { options } = items.length ? await api.choices(items.map((i) => i.card.id)) : { options: {} };
@@ -63,7 +63,7 @@ export function ChoiceScreen({ group }: { group?: GroupFilter }) {
   return (
     <main className="review choice">
       <header className="review-top">
-        <a className="icon-button" href="#/" aria-label="Закончить">
+        <a className="icon-button" href="#/" aria-label="Finish">
           <CloseIcon />
         </a>
         <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
@@ -86,7 +86,7 @@ export function ChoiceScreen({ group }: { group?: GroupFilter }) {
           item={item}
           options={options[item.card.id] ?? []}
           onDone={next}
-          aloud={<a href={group ? groupHash("speech", group) : "#/speech"}>записать голосом</a>}
+          aloud={<a href={group ? groupHash("speech", group) : "#/speech"}>record your voice</a>}
         />
       )}
     </main>
@@ -98,8 +98,8 @@ const DONT_KNOW = -1;
 
 /**
  * One card picked among look-alikes. The options come a few seconds after the meaning (or at once
- * with "Показать варианты"), so the word is recalled first and only then recognised. Sends its
- * rating to the speech schedule as soon as the pick is made; "Дальше" tells the session. A fresh one
+ * with "Show options"), so the word is recalled first and only then recognised. Sends its
+ * rating to the speech schedule as soon as the pick is made; "Next" tells the session. A fresh one
  * (keyed) per showing, so the order is shuffled anew. `aloud` offers saying it instead.
  */
 export function ChoiceCard({
@@ -163,7 +163,7 @@ export function ChoiceCard({
       const correct = id === card.id;
       const now = performance.now();
       const elapsedMs = Math.round(now - shownAt.current);
-      // "Не знаю" can come before the options; then there is no pick time to count.
+      // "Don't know" can come before the options; then there is no pick time to count.
       rating.current = afterNudge(choiceRating(correct, revealedAt.current ? now - revealedAt.current : 0), nudges.length > 0);
       setPicked(id);
       if (canSpeak()) speak(card);
@@ -209,10 +209,10 @@ export function ChoiceCard({
       <div className="review-stage">
         <div className="review-card choice-card">
           {leeches.has(card.id) && <LeechBadge />}
-          <p className="speech-ask">Выбери по-корейски</p>
+          <p className="speech-ask">Choose it in Korean</p>
           <p className="speech-meaning">{card.meaning}</p>
           {answered && canSpeak() && (
-            <button type="button" className="icon-button speak-button" aria-label="Послушать слово" onClick={() => speak(card)}>
+            <button type="button" className="icon-button speak-button" aria-label="Listen to the word" onClick={() => speak(card)}>
               <SpeakerIcon />
             </button>
           )}
@@ -225,13 +225,13 @@ export function ChoiceCard({
         {error && <p className="notice notice-error speech-notice">{error}</p>}
         {answered && (
           <p className={`sounds-feedback tone-${right ? "ok" : "wrong"}`}>
-            {right ? (nudges.length ? "Верно, с подсказкой" : rating.current === "hard" ? "Верно, но долго" : "Верно") : <>Правильно: <span lang="ko">{card.korean}</span></>}
+            {right ? (nudges.length ? "Correct, with a hint" : rating.current === "hard" ? "Correct, but slow" : "Correct") : <>Answer: <span lang="ko">{card.korean}</span></>}
           </p>
         )}
       </div>
 
       <footer className="review-actions">
-        {/* Picking "Не знаю" before the options also shows them, with the right one marked. */}
+        {/* Picking "Don't know" before the options also shows them, with the right one marked. */}
         {!revealed && !answered ? (
           <button
             type="button"
@@ -239,8 +239,8 @@ export function ChoiceCard({
             style={{ "--reveal-ms": `${REVEAL_MS}ms` } as CSSProperties}
             onClick={reveal}
           >
-            <span className="choice-reveal-ask">Вспомни слово</span>
-            <span className="choice-reveal-action">Показать варианты</span>
+            <span className="choice-reveal-ask">Recall the word</span>
+            <span className="choice-reveal-action">Show options</span>
             <span className="choice-reveal-bar" aria-hidden="true" />
           </button>
         ) : (
@@ -270,16 +270,16 @@ export function ChoiceCard({
         {answered ? (
           <>
             <button type="button" className="button primary" onClick={next}>
-              Дальше
+              Next
             </button>
-            <p className="review-tip muted small">Нажимай на слова, чтобы послушать</p>
+            <p className="review-tip muted small">Tap the words to hear them</p>
           </>
         ) : (
           <>
             <button type="button" className="chip-button dont-know" onClick={() => pick(DONT_KNOW)}>
-              Не знаю
+              Don't know
             </button>
-            {aloud && <p className="review-tip muted small">Можно и вслух: {aloud}</p>}
+            {aloud && <p className="review-tip muted small">Or say it aloud: {aloud}</p>}
           </>
         )}
       </footer>
@@ -294,9 +294,9 @@ function Finished({ count }: { count: number }) {
         <p className="finished-mark" lang="ko">
           잘했어요!
         </p>
-        <p className="finished-text">{count ? `Выбрано слов: ${count}. На сегодня всё.` : "Сейчас повторять нечего."}</p>
+        <p className="finished-text">{count ? `Words chosen: ${count}. That's all for today.` : "Nothing to review right now."}</p>
         <a className="button primary" href="#/">
-          На главную
+          Home
         </a>
       </div>
     </div>

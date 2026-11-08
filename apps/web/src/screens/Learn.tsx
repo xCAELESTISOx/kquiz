@@ -24,14 +24,14 @@ import { TypeCard } from "./Typing";
 import "../ui/learn.css";
 
 const TITLES: Record<LearnStep["kind"], string> = {
-  intro: "Знакомство",
-  build: "Собери из слогов",
-  dictation: "По звуку",
-  write: "По переводу",
-  cloze: "В примере",
-  aloud: "Вслух",
-  phrase: "Собери фразу",
-  "phrase-ear": "Фраза на слух",
+  intro: "New word",
+  build: "From syllables",
+  dictation: "By ear",
+  write: "From meaning",
+  cloze: "In an example",
+  aloud: "Aloud",
+  phrase: "Build the phrase",
+  "phrase-ear": "Phrase by ear",
 };
 
 const abilities = (card: Card): LearnAbilities => ({
@@ -47,7 +47,7 @@ function backHash(id: number | undefined, group: GroupFilter | undefined): strin
 }
 
 /**
- * "Учить": one word from a card's menu, or a group picked on the cards screen, GROUP_SIZE words at a
+ * "Learn": one word from a card's menu, or a group picked on the cards screen, GROUP_SIZE words at a
  * time, taken from meeting them to producing them (lib/learn.ts). Phrases are built from their blocks.
  * No rating is sent: the stats stay as they were. New words (not yet in reviews) enter reviews once
  * their portion has been gone through: the next day, or later today the ones missed on the way.
@@ -62,7 +62,7 @@ export function LearnScreen({ id, group }: { id?: number; group?: GroupFilter })
   const [queue, setQueue] = useState<LearnStep[]>([]);
   const [total, setTotal] = useState(0);
   const [missed, setMissed] = useState<ReadonlySet<number>>(new Set());
-  // Words with a step missed this pass; "Закрепить" goes over them.
+  // Words with a step missed this pass; "Practice again" goes over them.
   const [shaky, setShaky] = useState<ReadonlySet<number>>(new Set());
   // Steps that ask something; meeting the word is not one.
   const [asked, setAsked] = useState(0);
@@ -88,13 +88,13 @@ export function LearnScreen({ id, group }: { id?: number; group?: GroupFilter })
   }, []);
 
   useEffect(() => {
-    document.title = "Учить · KQuiz";
+    document.title = "Learn · KQuiz";
     (id !== undefined
       ? api.card(id).then(({ card }) => [card])
       : api
           .cards({ ...group, limit: 200 })
           .then(({ cards }) => cards.filter((c) => !c.suspended))
-    ).then(setAll, (e: Error) => setError(e.message === "not_found" ? "Такой карточки нет. Может, её уже удалили." : e.message));
+    ).then(setAll, (e: Error) => setError(e.message === "not_found" ? "No such card. Maybe it was deleted." : e.message));
     // A new group is a new screen (App keys it).
   }, [id]);
 
@@ -172,7 +172,7 @@ export function LearnScreen({ id, group }: { id?: number; group?: GroupFilter })
   const next = all?.slice(from + GROUP_SIZE, from + 2 * GROUP_SIZE) ?? [];
   const finished = ready && !current && total > 0;
 
-  // The first time through a portion, its new words go into reviews; "Закрепить" changes nothing.
+  // The first time through a portion, its new words go into reviews; "Practice again" changes nothing.
   useEffect(() => {
     if (!finished || pass !== 0 || learned) return;
     const fresh = cards.filter((c) => c.queued).map((c) => c.id);
@@ -180,14 +180,14 @@ export function LearnScreen({ id, group }: { id?: number; group?: GroupFilter })
     if (!fresh.length) return;
     api.learned(fresh, fresh.filter((cardId) => shaky.has(cardId))).then(
       ({ introduced }) => setLearned(introduced),
-      (e: Error) => setError(`Не получилось отправить слова в повторение: ${e.message}`),
+      (e: Error) => setError(`Couldn't move the words into reviews: ${e.message}`),
     );
   }, [finished, pass, learned, cards, shaky]);
 
   return (
     <main className="review learn">
       <header className="review-top">
-        <a className="icon-button" href={back} aria-label={single ? "Вернуться к карточке" : "Вернуться к карточкам"}>
+        <a className="icon-button" href={back} aria-label={single ? "Back to the card" : "Back to cards"}>
           <CloseIcon />
         </a>
         <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={1} aria-valuenow={progress}>
@@ -203,9 +203,9 @@ export function LearnScreen({ id, group }: { id?: number; group?: GroupFilter })
       {all?.length === 0 && (
         <div className="review-stage">
           <div className="finished">
-            <p className="finished-text">В этой группе нечего учить: все карточки на паузе.</p>
+            <p className="finished-text">Nothing to learn in this group: all its cards are paused.</p>
             <a className="button" href={back}>
-              К карточкам
+              Back to cards
             </a>
           </div>
         </div>
@@ -245,7 +245,7 @@ export function LearnScreen({ id, group }: { id?: number; group?: GroupFilter })
                 {cards[0]!.korean}
               </p>
             ) : (
-              <ul className="learn-summary" lang="ko" aria-label="Слова этой порции">
+              <ul className="learn-summary" lang="ko" aria-label="Words in this round">
                 {cards.map((c, i) => (
                   <li key={c.id} className="learn-summary-word" data-shaky={shaky.has(c.id) || undefined} style={{ "--i": i } as CSSProperties}>
                     {c.korean}
@@ -254,16 +254,16 @@ export function LearnScreen({ id, group }: { id?: number; group?: GroupFilter })
               </ul>
             )}
             <p className="finished-text">
-              {missed.size === 0 ? "Всё с первого раза." : `С первого раза: ${asked - missed.size} из ${asked}.`}
-              {shaky.size > 0 && cards.length > 1 && " Отмечены слова, где были ошибки."}{" "}
+              {missed.size === 0 ? "All right the first time." : `Right the first time: ${asked - missed.size} of ${asked}.`}
+              {shaky.size > 0 && cards.length > 1 && " Words with mistakes are marked."}{" "}
               {learned?.length
                 ? learned.length === cards.length
-                  ? `${cards.length === 1 ? "Слово придёт" : "Слова придут"} в повторение завтра${shaky.size > 0 ? ", с ошибками — ещё сегодня" : ""}.`
-                  : `Новые слова (${learned.length}) придут в повторение завтра${shaky.size > 0 ? ", с ошибками — ещё сегодня" : ""}.`
-                : `Статистика не изменилась, ${cards.length === 1 ? "слово придёт" : "слова придут"} в повторение как обычно.`}
+                  ? `${cards.length === 1 ? "The word comes" : "The words come"} up for review tomorrow${shaky.size > 0 ? ", the ones with mistakes later today" : ""}.`
+                  : `New words (${learned.length}) come up for review tomorrow${shaky.size > 0 ? ", the ones with mistakes later today" : ""}.`
+                : `Stats didn't change; ${cards.length === 1 ? "the word comes" : "the words come"} up for review as usual.`}
             </p>
             <button type="button" className="button primary" onClick={again}>
-              {shaky.size > 0 && shaky.size < cards.length ? "Закрепить трудные" : "Закрепить"}
+              {shaky.size > 0 && shaky.size < cards.length ? "Practice the hard ones" : "Practice again"}
             </button>
             {next.length > 0 && (
               <button
@@ -274,11 +274,11 @@ export function LearnScreen({ id, group }: { id?: number; group?: GroupFilter })
                   setFrom((f) => f + GROUP_SIZE);
                 }}
               >
-                Учить ещё {next.length} {next.every((c) => c.kind === "phrase") ? phrasesWord(next.length) : wordsWord(next.length)}
+                Learn {next.length} more {next.every((c) => c.kind === "phrase") ? phrasesWord(next.length) : wordsWord(next.length)}
               </button>
             )}
             <a className="button" href={back}>
-              {single ? "К карточке" : "К карточкам"}
+              {single ? "Back to the card" : "Back to cards"}
             </a>
           </div>
         </div>
@@ -317,7 +317,7 @@ export function IntroCard({ card, onDone }: { card: Card; onDone: () => void }) 
           )}
           <CardNotes card={card} />
           {canSpeak() && (
-            <button type="button" className="icon-button speak-button" aria-label="Послушать" onClick={() => speak(card)}>
+            <button type="button" className="icon-button speak-button" aria-label="Listen" onClick={() => speak(card)}>
               <SpeakerIcon />
             </button>
           )}
@@ -325,9 +325,9 @@ export function IntroCard({ card, onDone }: { card: Card; onDone: () => void }) 
       </div>
       <footer className="review-actions">
         <button type="button" className="button primary" onClick={onDone}>
-          Запомнил, дальше
+          Got it, next
         </button>
-        <p className="review-tip muted small">Послушай пару раз и прочитай пример вслух</p>
+        <p className="review-tip muted small">Listen a couple of times and read the example aloud</p>
       </footer>
     </>
   );
@@ -355,14 +355,14 @@ export function BuildCard({ card, options, onDone }: { card: Card; options: Choi
     <>
       <div className="review-stage">
         <div className="review-card build-card">
-          <p className="speech-ask">Собери слово</p>
+          <p className="speech-ask">Build the word</p>
           <p className="speech-meaning">{card.meaning}</p>
           {canSpeak() && (
-            <button type="button" className="icon-button speak-button" aria-label="Послушать" onClick={() => speak(card)}>
+            <button type="button" className="icon-button speak-button" aria-label="Listen" onClick={() => speak(card)}>
               <SpeakerIcon />
             </button>
           )}
-          <div className="build-slots" lang="ko" aria-label="Собранное слово">
+          <div className="build-slots" lang="ko" aria-label="Your word">
             {answer.map((s, i) => {
               const t = picked[i];
               const state = !full ? undefined : tiles[t!] === s ? "right" : "wrong";
@@ -373,7 +373,7 @@ export function BuildCard({ card, options, onDone }: { card: Card; options: Choi
                   className="build-slot"
                   data-state={state}
                   disabled={full || t === undefined}
-                  aria-label={t === undefined ? "пусто" : `убрать ${tiles[t]}`}
+                  aria-label={t === undefined ? "empty" : `remove ${tiles[t]}`}
                   onClick={() => setPicked((p) => p.slice(0, i))}
                 >
                   {t !== undefined && tiles[t]}
@@ -390,13 +390,13 @@ export function BuildCard({ card, options, onDone }: { card: Card; options: Choi
       </div>
 
       <div aria-live="polite">
-        {full && <p className={`sounds-feedback tone-${right ? "ok" : "wrong"}`}>{right ? "Верно" : "Правильно так"}</p>}
+        {full && <p className={`sounds-feedback tone-${right ? "ok" : "wrong"}`}>{right ? "Correct" : "Not quite"}</p>}
       </div>
 
       <footer className="review-actions">
         {full ? (
           <button type="button" className="button primary" onClick={() => onDone(right)}>
-            Дальше
+            Next
           </button>
         ) : (
           <div className="build-tiles" lang="ko">

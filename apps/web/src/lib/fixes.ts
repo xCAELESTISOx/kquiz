@@ -1,13 +1,13 @@
 import type { ScoreResult } from "./types";
 
 // "How to fix it" lines for the speech screen: one short articulation tip per wrong sound,
-// written for a Russian speaker. Keyed by the jamo the scorer sends (services/scorer/app/phones.py).
+// written for an English speaker. Keyed by the jamo the scorer sends (services/scorer/app/phones.py).
 
 type ScoreError = ScoreResult["errors"][number];
 
 type Phonation = "lenis" | "aspirated" | "tense";
 
-// Stops, affricates and ㅅ/ㅆ: the three-way contrast Russian does not have.
+// Stops, affricates and ㅅ/ㅆ: the three-way contrast English does not have.
 const SERIES: Record<string, { phonation: Phonation; place: string }> = {
   ㄱ: { phonation: "lenis", place: "k" },
   ㅋ: { phonation: "aspirated", place: "k" },
@@ -27,103 +27,114 @@ const SERIES: Record<string, { phonation: Phonation; place: string }> = {
 
 const PHONATION_FIX: Record<Phonation, Partial<Record<Phonation, string>>> = {
   lenis: {
-    aspirated: "Мягче и почти без выдоха: {e} расслабленный, лёгкая струйка воздуха, а не толчок, как у {h}.",
-    tense: "Не зажимай горло: {e} мягкий и расслабленный, с лёгким выдохом, а {h} твёрдый и без воздуха.",
+    aspirated: "Softer, with hardly any push: {e} is relaxed, a light breath of air, not the puff of {h}.",
+    tense: "Don't tighten your throat: {e} is soft and relaxed with a light breath, {h} is hard with no air.",
   },
   aspirated: {
-    lenis: "Сильнее выдох: {e} как «к» с толчком воздуха после, будто задуваешь свечу. Ладонь у рта должна почувствовать поток.",
-    tense: "Не зажимай, а выдохни: после {e} сильная струя воздуха, у {h} её нет совсем.",
+    lenis: "Breathe out harder: {e} is like {like}, with a strong puff of air after it. A hand at your mouth should feel it.",
+    tense: "Don't squeeze, breathe out: {e} has a strong puff of air after it, {h} has none.",
   },
   tense: {
-    lenis: "Напряги горло и скажи без выдоха, резко и чуть выше тоном: {e} похож на русское «к», только твёрже.",
-    aspirated: "Без выдоха: {e} твёрдый и сжатый, воздух после него не идёт. Ладонь у рта ничего не должна почувствовать.",
+    lenis: "Tighten your throat and say it with no breath, sharp and a bit higher: {e} is close to {like}, but tighter.",
+    aspirated: "No breath: {e} is hard and tight, no air comes after it. A hand at your mouth should feel nothing.",
   },
 };
 
-// Same-place lenis/aspirated/tense letters in the tips read wrong for ㅅ and the other places,
-// so the "к" examples are swapped for the right Russian letter.
-const RUSSIAN: Record<string, string> = { k: "к", t: "т", p: "п", c: "ч", s: "с" };
+// English sounds to compare with, by place: the aspirated stops sound like English initial k/t/p/ch,
+// the tense ones like the unaspirated k/t/p after s ("sky", "stay", "spy").
+const ENGLISH: Record<string, { aspirated?: string; tense: string }> = {
+  k: { aspirated: "the k in “kite”", tense: "the k in “sky”" },
+  t: { aspirated: "the t in “top”", tense: "the t in “stay”" },
+  p: { aspirated: "the p in “pie”", tense: "the p in “spy”" },
+  c: { aspirated: "the ch in “chip”", tense: "the tch in “catch”" },
+  s: { tense: "the s in “see”" },
+};
 
 // Specific pairs, "expected>heard". Position-free unless the key starts with a position.
 const PAIRS: Record<string, string> = {
-  // Vowels Russian merges or does not have.
-  "ㅓ>ㅗ": "Губы не округляй: ㅓ открытый, рот как для «а», а звук ближе к «о».",
-  "ㅗ>ㅓ": "Округли губы и вытяни их вперёд: ㅗ узкое, почти как «у».",
-  "ㅗ>ㅜ": "Чуть шире рот: ㅗ между «о» и «у», губы округлены, но не трубочкой.",
-  "ㅜ>ㅗ": "Губы трубочкой и вперёд, как в русском «у».",
-  "ㅜ>ㅡ": "Округли губы трубочкой: ㅜ — это «у», а не растянутое ㅡ.",
-  "ㅡ>ㅜ": "Губы не округляй, растяни их, как в улыбке: язык как для «ы», только чуть дальше назад.",
-  "ㅡ>ㅣ": "Язык назад, как для «ы»: ㅡ не «и», губы при этом растянуты.",
-  "ㅡ>ㅓ": "Рот почти закрыт, губы растянуты: ㅡ узкое «ы», не открытое ㅓ.",
-  "ㅓ>ㅡ": "Открой рот шире: ㅓ ближе к «о» с нижней челюстью вниз.",
-  "ㅓ>ㅏ": "Чуть меньше открой рот и отведи язык назад: ㅓ темнее, чем «а».",
-  "ㅏ>ㅓ": "Открой рот шире: ㅏ — ясное русское «а».",
-  "ㅔ>ㅣ": "Опусти челюсть: ㅔ — русское «э», а не «и».",
-  "ㅣ>ㅔ": "Уже рот и растяни губы: ㅣ — чистое «и».",
-  "ㅕ>ㅛ": "Губы не округляй: ㅕ = «й» + открытое ㅓ, а не «ё».",
-  "ㅛ>ㅕ": "Округли губы: ㅛ = «й» + узкое ㅗ, почти «ё».",
-  "ㅝ>ㅗ": "Начни с «у» и раскрой рот в ㅓ: ㅝ = у + ㅓ, губы в конце не округлены.",
-  "ㅢ>ㅣ": "Начни с ㅡ, губы растянуты, и быстро скользни в ㅣ.",
-  "ㅢ>ㅡ": "Не останавливайся на ㅡ: в конце быстро скользни в «и».",
+  // Vowels English speakers mix up or do not have.
+  "ㅓ>ㅗ": "Don't round your lips: ㅓ is open, jaw down, close to the u in “up”.",
+  "ㅗ>ㅓ": "Round your lips and push them forward: ㅗ is narrow, close to “oh” with no glide.",
+  "ㅗ>ㅜ": "Open a little more: ㅗ sits between “oh” and “oo”, lips rounded but not pursed.",
+  "ㅜ>ㅗ": "Purse your lips and push them forward, as in “oo”.",
+  "ㅜ>ㅡ": "Round your lips: ㅜ is “oo”, not the spread ㅡ.",
+  "ㅡ>ㅜ": "Don't round your lips, spread them as in a smile: tongue as for “oo”, lips flat.",
+  "ㅡ>ㅣ": "Pull your tongue back: ㅡ is not “ee”, though the lips stay spread.",
+  "ㅡ>ㅓ": "Mouth almost closed, lips spread: ㅡ is narrow, not the open ㅓ.",
+  "ㅓ>ㅡ": "Open your mouth wider: ㅓ drops the jaw, close to the u in “up”.",
+  "ㅓ>ㅏ": "Open a little less and pull your tongue back: ㅓ is darker than “ah”.",
+  "ㅏ>ㅓ": "Open your mouth wider: ㅏ is a clear “ah”, as in “father”.",
+  "ㅔ>ㅣ": "Drop your jaw: ㅔ is the e in “bed”, not “ee”.",
+  "ㅣ>ㅔ": "Narrow your mouth and spread your lips: ㅣ is a pure “ee”.",
+  "ㅕ>ㅛ": "Don't round your lips: ㅕ = “y” + the open ㅓ, not “yo”.",
+  "ㅛ>ㅕ": "Round your lips: ㅛ = “y” + the narrow ㅗ, close to “yo”.",
+  "ㅝ>ㅗ": "Start with “oo” and open into ㅓ: ㅝ = oo + ㅓ, lips unrounded at the end.",
+  "ㅢ>ㅣ": "Start with ㅡ, lips spread, and glide quickly into ㅣ.",
+  "ㅢ>ㅡ": "Don't stop on ㅡ: glide quickly into “ee” at the end.",
   // Codas: Korean finals are held, never released.
-  "coda:ㅇ>ㄴ": "ㅇ в конце: кончик языка внизу, задняя часть спинки прижата к нёбу, звук идёт в нос, как в английском sing.",
-  "coda:ㄴ>ㅇ": "ㄴ в конце: кончик языка к верхним зубам, как русское «н». Не уводи звук назад в «нг».",
-  "coda:ㅁ>ㄴ": "Сомкни губы в конце слога: ㅁ закрывает слог губами.",
-  "coda:ㅁ>ㅇ": "Сомкни губы в конце слога: ㅁ закрывает слог губами.",
-  "coda:ㄴ>ㅁ": "Губы не смыкай: ㄴ — кончик языка к зубам.",
-  "coda:ㅇ>ㄱ": "Здесь звук носовой: перед ㄴ и ㅁ ㄱ читается как ㅇ. Не обрывай его, пусти воздух в нос.",
-  "coda:ㄴ>ㄷ": "Здесь звук носовой: перед ㄴ и ㅁ ㄷ читается как ㄴ. Не обрывай его, пусти воздух в нос.",
-  "coda:ㅁ>ㅂ": "Здесь звук носовой: перед ㄴ и ㅁ ㅂ читается как ㅁ. Не обрывай его, пусти воздух в нос.",
-  "coda:ㄹ>ㄴ": "ㄹ в конце: кончик языка прижат за верхними зубами и остаётся там, звук как мягкое «л».",
+  "coda:ㅇ>ㄴ": "Final ㅇ: tongue tip down, the back of the tongue against the palate, sound through the nose, like the ng in “sing”.",
+  "coda:ㄴ>ㅇ": "Final ㄴ: tongue tip against the upper teeth, like the n in “sun”. Don't pull it back into “ng”.",
+  "coda:ㅁ>ㄴ": "Close your lips at the end of the syllable: ㅁ ends it with the lips.",
+  "coda:ㅁ>ㅇ": "Close your lips at the end of the syllable: ㅁ ends it with the lips.",
+  "coda:ㄴ>ㅁ": "Don't close your lips: ㄴ is the tongue tip against the teeth.",
+  "coda:ㅇ>ㄱ": "This sound is nasal: before ㄴ and ㅁ, ㄱ is read as ㅇ. Don't cut it off, let the air out through your nose.",
+  "coda:ㄴ>ㄷ": "This sound is nasal: before ㄴ and ㅁ, ㄷ is read as ㄴ. Don't cut it off, let the air out through your nose.",
+  "coda:ㅁ>ㅂ": "This sound is nasal: before ㄴ and ㅁ, ㅂ is read as ㅁ. Don't cut it off, let the air out through your nose.",
+  "coda:ㄹ>ㄴ": "Final ㄹ: tongue tip pressed behind the upper teeth and kept there, a light “l”.",
 };
 
 // Fallbacks by the expected sound, when no pair above fits.
 const VOWELS: Record<string, string> = {
-  ㅏ: "ㅏ — ясное русское «а», рот широко открыт.",
-  ㅓ: "ㅓ — рот открыт, губы не округлены, звук между «о» и «а».",
-  ㅗ: "ㅗ — губы округлены и вытянуты, узкое «о», почти «у».",
-  ㅜ: "ㅜ — губы трубочкой, как русское «у».",
-  ㅡ: "ㅡ — губы растянуты, как в улыбке, язык как для «ы».",
-  ㅣ: "ㅣ — чистое «и», губы растянуты.",
-  ㅔ: "ㅔ — русское «э», ㅐ и ㅔ сейчас звучат одинаково.",
-  ㅑ: "ㅑ = короткое «й» + «а».",
-  ㅕ: "ㅕ = короткое «й» + ㅓ, губы не округлены.",
-  ㅛ: "ㅛ = короткое «й» + узкое ㅗ.",
-  ㅠ: "ㅠ = короткое «й» + «у», как русское «ю».",
-  ㅖ: "ㅖ = короткое «й» + «э».",
-  ㅘ: "ㅘ = короткое «у» + «а», одним слогом.",
-  ㅚ: "ㅚ = короткое «у» + «э», одним слогом.",
-  ㅝ: "ㅝ = короткое «у» + ㅓ, одним слогом.",
-  ㅟ: "ㅟ = короткое «у» + «и», одним слогом.",
-  ㅢ: "ㅢ: начни с ㅡ и быстро скользни в «и».",
+  ㅏ: "ㅏ is a clear “ah”, mouth wide open.",
+  ㅓ: "ㅓ: mouth open, lips not rounded, close to the u in “up”.",
+  ㅗ: "ㅗ: lips rounded and pushed forward, a narrow “oh”, almost “oo”.",
+  ㅜ: "ㅜ: lips pursed, like the oo in “moon”.",
+  ㅡ: "ㅡ: lips spread as in a smile, tongue as for “oo”.",
+  ㅣ: "ㅣ is a pure “ee”, lips spread.",
+  ㅔ: "ㅔ is the e in “bed”; ㅐ and ㅔ sound the same today.",
+  ㅑ: "ㅑ = a short “y” + “ah”.",
+  ㅕ: "ㅕ = a short “y” + ㅓ, lips not rounded.",
+  ㅛ: "ㅛ = a short “y” + the narrow ㅗ.",
+  ㅠ: "ㅠ = a short “y” + “oo”, as in “you”.",
+  ㅖ: "ㅖ = a short “y” + the e in “bed”.",
+  ㅘ: "ㅘ = a short “w” + “ah”, in one syllable.",
+  ㅚ: "ㅚ = a short “w” + the e in “bed”, in one syllable.",
+  ㅝ: "ㅝ = a short “w” + ㅓ, in one syllable.",
+  ㅟ: "ㅟ = a short “w” + “ee”, in one syllable.",
+  ㅢ: "ㅢ: start with ㅡ and glide quickly into “ee”.",
 };
 
 const CONSONANTS: Record<string, string> = {
-  ㅎ: "ㅎ — лёгкий выдох из горла, мягче русского «х».",
-  ㅁ: "ㅁ — сомкни губы, как для «м».",
-  ㄴ: "ㄴ — кончик языка к верхним зубам, как «н».",
-  ㅇ: "ㅇ в конце — задняя часть языка к нёбу, звук в нос, как в английском sing.",
-  ㄹ: "ㄹ между гласными — один лёгкий удар языком, короткое «р» без раската.",
+  ㅎ: "ㅎ is a light breath from the throat, like the h in “hat”.",
+  ㅁ: "ㅁ: close your lips, as for “m”.",
+  ㄴ: "ㄴ: tongue tip against the upper teeth, as for “n”.",
+  ㅇ: "Final ㅇ: the back of the tongue against the palate, sound through the nose, like the ng in “sing”.",
+  ㄹ: "ㄹ between vowels is one light tap of the tongue, like the tt in American “butter”.",
 };
 
 // Finals ㄱ ㄷ ㅂ are held and never released.
 const CODA: Record<string, string> = {
-  ㄱ: "ㄱ в конце: прижми заднюю часть языка к нёбу и остановись, без выдоха и без «ы» после.",
-  ㄷ: "ㄷ в конце: прижми кончик языка к зубам и остановись, без выдоха и без «ы» после.",
-  ㅂ: "ㅂ в конце: сомкни губы и остановись, без выдоха и без «ы» после.",
-  ㄹ: "ㄹ в конце: кончик языка прижат за верхними зубами и остаётся там, звук как мягкое «л», не «р».",
+  ㄱ: "Final ㄱ: press the back of your tongue to the palate and stop, no breath and no “uh” after it.",
+  ㄷ: "Final ㄷ: press your tongue tip to the teeth and stop, no breath and no “uh” after it.",
+  ㅂ: "Final ㅂ: close your lips and stop, no breath and no “uh” after it.",
+  ㄹ: "Final ㄹ: tongue tip pressed behind the upper teeth and kept there, a light “l”, not “r”.",
 };
 
 const LENIS: Record<string, string> = {
-  ㄱ: "ㄱ мягкий, с лёгким выдохом, без напряжения.",
-  ㄷ: "ㄷ мягкий, с лёгким выдохом, без напряжения.",
-  ㅂ: "ㅂ мягкий, с лёгким выдохом, без напряжения.",
-  ㅈ: "ㅈ мягкий, с лёгким выдохом, ближе к «дж», чем к «ч».",
-  ㅅ: "ㅅ мягкий, с лёгким придыханием; перед ㅣ звучит почти как «щ».",
+  ㄱ: "ㄱ is soft, with a light breath and no tension.",
+  ㄷ: "ㄷ is soft, with a light breath and no tension.",
+  ㅂ: "ㅂ is soft, with a light breath and no tension.",
+  ㅈ: "ㅈ is soft, with a light breath, closer to “j” than to “ch”.",
+  ㅅ: "ㅅ is soft and a little breathy; before ㅣ it sounds almost like “sh”.",
 };
 
-function fill(text: string, expected: string, heard: string, place: string): string {
-  return text.replaceAll("{e}", expected).replaceAll("{h}", heard).replaceAll("«к»", `«${RUSSIAN[place] ?? "к"}»`);
+function fill(text: string, expected: string, heard: string, like: string | undefined): string {
+  return text.replaceAll("{e}", expected).replaceAll("{h}", heard).replaceAll("{like}", like ?? "");
+}
+
+/** The English sound to compare a non-lenis consonant with. */
+function likeOf(s: { phonation: Phonation; place: string }): string | undefined {
+  return s.phonation === "lenis" ? undefined : ENGLISH[s.place]?.[s.phonation];
 }
 
 function consonantFix(e: string, h: string | undefined): string | undefined {
@@ -131,10 +142,10 @@ function consonantFix(e: string, h: string | undefined): string | undefined {
   const b = h ? SERIES[h] : undefined;
   if (a && b && a.place === b.place && a.phonation !== b.phonation) {
     const text = PHONATION_FIX[a.phonation][b.phonation];
-    if (text) return fill(text, e, h!, a.place);
+    if (text) return fill(text, e, h!, likeOf(a));
   }
-  if (a?.phonation === "aspirated") return fill(PHONATION_FIX.aspirated.lenis!, e, "", a.place);
-  if (a?.phonation === "tense") return fill(PHONATION_FIX.tense.lenis!, e, "", a.place);
+  if (a?.phonation === "aspirated") return fill(PHONATION_FIX.aspirated.lenis!, e, "", likeOf(a));
+  if (a?.phonation === "tense") return fill(PHONATION_FIX.tense.lenis!, e, "", likeOf(a));
   return LENIS[e] ?? CONSONANTS[e];
 }
 
@@ -145,24 +156,24 @@ export function fixHint(error: ScoreError): string | undefined {
   const h = known(error.heard?.jamo);
 
   if (error.kind === "insertion") {
-    if (h === "ㅡ") return "Не добавляй гласную после согласного: заканчивай слог на согласном, без «ы» в конце.";
-    return h ? `Лишний ${h}: говори ровнее, без вставок между слогами.` : undefined;
+    if (h === "ㅡ") return "Don't add a vowel after the consonant: end the syllable on it, with no “uh” after.";
+    return h ? `Extra ${h}: speak evenly, with nothing added between syllables.` : undefined;
   }
   if (!e) return undefined;
 
   if (error.position === "coda") {
     if (error.kind === "deletion") {
       if (e === "ㄱ" || e === "ㄷ" || e === "ㅂ")
-        return `Не глотай конец слога: сомкни рот для ${e} и задержи, но не раскрывай звук и не выдыхай.`;
-      return `Не глотай конец слога: доведи ${e} до конца, прежде чем начать следующий.`;
+        return `Don't swallow the end of the syllable: close your mouth for ${e} and hold it, but don't release it or breathe out.`;
+      return `Don't swallow the end of the syllable: finish ${e} before starting the next one.`;
     }
     const fix = PAIRS[`coda:${e}>${h}`] ?? CODA[e];
     if (fix) return fix;
   }
 
   if (error.kind === "deletion") {
-    if (e === "ㅎ") return "ㅎ здесь слышен: лёгкий выдох из горла перед гласной.";
-    if (error.position === "vowel") return `Не проглатывай гласную. ${VOWELS[e] ?? ""}`.trim();
+    if (e === "ㅎ") return "ㅎ is heard here: a light breath from the throat before the vowel.";
+    if (error.position === "vowel") return `Don't swallow the vowel. ${VOWELS[e] ?? ""}`.trim();
   }
 
   if (error.position === "vowel") {

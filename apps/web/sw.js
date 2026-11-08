@@ -1,5 +1,5 @@
 // Service worker: a cache for speed, not an offline mode. The app shell (index.html, scripts, styles)
-// comes from the cache, so the PWA opens without waiting on a round trip to Moscow; fonts are cached
+// comes from the cache, so the PWA opens without waiting on a round trip to the server; fonts are cached
 // the first time a page needs them. The API is never touched here.
 //
 // vite.config.ts fills in BUILD at build time: a version per build and the files to precache.

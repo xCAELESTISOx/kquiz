@@ -44,7 +44,7 @@ function tooMany(c: Context, retryAfterMs: number) {
   return c.json({ error: "too_many_requests" }, 429);
 }
 
-/** Client address as Cloudflare reports it. Trusted only because the origin check rejects direct traffic. */
+/** Client address as the proxy reports it in cf-connecting-ip (Caddy sets it, or Cloudflare). Trusted only because the origin check rejects direct traffic. */
 export function clientIp(c: Context): string {
   return c.req.header("cf-connecting-ip") ?? "local";
 }

@@ -16,7 +16,7 @@ export interface Example {
   ru: string;
 }
 
-/** A Sino-Korean root: the syllable, its hanja and a short gloss, e.g. 학 學 «учёба». */
+/** A Sino-Korean root: the syllable, its hanja and a short gloss, e.g. 학 學 "study". */
 export interface Root {
   ko: string;
   hanja: string;
@@ -180,12 +180,12 @@ export interface Stats {
   learnedToday: number;
   /**
    * New words not learned yet: all of them (`queued`), the ones already being learned, and the
-   * Korean of the next few "Учить" comes to.
+   * Korean of the next few "Learn" comes to.
    */
   /**
    * New words not learned yet (apps/api newCards.ts): `learning` started and unfinished, of them
    * `started` on the ladder or due for their check, `fresh` the new ones the next session takes,
-   * `pool` not started; `next` the Korean of what "Учить" comes to.
+   * `pool` not started; `next` the Korean of what "Learn" comes to.
    */
   newCards: { queued: number; learning: number; next: string[]; started: number; fresh: number; pool: number };
 }
@@ -228,7 +228,7 @@ export interface StatsOverview {
   activity: { day: string; reviews: number }[];
   /** words: distinct words due that day (a word due in two modes counts once). */
   forecast: { day: string; due: Record<string, number>; words?: number }[];
-  /** Words past the new-word pool ("Учить") and not paused. */
+  /** Words past the new-word pool ("Learn") and not paused. */
   learned?: number;
   retention: Record<string, { reviews: number; recalled: number }>;
   targetRetention: Record<string, number>;

@@ -25,6 +25,7 @@ const server = createServer({
   config,
   setupCode,
   mcpRedirectUris: process.env.MCP_REDIRECT_URIS?.split(",").map((uri) => uri.trim()),
+  mcpAllowLoopback: process.env.MCP_ALLOW_LOOPBACK !== "0",
 });
 
 // Reference audio for new and changed cards, made by the scorer in the background.

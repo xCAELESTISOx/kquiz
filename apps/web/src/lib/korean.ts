@@ -24,9 +24,9 @@ export interface BulkLine {
 }
 
 /**
- * Parses bulk input, one card per line: `한국어 — перевод`.
+ * Parses bulk input, one card per line: `한국어 — translation`.
  * Accepts an em dash, en dash, hyphen surrounded by spaces, or a tab as the separator.
- * Lines where the sides are swapped (`вода — 물`) are flipped, since that is an easy slip when pasting.
+ * Lines where the sides are swapped (`water — 물`) are flipped, since that is an easy slip when pasting.
  */
 export function parseBulk(input: string): BulkLine[] {
   const result: BulkLine[] = [];
@@ -35,18 +35,18 @@ export function parseBulk(input: string): BulkLine[] {
     if (!line) return;
     const match = line.match(/^(.+?)\s*(?:\t|\s[—–-]\s)\s*(.+)$/);
     if (!match) {
-      result.push({ line: index + 1, raw: line, error: "Нет разделителя «—»" });
+      result.push({ line: index + 1, raw: line, error: "No “—” separator" });
       return;
     }
     let korean = normalizeKorean(match[1]!);
     let meaning = match[2]!.trim();
     if (!hasHangul(korean) && hasHangul(meaning)) [korean, meaning] = [normalizeKorean(meaning), korean];
     if (!hasHangul(korean)) {
-      result.push({ line: index + 1, raw: line, error: "Нет корейского слова" });
+      result.push({ line: index + 1, raw: line, error: "No Korean word" });
       return;
     }
     if (korean.length > 200 || meaning.length > 500) {
-      result.push({ line: index + 1, raw: line, error: "Слишком длинная строка" });
+      result.push({ line: index + 1, raw: line, error: "Line is too long" });
       return;
     }
     result.push({ line: index + 1, raw: line, card: { korean, meaning } });

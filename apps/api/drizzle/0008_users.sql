@@ -9,7 +9,7 @@ CREATE TABLE `users` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `users_webauthn_id_unique` ON `users` (`webauthn_id`);
 --> statement-breakpoint
-INSERT INTO `users` (`id`, `name`, `role`, `webauthn_id`, `created_at`) VALUES (1, 'Владелец', 'owner', 'a3F1aXotb3duZXI', CAST(strftime('%s', 'now') AS INTEGER) * 1000);
+INSERT INTO `users` (`id`, `name`, `role`, `webauthn_id`, `created_at`) VALUES (1, 'Owner', 'owner', 'a3F1aXotb3duZXI', CAST(strftime('%s', 'now') AS INTEGER) * 1000);
 --> statement-breakpoint
 CREATE TABLE `invites` (
 	`code_hash` text PRIMARY KEY NOT NULL,

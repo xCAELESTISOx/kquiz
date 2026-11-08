@@ -5,12 +5,12 @@ import type { SimilarWord } from "./types";
  * group; any other line is a plain remark. Claude writes notes this way (apps/api/src/mcp/tools.ts),
  * and older notes without marks still read as plain remarks.
  *
- *   ≠ 밑 — прямо под, вплотную      not to mix up with
- *   ↔ 위 — верх                      opposite
- *   ≈ 영화관 — тоже «кинотеатр»       near in meaning, synonyms
- *   + 아래층 — нижний этаж            set expressions and collocations
- *   = «сто товаров»                  literally
- *   ! 안 перед глаголом — «не»       watch out: homonyms, exceptions
+ *   ≠ 밑 — right under, touching      not to mix up with
+ *   ↔ 위 — top                        opposite
+ *   ≈ 영화관 — "cinema" too             near in meaning, synonyms
+ *   + 아래층 — the floor below          set expressions and collocations
+ *   = "a hundred goods"              literally
+ *   ! 안 before a verb — "not"        watch out: homonyms, exceptions
  */
 export type NoteKind = "similar" | "opposite" | "near" | "phrase" | "literal" | "warn";
 
@@ -34,12 +34,12 @@ export interface ParsedNotes {
 }
 
 export const NOTE_MARKS: { mark: string; kind: NoteKind; label: string }[] = [
-  { mark: "≠", kind: "similar", label: "Не путать" },
-  { mark: "↔", kind: "opposite", label: "Противоположность" },
-  { mark: "≈", kind: "near", label: "Близкие по смыслу" },
-  { mark: "+", kind: "phrase", label: "Выражения" },
-  { mark: "=", kind: "literal", label: "Дословно" },
-  { mark: "!", kind: "warn", label: "Внимание" },
+  { mark: "≠", kind: "similar", label: "Don't confuse" },
+  { mark: "↔", kind: "opposite", label: "Opposite" },
+  { mark: "≈", kind: "near", label: "Close in meaning" },
+  { mark: "+", kind: "phrase", label: "Expressions" },
+  { mark: "=", kind: "literal", label: "Literally" },
+  { mark: "!", kind: "warn", label: "Watch out" },
 ];
 
 // Written by hand too: <> and the ASCII arrows for ↔, ~ for ≈, • and - for a list item.
@@ -93,7 +93,7 @@ export function parseNotes(notes: string | null | undefined): ParsedNotes {
 }
 
 /**
- * Notes with the card's linked similar words folded into «Не путать»: a ≠ line about a linked word
+ * Notes with the card's linked similar words folded into "Don't confuse": a ≠ line about a linked word
  * becomes that word's entry, so the pair is shown once: its meaning, then the line's words or, without
  * a line, the pair's note.
  */

@@ -9,7 +9,7 @@ import "./phrase.css";
 export function PhraseParts({ card, links = true }: { card: Card; links?: boolean }) {
   if (!card.parts?.length) return null;
   return (
-    <ol className="parts" aria-label="Из чего состоит фраза">
+    <ol className="parts" aria-label="Parts of the phrase">
       {card.parts.map((part, i) => {
         const body = (
           <>
@@ -30,7 +30,7 @@ export function PhraseParts({ card, links = true }: { card: Card; links?: boolea
               <a
                 className="part-body is-linked"
                 href={`#/cards/${part.cardId}`}
-                aria-label={`${part.ko}: ${part.meaning}, открыть карточку`}
+                aria-label={`${part.ko}: ${part.meaning}, open card`}
                 // Inside a swipeable card: following the link is not a tap or a swipe on the card.
                 onClick={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
@@ -50,7 +50,7 @@ export function PhraseParts({ card, links = true }: { card: Card; links?: boolea
 export function RegisterBadge({ card }: { card: Card }) {
   if (!card.register) return null;
   return (
-    <span className={`register register-${card.register}`} title="Уровень вежливости">
+    <span className={`register register-${card.register}`} title="Politeness level">
       {REGISTER_LABELS[card.register]}
     </span>
   );

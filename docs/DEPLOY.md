@@ -1,113 +1,158 @@
-# Развёртывание KQuiz
+# Self-hosting KQuiz
 
-Один VPS с фиксированной ценой у российского провайдера (по умолчанию Timeweb Cloud, Москва), оплата заранее с баланса. Потратить больше пополненного нельзя: атака может уронить приложение, но не увеличить счёт.
-
-Cloudflare перед сервером не ставим: российские провайдеры обрывают соединения с ним, и приложение не открылось бы из России.
+KQuiz runs on one Linux server with Docker Compose: Caddy (HTTPS and the static PWA), the API (Node + SQLite) and the scorer (pronunciation scoring and TTS, Python). Any VPS provider works; nothing in [`deploy/`](../deploy) depends on a particular one.
 
 ```
-iPhone, Claude ──HTTPS (Let's Encrypt)──▶ сервер :443
-                                          Caddy ─▶ api (127.0.0.1:8787) ─▶ SQLite
-                                                └─▶ статика PWA
+phone / browser, Claude ──HTTPS (Let's Encrypt)──▶ your-server :443
+                                                    Caddy ─▶ api (127.0.0.1:8787) ─▶ SQLite
+                                                      │            └─▶ scorer (127.0.0.1:8788)
+                                                      └─▶ static PWA
 ```
 
-Что лежит в [`deploy/`](../deploy):
+## Requirements
 
-| Файл | Зачем |
+- A server with **Ubuntu 24.04**, 2 vCPU and **4 GB of RAM** (the scoring model alone takes about 2 GB; see [Scorer and audio](#scorer-and-audio)). About 10 GB of free disk for images and models.
+- A domain (or subdomain) with an A record pointing at the server. Passkeys are bound to this host name, so pick one you intend to keep.
+- Ports 80 and 443 reachable from the internet (Let's Encrypt uses port 80 for its challenge).
+
+## What is in `deploy/`
+
+| File | Purpose |
 |---|---|
-| `docker-compose.yml` | Три контейнера: `caddy`, `api`, `scorer` (оценка произношения) |
-| `Caddyfile` | HTTPS от Let's Encrypt, таймауты, лимит тела 2 МБ; `/api`, `/mcp`, `/oauth`, `/.well-known` в API, остальное — PWA с `index.html` на любые пути (нужно для `/login`) |
-| `.env.example` | Шаблон настроек: домен, e-mail для сертификата, секрет, код первого входа |
-| `cloud-init.sh` | Собирает user-data, с которым новый сервер сам ставит и запускает всё ниже |
-| `setup-server.sh` | Один раз на новом сервере: Docker, firewall, SSH только по ключу, папки, бэкап и автообновление |
-| `firewall.sh` | Открыты только 22 (только ключ), 80 и 443 |
-| `backup.sh` + `kquiz-backup.timer` | Копия базы каждую ночь в `/srv/kquiz/backups`, хранится 30 дней |
-| `update.sh` + `kquiz-update.timer` | Раз в 10 минут сервер сам проверяет `main`, делает бэкап и скачивает готовые образы этого коммита (см. «Обновления») |
-| `smoke-test.sh` | Проверка всей связки (её же запускает CI) |
+| `docker-compose.yml` | Three containers: `caddy`, `api`, `scorer`. Host network, read-only file systems, memory limits |
+| `Caddyfile` | HTTPS from Let's Encrypt, timeouts, 2 MB body limit; `/api`, `/mcp`, `/oauth`, `/.well-known` go to the API, everything else to the PWA with `index.html` for any client path (needed for `/login`) |
+| `.env.example` | Template for `deploy/.env`: domain, e-mail for the certificate, the origin secret, the first-sign-in code |
+| `setup-server.sh` | One-time setup of a fresh server: Docker, firewall, SSH keys only, swap, data folders, backup and update timers |
+| `firewall.sh` | `ufw`: only 22 (key only, or only from `SSH_FROM`), 80 and 443 are open |
+| `cloud-init.sh` | Prints cloud-init user-data that does the whole manual install below on a new server's first boot |
+| `update.sh` + `kquiz-update.timer` | Every 10 minutes: if `main` moved, back up, pull the prebuilt images for that commit and restart (see [Updates](#updates)) |
+| `backup.sh` + `kquiz-backup.timer` | Nightly copy of the database to `/srv/kquiz/backups`, kept for 30 days |
+| `smoke-test.sh` | Builds and starts the whole stack locally with a self-signed certificate and checks it; CI runs it |
+| `Dockerfile.{api,caddy,scorer}` | Image builds; the build context is the repository root |
 
-## Что делает владелец
+## Configuration
 
-1. Зарегистрироваться на [timeweb.cloud](https://timeweb.cloud) и пополнить баланс.
-2. Купить домен там же (раздел «Домены»), чтобы DNS был в той же панели и API.
-3. Создать API-токен Timeweb Cloud (панель → API и Terraform) и добавить его в настройки облачного окружения Claude (Project settings → Cloud environment → шестерёнка → Network secrets): тип **Bearer**, хост `api.timeweb.cloud`. Там же в Allowed domains добавить `api.timeweb.cloud`.
-4. Когда Claude пришлёт открытый ключ: GitHub → репозиторий `kquiz` → Settings → Deploy keys → Add deploy key, вставить ключ, галочку «Allow write access» **не ставить**. По этому ключу сервер забирает код, и больше он ничего не умеет.
+`deploy/.env` (copy from `.env.example`, keep it `chmod 600`; it is git-ignored):
 
-Дальше Claude через API Timeweb создаёт сервер (Ubuntu 24.04, 4 ГБ, Москва) с user-data из `cloud-init.sh`, добавляет A-запись домена и проверяет, что сайт открылся по HTTPS. Код первого входа Claude задаёт сам (`SETUP_CODE`) и присылает владельцу.
+| Variable | Required | Meaning |
+|---|---|---|
+| `DOMAIN` | yes | Host name without `https://`, e.g. `kquiz.example.com`. The API's public origin becomes `https://$DOMAIN` |
+| `ACME_EMAIL` | yes | E-mail for Let's Encrypt expiry notices. `internal` makes Caddy use its own self-signed CA (local tests only) |
+| `ORIGIN_SECRET` | yes | At least 32 random characters: `openssl rand -hex 32`. Caddy adds it to every request it forwards; the API refuses requests without it |
+| `SETUP_CODE` | no | One-time code (16+ characters) for binding the first passkey. If unset, the API prints a random one to its log |
+| `KQUIZ_DATA` | no | Database folder on the host, default `/srv/kquiz/data` |
+| `KQUIZ_REGISTRY` | no | Where prebuilt images are pulled from, default the upstream project's GHCR namespace. Set it to `ghcr.io/<your-github-user>` if you publish images from your own fork |
+| `KQUIZ_TAG` | no | Image tag; `update.sh` writes it for you |
+| `SCORER_LOAD_MODEL` | no | `0` runs the scorer without the scoring model (only g2p and TTS work); saves ~2 GB of RAM |
 
-## Первый вход и Claude
+Other API settings (`TIME_ZONE`, `MCP_REDIRECT_URIS`, ...) are read from the same `.env`, since it is passed to the `api` container; they are listed in [`apps/api/README.md`](../apps/api/README.md#environment). Scorer settings (`TTS_VOICE`, `SCORER_THREADS`, ...) go under `scorer.environment` in `docker-compose.yml`; see [`services/scorer/README.md`](../services/scorer/README.md).
 
-1. Открыть `https://<домен>` в Safari на iPhone, ввести код первого входа, создать passkey (Face ID). Код одноразовый.
-2. Поделиться → **На экран «Домой»**.
-3. claude.ai → Settings → Connectors → **Add custom connector**: URL `https://<домен>/mcp`, подтвердить passkey'ем.
+## Manual install
 
-## Ручная установка (если без API)
-
-1. Создать сервер Ubuntu 24.04, 2 vCPU, 4 ГБ, со своим SSH-ключом. Направить A-запись домена на его IP.
-2. На сервере:
+1. Create the server with your SSH key and point the domain's A record at its IP.
+2. On the server, as root:
 
 ```sh
-git clone https://github.com/xCAELESTISOx/kquiz.git /opt/kquiz   # для приватного репозитория — с токеном
+git clone https://github.com/<your-github-user>/kquiz.git /opt/kquiz
 cd /opt/kquiz/deploy
-./setup-server.sh            # если Docker Hub недоступен: DOCKER_MIRROR=<адрес зеркала провайдера> ./setup-server.sh
+./setup-server.sh              # if Docker Hub is unreachable: DOCKER_MIRROR=https://<mirror> ./setup-server.sh
 cp .env.example .env && nano .env && chmod 600 .env
-./update.sh                  # готовые образы из GHCR, а если реестр недоступен — сборка на месте
-docker compose logs api | grep 'setup code'   # если SETUP_CODE не задан
+./update.sh                    # pulls prebuilt images, or builds locally if the registry can't be reached
+docker compose logs api | grep 'setup code'    # only if SETUP_CODE is not set
 ```
 
-## Обновления
+The repository must stay at `/opt/kquiz`: the systemd units call `/opt/kquiz/deploy/*.sh`. `setup-server.sh` also restricts SSH to keys only, so make sure your key works before running it.
 
-Образы собирает GitHub Actions (задача `images` в [`ci.yml`](../.github/workflows/ci.yml)) после того, как на коммите в `main` прошли все проверки, и кладёт в GHCR: `ghcr.io/xcaelestisox/kquiz-{api,caddy,scorer}` с тегами `sha-<коммит>` и `main`. Сервер ничего не собирает, а только скачивает изменившиеся слои, поэтому обновление занимает минуты.
+To build everything on the server instead of pulling images: `docker compose up -d --build` (slow: the scorer image includes PyTorch).
 
-`update.sh` по таймеру:
+## Automated install with cloud-init
 
-- нет образов нового коммита, а реестр отвечает: CI ещё идёт или упал, сервер ждёт и проверяет снова через 10 минут, красный коммит не попадёт на сервер;
-- реестр недоступен (сеть или нет доступа к образам): собирает на месте, как раньше, это долго, но сайт обновится;
-- тег запущенных образов записывается в `deploy/.env` (`KQUIZ_TAG`), так что ручные `docker compose …` берут те же образы.
+`cloud-init.sh` prints user-data that clones the repository, runs `setup-server.sh`, writes `deploy/.env` and starts the stack. Paste its output as user-data when creating the server in your provider's panel or API.
 
-Модель оценки произношения в образ не входит: она лежит в томе `scorer-models`, который переживает обновления, и скачивается один раз на сервер.
+```sh
+DOMAIN=kquiz.example.com ACME_EMAIL=you@example.com \
+ORIGIN_SECRET=$(openssl rand -hex 32) SETUP_CODE=$(openssl rand -hex 12) \
+REPO=https://github.com/<your-github-user>/kquiz.git \
+deploy/cloud-init.sh > user-data.yaml
+```
 
-**Доступ сервера к образам.** Репозиторий приватный, образы в GHCR тоже, поэтому сервер входит в реестр токеном только на чтение. Fine-grained токены GHCR не поддерживает, нужен classic.
+`REPO` defaults to the upstream repository; point it at your fork if you have one. Keep the generated user-data private: it contains the origin secret and the setup code.
 
-1. GitHub → Settings → Developer settings → Personal access tokens → **Tokens (classic)** → Generate new token (classic). Note: `kquiz server`, Expiration: No expiration (или срок, после которого токен надо обновить), галочка только **`read:packages`**. Скопировать токен.
-2. Timeweb Cloud → сервер → **Консоль**, войти как root и выполнить:
-   ```sh
-   docker login ghcr.io -u xcaelestisox
-   ```
-   На вопрос `Password:` вставить токен (он не появится в истории команд). Должно ответить `Login Succeeded`.
+**Private fork.** To deploy from a private repository, also pass `DEPLOY_KEY_FILE`, a private key whose public half is added as a read-only deploy key (GitHub → repository → Settings → Deploy keys → Add deploy key, leave "Allow write access" off), and use the SSH address: `REPO=git@github.com:<your-github-user>/kquiz.git`. The server can then pull the code and do nothing else; the user-data then contains the key too.
 
-Docker хранит вход в `/root/.docker/config.json`, `update.sh` берёт его оттуда. Другой вариант без токена: сделать три пакета публичными (Package settings → Change visibility → Public).
+## First sign-in and connecting Claude
 
-Пока вход не выполнен, сервер собирает образы на месте.
+1. Open `https://<your-domain>` in any modern browser, enter the setup code and create a passkey. The code works once.
+2. Install it as an app if you like: on iPhone, Safari → Share → **Add to Home Screen**; on Android, Chrome → menu → **Install app**; on desktop, the install icon in Chrome or Edge's address bar.
+3. In Claude: Settings → Connectors → **Add custom connector**, URL `https://<your-domain>/mcp`, then confirm with your passkey on the consent page.
 
-## Обслуживание
+To let other people in, create an invite link in the app (owner only). Up to four members, each with their own cards; each can connect their own Claude.
 
-| Задача | Команда на сервере |
+## Updates
+
+GitHub Actions (the `images` job in [`ci.yml`](../.github/workflows/ci.yml)) builds the three images after every check has passed on a commit to `main` and pushes them to GHCR as `ghcr.io/<owner>/kquiz-{api,caddy,scorer}`, tagged `sha-<commit>` and `main`. The server never builds in the normal case; it only downloads the layers that changed, so an update takes minutes.
+
+`update.sh --if-changed` runs from `kquiz-update.timer` every 10 minutes and follows `origin/main` of the clone in `/opt/kquiz`:
+
+- `main` hasn't moved: nothing happens.
+- The registry answers but has no images for the new commit yet (CI still running or failed): it waits and tries again on the next run, so a red commit never reaches the server.
+- The registry can't be reached (network, or private images without `docker login`): it builds locally, which is slow but still updates the site.
+- Before restarting it backs the database up; migrations run when the new API starts.
+- The tag of the running images is written to `deploy/.env` (`KQUIZ_TAG`), so manual `docker compose ...` commands use the same images.
+
+Run `/opt/kquiz/deploy/update.sh` to update right away. If you'd rather update by hand, disable the timer: `systemctl disable --now kquiz-update.timer`.
+
+**Private images.** If your images on GHCR are private, log the server in with a classic personal access token that has only `read:packages` (GHCR doesn't accept fine-grained tokens):
+
+```sh
+docker login ghcr.io -u <your-github-user>     # paste the token at the Password: prompt
+```
+
+Docker keeps the login in `/root/.docker/config.json`, where `update.sh` finds it. Alternatively make the three packages public (Package settings → Change visibility). Until the server can pull, it builds locally.
+
+## Maintenance
+
+| Task | Command |
 |---|---|
-| Обновить сейчас, не дожидаясь таймера | `/opt/kquiz/deploy/update.sh` |
-| Логи | `cd /opt/kquiz/deploy && docker compose logs -f --tail 100` |
-| Бэкап вручную | `/opt/kquiz/deploy/backup.sh` |
-| Скачать бэкапы к себе | `scp 'root@<IP>:/srv/kquiz/backups/*' .` (с компьютера) |
+| Update now | `/opt/kquiz/deploy/update.sh` |
+| Logs | `cd /opt/kquiz/deploy && docker compose logs -f --tail 100` |
+| Back up now | `/opt/kquiz/deploy/backup.sh` |
+| Copy backups to your computer | `scp 'root@your-server:/srv/kquiz/backups/*' .` |
 
-**Восстановление из бэкапа:**
+**Restore from a backup:**
 
 ```sh
 cd /opt/kquiz/deploy
 docker compose stop api
-gunzip -c /srv/kquiz/backups/kquiz-<дата>.db.gz > /srv/kquiz/data/kquiz.db
+gunzip -c /srv/kquiz/backups/kquiz-<timestamp>.db.gz > /srv/kquiz/data/kquiz.db
 rm -f /srv/kquiz/data/kquiz.db-wal /srv/kquiz/data/kquiz.db-shm
 chown 1000:1000 /srv/kquiz/data/kquiz.db
 docker compose start api
 ```
 
-**Копия бэкапов вне сервера (по желанию).** Впиши в `/etc/kquiz-backup.env` `BACKUP_REMOTE=user@host:kquiz` (rsync по SSH, порт в `BACKUP_REMOTE_PORT`), и `backup.sh` будет копировать архивы туда.
+**Off-server backups (optional).** Put `BACKUP_REMOTE=user@backup-host:kquiz` (and `BACKUP_REMOTE_PORT`, default 23) in `/etc/kquiz-backup.env`, and `backup.sh` will rsync the archives there over SSH. The server's root SSH key must be authorized on that host.
 
-**Оценка произношения.** Контейнер `scorer` при первом старте скачивает модель (около 1,3 ГБ) в том `scorer-models`, следующие обновления её не трогают. В памяти модель занимает около 2 ГБ. Поэтому серверу нужно 4 ГБ: на 2 ГБ модель не поместится вместе с остальным.
+## Scorer and audio
 
-**Озвучка карточек.** Тот же контейнер `scorer` озвучивает карточки моделью Supertonic 3 (`POST /tts`, [`app/tts.py`](../services/scorer/app/tts.py)). Модель (около 400 МБ) скачивается в тот же том при первой озвучке. В памяти она занимает около 500 МБ только пока идёт озвучка: после 5 минут без запросов выгружается (`TTS_IDLE`), так что в обычное время контейнер занимает столько же, сколько раньше. API раз в 10 секунд находит карточки без озвучки или с изменённым корейским текстом, просит MP3 по одной и хранит в таблице `card_audio`, так что озвучка попадает в бэкапы. Пока файла нет, приложение говорит голосом телефона. Голос, скорость и число шагов задаются переменными `TTS_VOICE` (F1), `TTS_SPEED` (0.7, минимум модели) и `TTS_STEPS` (32) у `scorer`. После их смены старые файлы сами не переделываются. Когда всё остальное озвучено, тот же воркер по одному тексту за проход (раз в 10 секунд) записывает слова карточек и «похожих звуков» ещё голосами M1, F3 и M3 (таблица `voice_audio`, список в [`voices.ts`](../apps/api/src/voices.ts)): в режиме «на слух» и в «похожих звуках» голос выбирается случайно из готовых.
+**Pronunciation scoring.** On first start the `scorer` container downloads the scoring model (about 1.3 GB) into the `scorer-models` volume; later updates leave it alone. In memory the model takes about 2 GB, which is why the server needs 4 GB (`setup-server.sh` also adds 2 GB of swap). With `SCORER_LOAD_MODEL=0` the stack fits in 2 GB, but recordings can't be scored.
 
-## Как устроена защита
+**Card audio.** The same container voices cards with Supertonic 3 (`POST /tts`, [`app/tts.py`](../services/scorer/app/tts.py)). The TTS model (about 400 MB) is downloaded into the same volume on first use. It takes about 500 MB of memory only while voicing and is unloaded after 5 idle minutes (`TTS_IDLE`). Every 10 seconds the API looks for cards without audio, or whose Korean text changed, asks for MP3s one at a time and stores them in SQLite (`card_audio`), so the audio is part of every backup. Until a file exists, the app falls back to the phone's own voice. `TTS_VOICE` (default `F1`), `TTS_SPEED` (`0.7`, the model's minimum) and `TTS_STEPS` (`32`) set the voice; files made before a change are not redone. Once everything else is voiced, the same worker also records card and drill words in the voices M1, F3 and M3 (`voice_audio`, list in [`voices.ts`](../apps/api/src/voices.ts)); listening practice and sound drills pick one of the ready voices at random.
 
-- Наружу открыт только Caddy (80 и 443) и SSH по ключу. API и сервис оценки слушают `127.0.0.1`.
-- API принимает только запросы с секретным заголовком, который добавляет Caddy, и берёт IP клиента из заголовка, который тоже ставит Caddy. Подделать IP, чтобы обойти лимиты, нельзя.
-- Лимиты запросов в API: вход 5 в минуту, остальное API 300 в минуту, MCP и OAuth отдельно. Caddy режет тела больше 2 МБ и медленные соединения.
-- Контейнеры без root-прав (кроме Caddy, которому оставлено только право занять порты 80 и 443), файловая система только для чтения, лимиты памяти, логи не больше 30 МБ на контейнер, чтобы поток запросов не забил диск.
-- Бюджет: тариф с фиксированной ценой и оплата с баланса. Сервер не может стоить больше, чем на балансе.
+## How the server is protected
+
+- Only Caddy (80 and 443) and SSH (keys only) are open. The API and the scorer listen on `127.0.0.1`.
+- The API accepts only requests that carry the secret header Caddy adds, and takes the client IP from a header Caddy sets, so clients can't fake their IP to get around the rate limits.
+- API rate limits: sign-in 5 a minute, the rest of the API 300 a minute, MCP and OAuth separately. Caddy cuts off bodies over 2 MB and slow connections.
+- Containers run without root (except Caddy, which keeps only the right to bind ports 80 and 443), with read-only file systems, memory limits and at most 30 MB of logs each, so a flood of requests can't fill the disk.
+- Cost: pick a fixed-price plan with traffic included. Then the server can't cost more than its plan, whatever traffic it gets.
+
+## Running locally
+
+For development you don't need Docker:
+
+```sh
+pnpm install
+pnpm dev     # API on http://127.0.0.1:8787, web on http://localhost:5173 (proxies /api)
+```
+
+The API prints a one-time setup code on first start; open http://localhost:5173 and bind a passkey with it (browsers allow passkeys on `localhost` without HTTPS). The scorer is optional in development and runs separately; see [`services/scorer/README.md`](../services/scorer/README.md). To try the production stack on your machine, run `deploy/smoke-test.sh` (needs Docker, curl, sqlite3 and openssl).

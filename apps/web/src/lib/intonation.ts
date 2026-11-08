@@ -380,17 +380,17 @@ export type Verdict = { tone: "ok" | "weak" | "wrong" | "none"; title: string; t
 export function intonationVerdict(c: IntonationComparison): Verdict {
   const voiced = c.yours.filter((v) => v !== null).length;
   if (c.similarity === null || voiced < c.reference.length * 0.2) {
-    return { tone: "none", title: "Мелодию не разобрать", text: "Голоса в записи мало. Скажи фразу целиком и чуть громче." };
+    return { tone: "none", title: "Can't make out the melody", text: "There is too little voice in the recording. Say the whole phrase a bit louder." };
   }
   // Two voices never match frame by frame; a short slip in a matching melody is not worth a warning.
   const apart = c.diverging.reduce((n, [from, to]) => n + to - from, 0);
   if (c.similarity >= 0.7 && apart <= voiced * 0.15) {
-    return { tone: "ok", title: "Мелодия совпадает", text: "Подъёмы и спады там же, где у образца." };
+    return { tone: "ok", title: "The melody matches", text: "The rises and falls are where the sample has them." };
   }
   if (c.similarity >= 0.4) {
-    return { tone: "weak", title: "Похоже, с расхождениями", text: "Красным отмечено, где мелодия уходит от образца." };
+    return { tone: "weak", title: "Close, with some differences", text: "Red marks where the melody drifts from the sample." };
   }
-  return { tone: "wrong", title: "Мелодия другая", text: "Послушай образец ещё раз и повтори, следя за подъёмами и спадами." };
+  return { tone: "wrong", title: "A different melody", text: "Listen to the sample again and repeat it, following the rises and falls." };
 }
 
 // ---- Decoding ----

@@ -37,7 +37,7 @@ export function CardNotes({ card }: { card: Pick<Card, "notes" | "similar"> }) {
   const { remarks, groups } = cardNotes(card.notes, card.similar);
   if (!remarks.length && !groups.length) return null;
   return (
-    <section className="notes" aria-label="Заметки">
+    <section className="notes" aria-label="Notes">
       {remarks.length > 0 && (
         <div className="notes-remarks">
           {remarks.map((remark, i) => (
@@ -101,7 +101,7 @@ export function NotesField({
         <textarea className="input textarea" rows={structured ? 5 : 2} value={value} onChange={(e) => onChange(e.target.value)} />
       </label>
       {marks && (
-        <p className="notes-legend muted small" aria-label="Значки в начале строки">
+        <p className="notes-legend muted small" aria-label="Marks at the start of a line">
           {NOTE_MARKS.map((m) => (
             <span key={m.mark} className={`notes-legend-item ${TONE[m.kind]}`}>
               <span className="notes-mark" aria-hidden="true">

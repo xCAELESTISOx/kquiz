@@ -1,6 +1,6 @@
 // New words. A card doesn't enter reviews when it is added, from Claude or in the app: it waits in
 // the pool until it is learned, so reviews never ask about a word not met yet. The app's session
-// ("Учить", apps/web screens/Review.tsx) learns a few at a time (ACTIVE_WORDS), oldest first, and
+// ("Learn", apps/web screens/Review.tsx) learns a few at a time (ACTIVE_WORDS), oldest first, and
 // takes new ones only while few words are still unfinished (IN_PROGRESS_LIMIT), so started words are
 // finished before more come:
 // each climbs a ladder of LADDER_STEPS tasks (build it from syllables, pick it out by ear, write it
@@ -71,13 +71,13 @@ export function introduce(tx: Tx, ids: number[], how: "direct" | "daily" | "earl
 /**
  * New words not learned yet. `queued`: all of them (in the pool, being learned, or waiting for
  * their check). `learning`: of those, the ones already taken into learning. `next`: the Korean of
- * the words "Учить" comes to first (being learned, then the pool, oldest added first), for Today.
+ * the words "Learn" comes to first (being learned, then the pool, oldest added first), for Today.
  */
 export type NewCards = {
   queued: number;
   learning: number;
   next: string[];
-  /** Of `learning`, on the ladder now or due for their check: what "Учить" goes on with. */
+  /** Of `learning`, on the ladder now or due for their check: what "Learn" goes on with. */
   started: number;
   /** How many new words from the pool the next session takes. */
   fresh: number;
@@ -104,7 +104,7 @@ export function newCards(db: Db, userId: number, now = new Date()): NewCards {
   const c = counts(db, userId, now);
   const fresh = room(c);
   const started = c.active + c.checks;
-  // What "Учить" comes to: the words started (ladder, then checks), then the new ones it will take.
+  // What "Learn" comes to: the words started (ladder, then checks), then the new ones it will take.
   const next = db
     .select({ korean: cards.korean })
     .from(cards)

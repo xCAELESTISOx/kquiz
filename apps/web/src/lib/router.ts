@@ -27,11 +27,11 @@ export interface Location {
   route: Route;
   /** The card id on "card" and "learn" (one word), the filter on "cards" ("queued", "paused", "phrases"), the code on "invite". */
   param?: string;
-  /** A group picked on the cards screen, reviewed instead of the day's queue: `#/review?tag=еда`. */
+  /** A group picked on the cards screen, reviewed instead of the day's queue: `#/review?tag=food`. */
   group?: GroupFilter;
   /** On "cards": the hanja whose word family is shown, `#/cards?root=學`. */
   root?: string;
-  /** On "mix": every way at once, without asking what to mix (`#/mix?tag=еда&all=1`). */
+  /** On "mix": every way at once, without asking what to mix (`#/mix?tag=food&all=1`). */
   all?: boolean;
 }
 
@@ -83,9 +83,9 @@ export function parseHash(hash: string): Location {
   ) {
     return { route: head };
   }
-  // "Учить" from a card's menu: that one word in every mode, #/learn/<id>.
+  // "Learn" from a card's menu: that one word in every mode, #/learn/<id>.
   if (head === "learn" && param && /^\d+$/.test(param)) return { route: "learn", param };
-  // "Учить" for a group picked on the cards screen: #/learn?tag=еда.
+  // "Learn" for a group picked on the cards screen: #/learn?tag=food.
   if (head === "learn" && !param && search !== undefined) return { route: "learn", group: parseGroup(search) };
   // A friend's invite link: #/invite/<code>.
   if (head === "invite" && param) return { route: "invite", param };

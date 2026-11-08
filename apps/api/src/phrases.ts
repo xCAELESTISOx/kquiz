@@ -1,6 +1,6 @@
-// Phrases are reviewed by building them: the Russian is shown (or the phrase is heard), and the
+// Phrases are reviewed by building them: the translation is shown (or the phrase is heard), and the
 // Korean is put together from its blocks mixed with a handful of wrong ones. Typing a translation
-// back is not asked: a phrase can be said in Russian many ways, so there is nothing fair to compare
+// back is not asked: a phrase can be translated many ways, so there is nothing fair to compare
 // it with. Wrong blocks are what the phrase could be mistaken for: the same block with another
 // particle or ending (화장실을 for 화장실이, 이에요 for 예요), and blocks of the user's other phrases.
 import { and, eq, inArray, isNotNull } from "drizzle-orm";

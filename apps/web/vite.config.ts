@@ -4,7 +4,7 @@ import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 
 // Files from public/ that the app loads on its own and so are worth having in the cache up front.
-const PUBLIC_PRECACHE = ["/manifest.webmanifest", "/recorder-worklet.js"];
+const PUBLIC_PRECACHE = ["/manifest.webmanifest", "/recorder-worklet.js", "/favicon.svg"];
 
 /**
  * Emits sw.js (the service worker, see sw.js) with this build's version and the files to precache:

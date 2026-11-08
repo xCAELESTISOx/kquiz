@@ -96,7 +96,7 @@ export function TodayScreen() {
     (k) => k,
     left,
   ).slice(0, Math.max(PREVIEW - wall.length, 0));
-  // What "Учить" goes on with: words already started first, new ones only when few are unfinished.
+  // What "Learn" goes on with: words already started first, new ones only when few are unfinished.
   const started = stats?.newCards.started ?? 0;
   const portion = stats?.newCards.fresh ?? 0;
   const learning = stats?.newCards.learning ?? 0;
@@ -112,7 +112,7 @@ export function TodayScreen() {
   const fresh = stats?.cards === 0;
   const [more, setMore] = useState(false);
   const pending = pendingReviewCount();
-  const today = new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
+  const today = new Intl.DateTimeFormat("en-US", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
 
   return (
     <main className="screen">
@@ -126,13 +126,13 @@ export function TodayScreen() {
       {fresh && <FirstWords />}
 
       {/* The words themselves are the hero: the ones to go over, then the new ones coming up. */}
-      <section hidden={fresh} className="word-wall" aria-label="Слова на сегодня" aria-busy={!stats && !error}>
+      <section hidden={fresh} className="word-wall" aria-label="Words for today" aria-busy={!stats && !error}>
         {stats && (wall.length + upcoming.length > 0 ? <WordWall due={wall} more={moreDue} fresh={upcoming} /> : <AllDone />)}
         {stats && wall.length + upcoming.length > 0 && (
           <ul className="word-wall-legend">
-            {dueCount > 0 && <li data-kind="due">повторить {dueCount}</li>}
-            {learning > 0 && <li data-kind="new">учатся {learning}</li>}
-            {pool > 0 && <li data-kind="pool">в очереди {pool}</li>}
+            {dueCount > 0 && <li data-kind="due">review {dueCount}</li>}
+            {learning > 0 && <li data-kind="new">learning {learning}</li>}
+            {pool > 0 && <li data-kind="pool">queued {pool}</li>}
           </ul>
         )}
         {!stats && !error && <div className="skeleton" />}
@@ -141,10 +141,10 @@ export function TodayScreen() {
       {stats && !fresh && <TodayStats stats={stats} overview={overview} />}
 
       <div aria-live="polite">
-        {error && <p className="notice notice-error">Не получилось загрузить данные: {error}. Обнови страницу.</p>}
+        {error && <p className="notice notice-error">Couldn't load data: {error}. Reload the page.</p>}
         {pending > 0 && (
           <p className="notice">
-            {pending} {pending === 1 ? "оценка ждёт" : "оценок ждут"} отправки. Уйдут сами, когда появится сеть.
+            {pending} {pending === 1 ? "grade" : "grades"} waiting to sync. They'll go out on their own once you're online.
           </p>
         )}
       </div>
@@ -153,20 +153,20 @@ export function TodayScreen() {
       <div className="bottom-actions" hidden={!stats && !error}>
         {fresh ? (
           <a className="button primary" href="#/add">
-            Добавить первые слова
+            Add your first words
           </a>
         ) : nothing ? (
           <a className="button primary" href="#/add">
-            Добавить слова
+            Add words
           </a>
         ) : (
           <a className="button primary session-button" href="#/session">
-            <span>Учить</span>
+            <span>Learn</span>
             <span className="session-button-sub">
               {[
-                dueCount > 0 && `повторить ${dueCount} ${wordsWord(dueCount)}`,
-                started > 0 && `доучить ${started}`,
-                portion > 0 && `выучить ${portion} ${portion === 1 ? "новое" : "новых"}`,
+                dueCount > 0 && `review ${dueCount} ${wordsWord(dueCount)}`,
+                started > 0 && `finish ${started}`,
+                portion > 0 && `learn ${portion} new`,
               ]
                 .filter(Boolean)
                 .join(" · ")}
@@ -175,7 +175,7 @@ export function TodayScreen() {
         )}
         <button type="button" className="button more-button" hidden={fresh} aria-haspopup="dialog" onClick={() => setMore(true)}>
           <MoreIcon />
-          Ещё
+          More
         </button>
       </div>
 
@@ -194,20 +194,20 @@ function TodayStats({ stats, overview }: { stats: Stats; overview?: StatsOvervie
   const top = Math.max(...days.map((d) => d.reviews), 1);
   const streak = overview?.streak.current ?? 0;
   return (
-    <a className="today-stats" href="#/stats" aria-label="Статистика">
+    <a className="today-stats" href="#/stats" aria-label="Stats">
       <dl className="today-stats-facts">
         <div>
-          <dt>Дней подряд</dt>
+          <dt>Day streak</dt>
           <dd>
             {streak}
           </dd>
         </div>
         <div>
-          <dt>Повторено сегодня</dt>
+          <dt>Reviewed today</dt>
           <dd>{stats.reviewedToday}</dd>
         </div>
         <div>
-          <dt>Выучено слов</dt>
+          <dt>Words learned</dt>
           <dd>
             {stats.learned}
             {stats.learnedToday > 0 && <span className="today-stats-plus"> +{stats.learnedToday}</span>}
@@ -225,7 +225,7 @@ function TodayStats({ stats, overview }: { stats: Stats; overview?: StatsOvervie
         ))}
       </div>
       <p className="today-stats-caption muted small">
-        Повторения по дням, последние две недели <span aria-hidden="true">›</span>
+        Reviews per day, last two weeks <span aria-hidden="true">›</span>
       </p>
     </a>
   );
@@ -276,7 +276,7 @@ const PeopleIcon = () => (
   </svg>
 );
 
-/** Everything besides "Учить": each kind of review on its own, practice, and the settings. */
+/** Everything besides "Learn": each kind of review on its own, practice, and the settings. */
 function MoreSheet({
   onClose,
   due,
@@ -300,23 +300,23 @@ function MoreSheet({
   const mixable = [due, speechDue, listenDue].filter((n) => n > 0).length > 1;
   return (
     <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet" role="dialog" aria-modal="true" aria-label="Ещё" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label="More" onClick={(e) => e.stopPropagation()}>
         <header className="sheet-header">
-          <p className="sheet-title">Ещё</p>
-          <button type="button" className="icon-button" aria-label="Закрыть" onClick={onClose}>
+          <p className="sheet-title">More</p>
+          <button type="button" className="icon-button" aria-label="Close" onClick={onClose}>
             <CloseIcon />
           </button>
         </header>
         <nav className="sheet-links" onClick={onClose}>
-          {due > 0 && <SheetLink href="#/review" icon={<CardsIcon />} label="Повторить значения" count={due} />}
-          {mixable && <SheetLink href="#/mix" icon={<ShuffleIcon />} label="Вперемешку, выбрать способы" />}
-          {speechDue > 0 && <SheetLink href="#/speech" icon={<MicIcon />} label="Вслух" count={speechDue} />}
-          {speechDue > 0 && <SheetLink href="#/choose" icon={<ChoiceIcon />} label="Выбрать слово из вариантов" />}
-          {listenDue > 0 && <SheetLink href="#/listen" icon={<HeadphonesIcon />} label="На слух" count={listenDue} />}
-          {leeches > 0 && <SheetLink href="#/leeches" icon={<LeechIcon />} label="Трудные карточки" count={leeches} />}
-          <SheetLink href="#/cards/queued" icon={<LearnIcon />} label="Новые слова" />
-          <SheetLink href="#/add" icon={<PlusIcon />} label="Добавить слова" />
-          {owner && <SheetLink href="#/access" icon={<PeopleIcon />} label="Доступ для друзей" />}
+          {due > 0 && <SheetLink href="#/review" icon={<CardsIcon />} label="Review meanings" count={due} />}
+          {mixable && <SheetLink href="#/mix" icon={<ShuffleIcon />} label="Mixed, pick the ways" />}
+          {speechDue > 0 && <SheetLink href="#/speech" icon={<MicIcon />} label="Aloud" count={speechDue} />}
+          {speechDue > 0 && <SheetLink href="#/choose" icon={<ChoiceIcon />} label="Choose from options" />}
+          {listenDue > 0 && <SheetLink href="#/listen" icon={<HeadphonesIcon />} label="Listening" count={listenDue} />}
+          {leeches > 0 && <SheetLink href="#/leeches" icon={<LeechIcon />} label="Hard cards" count={leeches} />}
+          <SheetLink href="#/cards/queued" icon={<LearnIcon />} label="New words" />
+          <SheetLink href="#/add" icon={<PlusIcon />} label="Add words" />
+          {owner && <SheetLink href="#/access" icon={<PeopleIcon />} label="Friends' access" />}
         </nav>
         <PracticeLinks />
         <ScheduleSettings />
@@ -360,7 +360,7 @@ function AllDone() {
       <span lang="ko" className="word-wall-done">
         다 했어요
       </span>
-      <span className="muted">Всё выученное повторено, новых слов в очереди нет. Добавьте слова с занятия, когда будут.</span>
+      <span className="muted">Everything learned is reviewed, and no new words are queued. Add words from your next lesson.</span>
     </p>
   );
 }

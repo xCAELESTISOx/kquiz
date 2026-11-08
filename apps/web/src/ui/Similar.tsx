@@ -29,7 +29,7 @@ export function SimilarNudge({ word }: { word: SimilarWord }) {
           <span lang="ko" className="similar-nudge-word">
             {word.korean}
           </span>{" "}
-          — это «{word.meaning}»
+          is “{word.meaning}”
         </span>
       </p>
       {word.note && (
@@ -37,7 +37,7 @@ export function SimilarNudge({ word }: { word: SimilarWord }) {
           <RichText text={word.note} />
         </p>
       )}
-      <p className="similar-nudge-ask">Похожее слово, но здесь нужно другое</p>
+      <p className="similar-nudge-ask">A similar word, but this one needs the other</p>
     </div>
   );
 }
@@ -46,11 +46,11 @@ export function SimilarNudge({ word }: { word: SimilarWord }) {
 export function SimilarList({ card }: { card: Card }) {
   if (!card.similar?.length) return null;
   return (
-    <section className="similar-list" aria-label="Похожие слова">
+    <section className="similar-list" aria-label="Similar words">
       {card.similar.map((w) => (
         <div key={w.id} className="similar-item">
           <p className="similar-line">
-            <span className="similar-ne" aria-label="не путать с">
+            <span className="similar-ne" aria-label="don't confuse with">
               ≠
             </span>
             <span lang="ko" className="similar-word">
@@ -70,9 +70,9 @@ export function SimilarList({ card }: { card: Card }) {
 }
 
 const ERRORS: Record<string, string> = {
-  too_many: "У слова может быть не больше 8 похожих",
-  not_found: "Такой карточки уже нет",
-  same_card: "Это та же карточка",
+  too_many: "A word can have at most 8 similar words",
+  not_found: "This card no longer exists",
+  same_card: "That's the same card",
 };
 
 /**
@@ -156,7 +156,7 @@ export function SimilarEditor({ card, onChange }: { card: Card; onChange: (card:
               <button
                 type="button"
                 className="icon-button similar-remove"
-                aria-label={`Убрать связь с ${w.korean}`}
+                aria-label={`Unlink ${w.korean}`}
                 disabled={busy !== undefined}
                 onClick={() => void run(w.id, () => api.unlinkSimilar(card.id, w.id))}
               >
@@ -170,7 +170,7 @@ export function SimilarEditor({ card, onChange }: { card: Card; onChange: (card:
       {!adding ? (
         <button type="button" className="chip-button similar-add" onClick={() => setAdding(true)}>
           <PairMark />
-          {similar.length ? "Добавить ещё" : "Добавить похожее слово"}
+          {similar.length ? "Add another" : "Add a similar word"}
         </button>
       ) : (
         <div className="similar-picker">
@@ -183,8 +183,8 @@ export function SimilarEditor({ card, onChange }: { card: Card; onChange: (card:
                 autoCorrect="off"
                 autoCapitalize="off"
                 spellCheck={false}
-                placeholder="Найти слово: 쓰레기통 или «ведро»"
-                aria-label="Найти карточку"
+                placeholder="Find a word: 쓰레기통 or its translation"
+                aria-label="Find a card"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => {
@@ -195,7 +195,7 @@ export function SimilarEditor({ card, onChange }: { card: Card; onChange: (card:
                 }}
               />
               {found.length > 0 && (
-                <ul className="similar-found" role="listbox" aria-label="Найденные карточки">
+                <ul className="similar-found" role="listbox" aria-label="Cards found">
                   {found.map((c) => (
                     <li key={c.id}>
                       <button type="button" className="similar-found-item" role="option" aria-selected={false} onClick={() => setPicked(c)}>
@@ -208,7 +208,7 @@ export function SimilarEditor({ card, onChange }: { card: Card; onChange: (card:
                   ))}
                 </ul>
               )}
-              {query.trim() && found.length === 0 && <p className="muted small similar-empty">Ничего не нашлось. Сначала добавь это слово.</p>}
+              {query.trim() && found.length === 0 && <p className="muted small similar-empty">Nothing found. Add that word first.</p>}
             </>
           ) : (
             <div className="similar-pair">
@@ -222,8 +222,8 @@ export function SimilarEditor({ card, onChange }: { card: Card; onChange: (card:
                 className="input textarea"
                 rows={2}
                 maxLength={300}
-                placeholder="Чем отличаются, например: у стола / на кухне"
-                aria-label="Чем отличаются"
+                placeholder="How they differ, e.g. by the desk / in the kitchen"
+                aria-label="How they differ"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
               />
@@ -231,12 +231,12 @@ export function SimilarEditor({ card, onChange }: { card: Card; onChange: (card:
           )}
           <div className="similar-picker-actions">
             <button type="button" className="chip-button" onClick={picked ? () => setPicked(undefined) : close}>
-              {picked ? "Другое слово" : "Отмена"}
+              {picked ? "Another word" : "Cancel"}
             </button>
             {picked && (
               <button type="button" className="chip-button is-primary" disabled={busy !== undefined} onClick={add}>
                 {busy === "add" && <Spinner />}
-                Связать
+                Link
               </button>
             )}
           </div>

@@ -1,4 +1,4 @@
-/* "Учить" one word, and typing the word in Hangul (here and in the mix). */
+/* "Learn" one word, and typing the word in Hangul (here and in the mix). */
 
 .learn-step {
   min-width: 0;
@@ -229,7 +229,7 @@
   animation: finished-in 420ms var(--ease-spring) calc(var(--i, 0) * 45ms) backwards;
 }
 
-/* A word with a missed step: the one "Закрепить трудные" goes over. */
+/* A word with a missed step: the one "Practice the hard ones" goes over. */
 .learn-summary-word[data-shaky] {
   border-color: rgb(251 191 36 / 0.4);
   background: rgb(251 191 36 / 0.1);

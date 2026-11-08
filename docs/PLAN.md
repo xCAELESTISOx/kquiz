@@ -1,190 +1,186 @@
-# KQuiz — план приложения
+# KQuiz: design and architecture
 
-Личное приложение для изучения корейского: карточки, интервальное повторение и тренировка произношения с разбором по звукам. Пользователь один — владелец.
+KQuiz is a self-hosted app for learning Korean vocabulary: flashcards with spaced repetition, cards added straight from Claude over MCP, and pronunciation practice scored sound by sound. One server runs it for its owner and a few invited people, each with their own deck.
 
-Документ — рабочий план. Он вырос из наброска «Korean Pronunciation Trainer — System Design» и заменяет его там, где они расходятся.
+This document explains what the system is made of and why. The API reference lives in [`apps/api/README.md`](../apps/api/README.md), the scorer in [`services/scorer/README.md`](../services/scorer/README.md), and self-hosting in [`DEPLOY.md`](DEPLOY.md). Section numbers are stable: code comments refer to them (for example "PLAN.md §4.3").
 
-## 1. Цели и что из них следует
+## 1. Goals and what follows from them
 
-| Цель | Что это значит для архитектуры |
+| Goal | What it means for the architecture |
 |---|---|
-| Быстро заводить карточки | Экран «Добавить» открывается за одно касание, обязательны только два поля (корейский и перевод), остальное заполняется автоматически. Есть пакетная вставка списком. |
-| Заводить карточки из Claude | Свой MCP-сервер на нашем бэкенде. Claude видит инструменты `add_cards`, `find_cards` и другие и пишет прямо в нашу базу. |
-| Красиво, удобно, в тёмных тонах | Своя дизайн-система: только тёмная тема, токены цветов, крупные зоны нажатия, mobile-first под iPhone. |
-| Только для меня | Регистрации нет. Вход по passkey (Face ID), один владелец. Новый ключ можно добавить только из уже открытой сессии, поэтому смена телефона не отрезает доступ. |
-| Атака не должна съесть бюджет | Нигде нет оплаты за запросы или трафик. Сервер с фиксированной ценой, перед ним Cloudflare. Худший исход атаки — приложение недоступно, но счёт не растёт. |
-| Повторять и слова, и произношение | Два режима повторения у одной карточки: «значение» (узнать слово) и «произношение» (сказать вслух с оценкой). У каждого своё расписание FSRS. |
-| Пока только корейский | Код не обобщаем под другие языки. Язык заложен одним полем в модели, чтобы не переписывать базу, если когда-нибудь понадобится. |
+| Adding cards is fast | The Add screen is one tap away and needs only two fields (Korean and a translation); pronunciation and romanization are filled in automatically. A bulk mode takes a pasted list. |
+| Cards can come from Claude | The backend has its own MCP server. Claude sees tools such as `add_cards` and `find_cards` and writes straight into the database. |
+| Pleasant on a phone | Own design system: dark theme only, color tokens, large touch targets, mobile-first, installable on any phone or desktop. |
+| Private by default | No public sign-up. Sign-in is by passkey only. The owner binds the first passkey with a one-time code from the server log and invites up to four more people by one-time links. A new passkey can be added only from a signed-in session, so changing phones never locks anyone out. |
+| An attack can't run up a bill | Nothing is billed per request or per byte. One fixed-price server; the worst an attack can do is make the app unavailable. |
+| Practice both meaning and speech | Each card is reviewed in several modes, each with its own FSRS schedule: `meaning` (recognize the word), `speech` (say it aloud and get it scored, or pick the Korean word as a quiet alternative) and `listening` (hear it, no text). |
+| Korean only, for now | The code is not generalized to other languages. The language is one column in the data model, so the schema doesn't have to change if that ever happens. |
 
-## 2. Главные решения и почему
+## 2. Key decisions and why
 
-1. **Своё хранилище вместо Nibomo.** В наброске карточки жили в стороннем сервисе. Отказываемся: быстрое добавление и красивый интерфейс требуют своего экрана, а значит своей базы. Заодно исчезают чужой API-ключ, лимиты и риск, что сервис закроется. Интервальное повторение берём готовое — библиотека [ts-fsrs](https://github.com/open-spaced-repetition/ts-fsrs) (MIT).
-2. **TypeScript везде, кроме оценки произношения.** Клиент и основной бэкенд на TS. Python только в отдельном внутреннем сервисе оценки, потому что модели и g2p есть только там.
-3. **Один сервер с фиксированной ценой.** Hetzner Cloud за ~5–6 € в месяц (трафик в тарифе) или Oracle Always Free. Никакого serverless с оплатой за вызов, никакого автоскейлинга, никаких платных API без жёсткого потолка.
-4. **Сервис оценки не торчит наружу.** Python-сервис слушает только `127.0.0.1`, к нему ходит наш API после проверки авторизации и лимитов.
-5. **PWA, а не нативное приложение.** Нет Mac и аккаунта разработчика Apple. PWA ставится на домашний экран iPhone и работает офлайн для обычного повторения.
+1. **Own storage, not a third-party flashcard service.** Fast adding and a good interface need their own screens and therefore their own database. It also removes third-party API keys, quotas and the risk of the service shutting down. Spaced repetition comes from a library: [ts-fsrs](https://github.com/open-spaced-repetition/ts-fsrs) (MIT), with per-user weights fitted by fsrs-rs.
+2. **TypeScript everywhere except pronunciation scoring.** The client and the main backend are TypeScript. Python is used only in a separate internal scoring service, because the acoustic models, g2p and TTS live in that ecosystem.
+3. **One fixed-price server.** A small VPS with traffic included. No pay-per-call serverless, no autoscaling, no paid APIs without a hard cap.
+4. **The scorer is never exposed.** The Python service listens on `127.0.0.1` only; the API calls it after checking the session and the rate limits.
+5. **A PWA, not a native app.** No App Store account or Mac build machine is needed. The PWA installs to the home screen on iPhone and Android and as an app on desktop; a service worker caches the app shell for speed.
 
-## 3. Архитектура
+## 3. Architecture
 
 ```
-iPhone (PWA)                 Claude (claude.ai / app)
-     │  HTTPS                        │  HTTPS, MCP + OAuth
-     ▼                               ▼
-          Cloudflare (бесплатный план): TLS, DDoS, rate limit
-                          │  только IP Cloudflare
-                          ▼
-     ┌──────────── VPS с фиксированной ценой ────────────┐
-     │ Caddy → api (Node, TS)                             │
-     │          ├─ REST для PWA                           │
-     │          ├─ /mcp для Claude                        │
-     │          ├─ OAuth 2.1 для одного владельца         │
-     │          └─ SQLite (карточки, расписание, попытки) │
-     │                    │ 127.0.0.1                      │
-     │                    ▼                               │
-     │          scorer (Python, FastAPI): g2p + модель    │
-     └────────────────────────────────────────────────────┘
+Phone / desktop (PWA)            Claude (claude.ai, desktop, mobile)
+        │  HTTPS                          │  HTTPS, MCP + OAuth 2.1
+        ▼                                 ▼
+  ┌──────────────────────── fixed-price VPS ─────────────────────────┐
+  │ Caddy :443 (Let's Encrypt)                                       │
+  │   ├─ static PWA (apps/web/dist)                                  │
+  │   └─ /api, /mcp, /oauth, /.well-known → api 127.0.0.1:8787       │
+  │                                                                  │
+  │ api (Node 22, Hono)                                              │
+  │   ├─ REST for the PWA                                            │
+  │   ├─ /mcp for Claude, OAuth 2.1 with dynamic client registration │
+  │   ├─ background workers: card audio, FSRS optimizer              │
+  │   └─ SQLite (cards, schedules, review log, attempts, audio)      │
+  │                 │ 127.0.0.1:8788                                 │
+  │                 ▼                                                │
+  │ scorer (Python, FastAPI): g2p, wav2vec2 phone model, TTS         │
+  └──────────────────────────────────────────────────────────────────┘
 ```
 
-Статика PWA раздаётся с того же сервера через Caddy или с Cloudflare Pages (бесплатно, без оплаты за запросы). Один домен, чтобы не было CORS и cookie работали просто.
+Everything is served from one domain, so there is no CORS and cookies stay simple. The three parts run as Docker containers on the host network (see [`deploy/docker-compose.yml`](../deploy/docker-compose.yml)).
 
-## 4. Компоненты
+## 4. Components
 
-### 4.1. `apps/web` — PWA
+### 4.1. `apps/web`: the PWA
 
-- React + Vite + TypeScript, роутинг на TanStack Router или React Router, данные через TanStack Query.
-- Офлайн: service worker кэширует приложение и очередь карточек на день. Оценки, сделанные офлайн, копятся в IndexedDB и отправляются при появлении сети. У каждой оценки свой UUID, поэтому повторная отправка безопасна.
-- Запись звука через Web Audio (AudioWorklet) в PCM 16 кГц моно, WAV собирается на клиенте. MediaRecorder не используем из-за бага iOS в PWA с домашнего экрана и формата `audio/mp4` в Safari.
-- Эталонная озвучка: MP3 от серверного TTS (Supertonic 3 в `services/scorer`), сделанный один раз на карточку; пока его нет, `speechSynthesis` с голосом `ko-KR`.
+- React + Vite + TypeScript, a small hand-written router (`src/lib/router.ts`), no state library.
+- Offline tolerance: every rating goes through a local queue in `localStorage` and is sent in batches. Each rating carries its own UUID, so resending is safe. The service worker caches the app shell for speed; it is not a full offline mode.
+- Audio is recorded through Web Audio (an AudioWorklet) as 16 kHz mono PCM, and the WAV is assembled on the client. MediaRecorder is avoided because of an iOS bug in home-screen PWAs and Safari's `audio/mp4` output.
+- Reference audio: an MP3 made once per card by the server-side TTS (Supertonic 3 in `services/scorer`); until it exists, the browser's `speechSynthesis` with a `ko-KR` voice.
+- In development, when the API isn't running, the client falls back to a `localStorage` mock (`src/lib/mock.ts`).
 
-Экраны:
+Main screens:
 
-| Экран | Что на нём |
+| Screen | What it does |
 |---|---|
-| Сегодня | Сколько карточек к повторению в каждом режиме, кнопки «Повторить» и «Произношение», быстрое «+» |
-| Повторение | Вопрос → «Показать» → ответ с произношением и примером → Again / Hard / Good / Easy. Жесты: свайп вправо — Good, влево — Again |
-| Произношение | Перевод → вспомнить → «Послушать» → «Записать» → слоги подсвечены ok / weak / wrong → оценка предложена по баллу, выбираешь ты |
-| Добавить | Корейский + перевод, остальное подтягивается само. Переключатель «пакетно»: строки вида `한국어 — перевод` |
-| Карточки | Поиск, фильтр по тегам, правка, «не готовые к проверке» |
-| Статистика | Серия дней, прогноз нагрузки, слабые звуки |
+| Today | What is due in each mode, new words waiting to be learned, a quick "+" |
+| Learn | Teaches new words a few at a time on a short ladder of tasks before they enter reviews |
+| Review | Prompt → reveal → answer with pronunciation and examples → Again / Hard / Good / Easy |
+| Speech | Translation → recall → listen → record → syllables marked ok / weak / wrong → a suggested rating; the learner picks the final one |
+| Add | Korean + translation, the rest is filled in. Bulk mode: lines like `한국어 — translation` |
+| Cards | Search, tag and root filters, editing, cards not ready for speech |
+| Practice | Shadowing of example sentences with an intonation curve, and minimal-pair sound drills |
+| Stats | Streak, workload forecast, retention, weakest sounds |
 
-### 4.2. `apps/api` — основной бэкенд
+### 4.2. `apps/api`: the main backend
 
-- Node 22, [Hono](https://hono.dev) (лёгкий, на TS), SQLite через `better-sqlite3`, схемы и миграции на Drizzle, валидация zod.
-- REST для PWA, MCP-эндпоинт для Claude, OAuth-сервер для одного владельца.
-- Расписание повторений считает ts-fsrs на сервере, клиент присылает только оценку.
-- Нормализация при добавлении: обрезка пробелов, проверка «только хангыль и пунктуация» в поле `korean`, поиск дублей по нормализованному корейскому.
-- Автозаполнение: произношение хангылем (g2p) и романизация запрашиваются у scorer и кэшируются.
+- Node 22, [Hono](https://hono.dev), SQLite through `better-sqlite3`, schema and migrations with Drizzle, validation with zod.
+- REST for the PWA, an MCP endpoint for Claude, and an OAuth 2.1 server whose grants are tied to the person who approved them.
+- The schedule is computed on the server by ts-fsrs; the client sends only the rating.
+- Normalization on add: whitespace is trimmed, `korean` is checked to be Hangul and punctuation only, duplicates are found by the normalized Korean text.
+- Autofill: pronunciation in Hangul (g2p) and romanization come from the scorer.
+- Background workers: one asks the scorer for card audio and stores it in SQLite (so it is part of every backup); the other refits FSRS weights from each user's own review history.
 
-### 4.3. `services/scorer` — оценка произношения
+### 4.3. `services/scorer`: pronunciation scoring
 
-Конвейер на одну запись (из наброска, без изменений по сути):
+The pipeline for one recording:
 
-1. Декодирование WAV, обрезка тишины с запасом ~200 мс по краям, нормализация громкости.
-2. Распознавание фонем моделью [slplab/wav2vec2-xls-r-300m_phone-mfa_korean](https://huggingface.co/slplab/wav2vec2-xls-r-300m_phone-mfa_korean) (Apache-2.0).
-3. Эталон: текст → [g2pkiwi](https://github.com/Bing-su/g2pkiwi) → произносимая форма → таблица чамо → MFA-IPA.
-4. Выравнивание по Левенштейну с весами: близкие замены (ㄱ/ㅋ/ㄲ, ㅓ/ㅗ) дешевле далёких. Классы эквивалентности для нормы сеульской речи (ㅐ = ㅔ, ㅚ ≈ [we]) не штрафуются.
-5. Уверенность по звукам (GOP по выходам CTC).
-6. Ответ: балл 0–100, слоги со статусом ok / weak / wrong, для ошибок — что ожидалось и что услышано.
+1. Decode the WAV, trim silence with ~200 ms of margin, normalize loudness.
+2. Recognize phones with [slplab/wav2vec2-xls-r-300m_phone-mfa_korean](https://huggingface.co/slplab/wav2vec2-xls-r-300m_phone-mfa_korean) (Apache-2.0).
+3. Reference: text → [g2pkiwi](https://github.com/Bing-su/g2pkiwi) → spoken form → jamo → MFA-style IPA.
+4. Weighted Levenshtein alignment: close substitutions (ㄱ/ㅋ/ㄲ, ㅓ/ㅗ) cost less than distant ones. Equivalences of standard Seoul speech (ㅐ = ㅔ, ㅚ ≈ [we]) are not penalized.
+5. Per-sound confidence (goodness of pronunciation from the CTC outputs).
+6. Result: a score of 0–100, syllables marked ok / weak / wrong, and for each error what was expected and what was heard.
 
-Запасной план, если модель не справится с речью иностранца: модель на чамо (Kkonjeong/wav2vec2-base-korean) или дообучение на своих записях. Если на CPU медленно — экспорт в ONNX с int8.
+Fallbacks if the model struggles with non-native speech: a jamo-level model (Kkonjeong/wav2vec2-base-korean) or fine-tuning on one's own recordings. If CPU inference is too slow: ONNX export with int8 quantization.
 
-## 5. Модель данных (SQLite)
+The same service also synthesizes reference audio with Supertonic 3 (`POST /tts`).
 
-У карточки один набор полей, а повторяется она в двух режимах.
+## 5. Data model (SQLite)
 
-| Таблица | Поля | Назначение |
-|---|---|---|
-| `cards` | id, korean, meaning, pronunciation, romanization, example_ko, example_meaning, notes, tags (json), speakable, source (`app` / `claude` / `bulk`), created_at, updated_at | Сама карточка |
-| `review_states` | card_id, mode (`meaning` / `speech`), состояние FSRS (due, stability, difficulty, reps, lapses, state, last_review) | Расписание отдельно для каждого режима |
-| `review_log` | id (UUID от клиента), card_id, mode, rating, reviewed_at, elapsed_ms | История оценок, идемпотентность |
-| `attempts` | id, card_id, created_at, score, target_phones, heard_phones, errors_json, audio_path | Попытки произношения |
-| `phone_stats` | phone, attempts, errors, last_seen | Слабые звуки |
-| `g2p_cache` | text, pron_hangul, romanization, phones | Кэш g2p |
-| `auth_*` | passkey'и владельца, сессии, OAuth-клиенты и токены | Доступ |
+A card has one set of fields and is reviewed in several modes. The authoritative schema is [`apps/api/src/db/schema.ts`](../apps/api/src/db/schema.ts); the main tables:
 
-Правила:
-- `korean` — только хангыль, пробелы и пунктуация. Иначе карточка сохраняется, но помечается «не готова к проверке» и не попадает в режим произношения.
-- `speakable = false` по умолчанию для длинных фраз (> 12 слогов) — их можно включить вручную.
-- Ночной бэкап одного файла SQLite (Litestream в объектное хранилище с фиксированной ценой или простой `sqlite3 .backup` + копия). Экспорт в JSON из интерфейса.
-
-## 6. Claude: MCP-сервер
-
-Эндпоинт `https://<домен>/mcp`, транспорт Streamable HTTP, официальный `@modelcontextprotocol/sdk`.
-
-Инструменты:
-
-| Инструмент | Что делает |
+| Table | Purpose |
 |---|---|
-| `add_cards` | Пакет до 50 карточек. Возвращает созданные, дубли и отклонённые с причиной |
-| `add_phrases` | Пакет до 50 фраз: вместо примеров разбор на части (`parts`) и вежливость (`register`) |
-| `find_cards` | Поиск по корейскому, переводу, тегу |
-| `update_card` | Правка полей одной карточки |
-| `get_weak_sounds` | Звуки с наибольшей долей ошибок, чтобы Claude подбирал слова под них |
-| `get_stats` | Сколько карточек, сколько к повторению, серия |
+| `users`, `invites` | The owner (id 1) and invited members; one-time invite links |
+| `cards` | The card: Korean, translation, pronunciation, romanization, up to three examples, notes, tags, Sino-Korean roots, `kind` (word or phrase), phrase parts and register, source (`app` / `claude` / `bulk`), learning state |
+| `similar_words` | Pairs of the user's words that are easy to confuse, with a note on how they differ |
+| `review_states` | FSRS state per card and mode (`meaning` / `speech` / `listening`) |
+| `review_log` | Every rating, keyed by the client's UUID (idempotent resends) |
+| `fsrs_settings` | Per-user, per-mode desired retention and fitted weights |
+| `attempts`, `phone_stats` | Scored pronunciation attempts (no audio is kept) and per-sound error counts |
+| `card_audio`, `speech_audio`, `voice_audio` | Generated MP3s for cards, example sentences and extra voices |
+| `sound_drills` | Minimal-pair drills for weak sounds |
+| `auth_*`, `oauth_*` | Passkeys, challenges, sessions, OAuth clients, codes and grants |
 
-Удаления через MCP нет: удаляешь только сам в приложении.
+Rules:
+- `korean` holds only Hangul, spaces and punctuation. Anything else is saved but marked not ready for speech and never enters the speech queue.
+- Long phrases are not `speakable` by default; they can be switched on by hand.
+- Backups are nightly copies of the single SQLite file (`sqlite3 .backup`, see [`deploy/backup.sh`](../deploy/backup.sh)). The app can also export everything as JSON.
 
-Доступ: Claude поддерживает удалённые MCP-серверы с OAuth и Dynamic Client Registration ([справка Anthropic](https://support.anthropic.com/en/articles/11503834-building-custom-connectors-via-remote-mcp-servers)). Поднимаем минимальный OAuth 2.1 сервер на одного владельца: Claude регистрируется как клиент, открывает страницу согласия, ты подтверждаешь вход passkey'ем, Claude получает токен. Токены короткие с refresh, их можно отозвать на экране настроек. Число регистраций клиентов ограничено, чтобы DCR нельзя было использовать для засорения базы. Проверяем на этапе 0, потому что есть [сообщения](https://github.com/anthropics/claude-ai-mcp/issues/697) о капризах подключения.
+## 6. Claude: the MCP server
 
-## 7. Безопасность и защита бюджета
+The endpoint is `https://<your-domain>/mcp`, Streamable HTTP transport, built on the official `@modelcontextprotocol/sdk`.
 
-Принцип: **платим фиксированную сумму, что бы ни происходило**. Тогда атака может только уронить сервис, но не выставить счёт.
+Tools:
 
-Деньги:
-- VPS с фиксированной месячной ценой и включённым трафиком. Без платных дополнений, которые тарифицируются по использованию.
-- Cloudflare только на бесплатном плане: там нет оплаты за запросы.
-- Никаких платных API (облачный TTS, распознавание речи, LLM) без жёсткого лимита на стороне провайдера. Сейчас их нет совсем.
-- Оповещение о бюджете в панели хостинга на всякий случай.
+| Tool | What it does |
+|---|---|
+| `add_cards` | Up to 50 cards at once. Returns what was created, duplicates, and rejections with reasons |
+| `add_phrases` | Up to 50 set phrases: instead of examples, a breakdown into parts and a politeness register |
+| `find_cards` | Search by Korean, translation or tag |
+| `update_card` | Edit the fields of one card |
+| `set_roots` | Fill in Sino-Korean roots (hanja) of older cards |
+| `link_similar` | Link or unlink two easily confused words, with a note |
+| `get_weak_sounds` | Sounds with the highest error rate, so Claude can pick words that train them |
+| `get_leeches` | Cards forgotten again and again, for Claude to rework |
+| `get_stats` | Card counts, what is due, the streak |
+| `add_sound_drills`, `list_sound_drills` | Minimal-pair drills for weak sounds |
 
-Сеть:
-- Домен за Cloudflare в режиме прокси. Firewall на сервере (Hetzner Cloud Firewall + ufw) пускает 80/443 только с IP Cloudflare, SSH — только по ключу и только с твоих адресов или через Tailscale.
-- Правило rate limit в Cloudflare на `/api/score` и `/mcp`, плюс правило WAF, блокирующее всё, кроме нужных путей.
+There is no delete over MCP: cards are deleted only in the app.
 
-Приложение:
-- Все эндпоинты, кроме входа и OAuth-метаданных, требуют сессию или токен.
-- Сессия — httpOnly, Secure, SameSite=Strict cookie, CSRF-токен на изменяющих запросах.
-- Вход только passkey. Первый ключ привязывается одноразовым кодом с сервера при первой настройке. Каждый следующий (например, для нового телефона) — только из уже открытой сессии. Без сессии новый ключ не зарегистрировать.
-- Лимиты в самом API (на случай обхода Cloudflare): вход 5 попыток в минуту, оценка 20 в минуту, MCP 60 в минуту.
-- Оценка: запись не длиннее 10 с и 1 МБ, очередь с одной задачей за раз, таймаут 15 с. Это защищает CPU, а значит и доступность.
-- Ограничение размера тела запроса на уровне Caddy.
-- Хранятся только последние 50 записей голоса.
-- Зависимости обновляет Dependabot, контейнеры запускаются не от root.
+Access: Claude supports remote MCP servers with OAuth and Dynamic Client Registration ([Anthropic's guide](https://support.anthropic.com/en/articles/11503834-building-custom-connectors-via-remote-mcp-servers)). The API runs a minimal OAuth 2.1 server: Claude registers as a client, opens the consent page, the user confirms with a passkey, and Claude gets a token. Tokens are short-lived with refresh and can be revoked. Client registrations are capped so dynamic registration can't be used to fill the database. Allowed redirect URIs default to Claude's callbacks and can be changed with `MCP_REDIRECT_URIS`; loopback callbacks on any port (RFC 8252) are accepted too, for command-line clients like Claude Code and Codex, unless `MCP_ALLOW_LOOPBACK=0`. PKCE is required for every client.
 
-## 8. Дизайн
+## 7. Security and cost control
 
-- Только тёмная тема: фон почти чёрный с лёгким синим оттенком, поверхности на 4–8 % светлее, один акцентный цвет. Статусы произношения: ok — зелёный, weak — янтарный, wrong — красный, с проверкой контраста WCAG AA.
-- Шрифт [Pretendard](https://github.com/orioncactus/pretendard) (OFL): хорошо выглядит и для хангыля, и для кириллицы.
-- Корейское слово — самый крупный элемент на карточке. Произношение и перевод вторичны.
-- Зоны нажатия от 44 px, основные действия в нижней трети экрана под большой палец, учитываем safe area iPhone.
-- Анимации короткие (150–250 мс) и отключаются при `prefers-reduced-motion`.
-- Перед версткой экранов — макеты главных экранов, согласуем их с тобой.
+Principle: **the server costs a fixed amount whatever happens.** An attack can take the service down, but it can't produce a bill.
 
-## 9. Этапы
+Cost:
+- A VPS with a fixed monthly price and traffic included, no usage-billed add-ons.
+- No paid APIs (cloud TTS, speech recognition, LLMs). Everything runs on the server's CPU.
 
-**Этап 0. Проверка рисков (2–3 вечера).** Ничего не строим, пока не ответим на три вопроса.
-- Запись в PWA на iPhone: тестовая страница с AudioWorklet, добавить на домашний экран, 10 записей с закрытием и повторным открытием.
-- Модель: скрипт на 30–50 своих записях и на TTS-эталонах. Критерий: эталоны дают ≥ 90, намеренно испорченные звуки находятся в большинстве случаев. Замер скорости на CPU.
-- MCP: минимальный сервер с OAuth на тестовом домене, подключение из Claude, один вызов `add_cards`.
+Network:
+- Only Caddy (80 and 443) and SSH (keys only) are open; `ufw` closes the rest. The API and the scorer listen on `127.0.0.1`.
+- Caddy adds a secret header (`x-kquiz-origin`, value `ORIGIN_SECRET`) and the client IP (`cf-connecting-ip`) to every request it forwards. The API refuses requests without the secret, so nothing reaches it around Caddy, and clients can't spoof their IP to escape the limits. The header names come from an earlier setup with Cloudflare in front; if you put a CDN in front of Caddy, make sure the real client IP still reaches the API.
 
-**Этап 1. Основа (≈ 1 неделя).** API, SQLite и миграции, вход passkey, CRUD карточек, повторение с FSRS, деплой на сервер с Cloudflare и firewall. Деплой с первого же этапа, чтобы защита проверялась сразу.
+Application:
+- Every endpoint except sign-in and OAuth metadata needs a session or a token.
+- The session is an httpOnly, Secure, SameSite=Strict cookie; changing requests also need a CSRF token.
+- Passkeys only. The first one is bound with a one-time code printed to the server log; every later one only from a signed-in session.
+- Rate limits in the API itself, per client: sign-in 5 a minute, scoring 20 a minute, MCP 60 a minute, the rest of the API 300 a minute. Invited members also have daily quotas for cards and recordings.
+- Scoring: recordings of at most 10 s and 1 MB, one job at a time, 15 s timeout. This protects the CPU and so the availability.
+- Request bodies are capped in Caddy (2 MB) and in the API (1 MB).
+- Voice recordings are not stored; only the scores are.
+- Dependabot updates dependencies; containers run as non-root with read-only file systems and memory limits.
 
-**Этап 2. Приложение (≈ 1 неделя).** Дизайн-система, экраны «Сегодня», «Повторение», «Добавить», «Карточки», офлайн-очередь.
+## 8. Design
 
-**Этап 3. Claude.** MCP-сервер с инструментами из раздела 6, OAuth, постоянная инструкция для Claude о формате карточек.
+- Dark theme only: an almost black background with a slight blue tint, surfaces 4–8 % lighter, one accent color. Pronunciation statuses: ok green, weak amber, wrong red, all checked against WCAG AA contrast.
+- Typeface [Pretendard](https://github.com/orioncactus/pretendard) (OFL), which works well for Hangul, Latin and Cyrillic alike.
+- The Korean word is the largest element on a card; pronunciation and translation are secondary.
+- Touch targets of at least 44 px, primary actions in the bottom third of the screen within thumb reach, iPhone safe areas respected.
+- Short animations (150–250 ms), turned off under `prefers-reduced-motion`.
 
-**Этап 4. Произношение (≈ 1 неделя).** Сервис scorer, экран «Произношение», статистика слабых звуков.
+## 9. Validation (stage 0)
 
-**Этап 5. Развитие.** Серверный TTS, упражнения на слабые звуки, сравнение интонации (F0), подбор слов под слабые звуки через Claude.
+The project started by checking its three riskiest assumptions before building anything else:
 
-Итого реалистично 4–5 недель вечерами.
+- **Recording in a home-screen PWA on iPhone.** A test page with an AudioWorklet, added to the home screen, ten recordings with the app closed and reopened in between.
+- **The scoring model.** A script over 30–50 of one's own recordings and TTS references. Criterion: references score ≥ 90, deliberately mispronounced sounds are caught in most cases. CPU speed is measured too. The harness is still in the repository: `python -m app.eval` in `services/scorer` (see its README).
+- **MCP.** A minimal server with OAuth on a test domain, connected from Claude, with one `add_cards` call.
 
-## 10. Что нужно от тебя
+The rest was built in stages on top of that: the API with passkeys and FSRS, the PWA screens, the MCP server, pronunciation scoring, then server-side TTS, sound drills, intonation comparison and multi-user support.
 
-- Домен (подойдёт любой дешёвый, ~10 € в год) и бесплатный аккаунт Cloudflare.
-- Аккаунт Hetzner Cloud или Oracle Cloud.
-- 30–50 записей своих корейских слов для этапа 0.
+## 10. Open questions
 
-## 11. Открытые вопросы
-
-- Hetzner (стабильно, ~5–6 € в месяц) или Oracle Free (бесплатно, но инстанс могут отобрать)? По умолчанию план исходит из Hetzner.
-- Нужен ли режим «написать слово по-корейски» помимо «узнать» и «сказать»?
+- A "type the word in Korean" mode next to "recognize" and "say" exists in the app; whether it deserves its own FSRS schedule is still open.
+- The scorer thresholds in `services/scorer/app/scoring.py` were tuned on a small set of recordings and may need adjusting for other speakers.

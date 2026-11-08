@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-time preparation of a fresh Ubuntu 24.04 server. Run as root from /opt/kquiz/deploy.
-# DOCKER_MIRROR=https://... sets a Docker Hub mirror (Docker Hub may be unreachable from Russia).
+# DOCKER_MIRROR=https://... sets a Docker Hub mirror (for networks where Docker Hub is blocked or rate-limited).
 set -euo pipefail
 [ "$(id -u)" = 0 ] || { echo "Run as root" >&2; exit 1; }
 cd "$(dirname "$0")"

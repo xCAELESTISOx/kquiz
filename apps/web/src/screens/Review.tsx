@@ -27,10 +27,10 @@ import "../ui/learn.css";
 import "../ui/today.css";
 
 const RATINGS: { name: RatingName; label: string; key: string }[] = [
-  { name: "again", label: "Снова", key: "1" },
-  { name: "hard", label: "Трудно", key: "2" },
-  { name: "good", label: "Хорошо", key: "3" },
-  { name: "easy", label: "Легко", key: "4" },
+  { name: "again", label: "Again", key: "1" },
+  { name: "hard", label: "Hard", key: "2" },
+  { name: "good", label: "Good", key: "3" },
+  { name: "easy", label: "Easy", key: "4" },
 ];
 
 const SWIPE_THRESHOLD = 90;
@@ -44,7 +44,7 @@ type Swipe = RatingName | "back";
  * Mixed puts every mode in one session, saying aloud included: each card is shown and graded in its
  * item's own mode, and the speech schedule is gone through partly aloud, partly by picking from options.
  * What goes into the mix is picked first (MixSetup).
- * A session ("Учить" on Today, lib/session.ts) is mixed with every way at once, runs SESSION_TASKS answers and
+ * A session ("Learn" on Today, lib/session.ts) is mixed with every way at once, runs SESSION_TASKS answers and
  * brings new words from the pool in among the reviews, each step of learning them answered to the
  * server. The tasks missed in the stretch are then gone over again, after a screen that says so,
  * until each is right: practice only, since the miss already went to the schedule. Then a summary
@@ -58,9 +58,9 @@ export function ReviewScreen({
 }: {
   mode: Extract<QueueMode, "meaning" | "listening" | "mixed">;
   group?: GroupFilter;
-  /** Mixed: every way at once ("Повторить" for a group), without asking what to mix. */
+  /** Mixed: every way at once ("Review" for a group), without asking what to mix. */
   all?: boolean;
-  /** "Учить": a stretch of new words and reviews together, SESSION_TASKS answers at a time. */
+  /** "Learn": a stretch of new words and reviews together, SESSION_TASKS answers at a time. */
   session?: boolean;
 }) {
   const [queue, setQueue] = useState<QueueItem[]>();
@@ -118,12 +118,12 @@ export function ReviewScreen({
 
   useEffect(() => {
     document.title = session
-      ? "Учить · KQuiz"
+      ? "Learn · KQuiz"
       : mode === "mixed"
-        ? "Вперемешку · KQuiz"
+        ? "Mixed · KQuiz"
         : mode === "listening"
-          ? "На слух · KQuiz"
-          : "Повторение · KQuiz";
+          ? "Listening · KQuiz"
+          : "Review · KQuiz";
     if (mode === "mixed" && !kinds) return;
     const modes = kinds && serverModes(kinds);
     Promise.all([
@@ -217,7 +217,7 @@ export function ReviewScreen({
     [fixes],
   );
 
-  /** "Исправить": the mistakes of this stretch, in the order they were made. */
+  /** "Fix mistakes": the mistakes of this stretch, in the order they were made. */
   const startFixes = useCallback(() => {
     setLast(undefined);
     void releaseHeldReview();
@@ -253,7 +253,7 @@ export function ReviewScreen({
       }).catch((e: Error) => setError(e.message));
       setLast({ reviewId, queue, done, mistakes });
       // A forgotten card comes back at the end of this session, like Anki's relearning step, and
-      // is heard in a new voice then. In "Учить" that is the mistakes gone over after the stretch.
+      // is heard in a new voice then. In "Learn" that is the mistakes gone over after the stretch.
       if (rating === "again") forgetVoice(item);
       if (rating === "again" && session) setMistakes((m) => withMistake(m, item));
       const next = rating === "again" && !session ? [...queue.slice(1), queue[0]!] : queue.slice(1);
@@ -307,7 +307,7 @@ export function ReviewScreen({
    * goes to the server, which says where the word stands now: its next step comes back a few cards
    * on, or it has climbed its ladder (and the next word from the pool joins), or it is learned.
    */
-  // Saying aloud turned off for this session ("Не могу говорить" on a new word).
+  // Saying aloud turned off for this session ("Can't speak now" on a new word).
   const [silent, setSilent] = useState(false);
   const learned = useCallback(
     (ok: boolean, quiet = false) => {
@@ -318,7 +318,7 @@ export function ReviewScreen({
       setLast(undefined);
       void releaseHeldReview();
       setExit(undefined);
-      // "Не могу говорить": no more saying aloud in this session.
+      // "Can't speak now": no more saying aloud in this session.
       if (quiet) setSilent(true);
       const rest = quiet ? queue.slice(1).filter((i) => i.learn?.kind !== "aloud") : queue.slice(1);
       const word = item.card;
@@ -368,7 +368,7 @@ export function ReviewScreen({
     [queue, item, prepare, count, options, note, silent, fixing, fixed],
   );
 
-  /** "Ещё": as many answers again; the same queue goes on, or a fresh one if it ran out. */
+  /** "Another round": as many answers again; the same queue goes on, or a fresh one if it ran out. */
   const more = useCallback(() => {
     setGoal(answered + SESSION_TASKS);
     setOver(false);
@@ -430,7 +430,7 @@ export function ReviewScreen({
   return (
     <main className="review">
       <header className="review-top">
-        <a className="icon-button" href="#/" aria-label={mode === "listening" ? "Закончить тренировку на слух" : "Закончить повторение"}>
+        <a className="icon-button" href="#/" aria-label={mode === "listening" ? "End listening practice" : "End review"}>
           <CloseIcon />
         </a>
         <div className={`progress${fixing ? " is-fix" : ""}`} role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
@@ -442,8 +442,8 @@ export function ReviewScreen({
         <button
           type="button"
           className="icon-button review-back"
-          aria-label="Вернуть предыдущую карточку"
-          title="Вернуть предыдущую карточку"
+          aria-label="Bring back the previous card"
+          title="Bring back the previous card"
           disabled={!last}
           hidden={pause || fixing}
           onClick={back}
@@ -492,7 +492,7 @@ export function ReviewScreen({
           onDone={spoken}
           aloud={canRecord() && (
             <button type="button" className="link-button inline" onClick={() => setQuiet((s) => toggled(s, item))}>
-              записать голосом
+              record your voice
             </button>
           )}
         />
@@ -505,7 +505,7 @@ export function ReviewScreen({
           onRated={spoken}
           quiet={(options[item.card.id]?.length ?? 0) > 0 && (
             <button type="button" className="link-button inline" onClick={() => setQuiet((s) => toggled(s, item))}>
-              Выбрать из вариантов
+              Choose from options
             </button>
           )}
         />
@@ -544,7 +544,7 @@ export function ReviewScreen({
               <button
                 type="button"
                 className="listen-play"
-                aria-label="Послушать ещё раз"
+                aria-label="Listen again"
                 onClick={(e) => {
                   e.stopPropagation();
                   speak(heard(item));
@@ -594,14 +594,14 @@ export function ReviewScreen({
               </div>
             ) : (
               <p className="review-hint muted">
-                {listening ? "Послушай и вспомни перевод" : cloze ? "Вспомни перевод выделенного слова" : "Вспомни перевод"}
+                {listening ? "Listen and recall the translation" : cloze ? "Recall the translation of the highlighted word" : "Recall the translation"}
               </p>
             )}
             {canSpeak() && (!listening || revealed) && (
               <button
                 type="button"
                 className="icon-button speak-button"
-                aria-label="Послушать"
+                aria-label="Listen"
                 onClick={(e) => {
                   e.stopPropagation();
                   speak(heard(item));
@@ -624,11 +624,11 @@ export function ReviewScreen({
               </div>
             ) : (
               <button type="button" className="button primary" onClick={reveal}>
-                Показать ответ
+                Show answer
               </button>
             )}
             <p className="review-tip muted small">
-              {revealed ? "Свайп вправо: «Хорошо», влево: «Снова»" : last && "Свайп вправо: вернуть предыдущую"}
+              {revealed ? "Swipe right: Good, left: Again" : last && "Swipe right: bring back the previous one"}
             </p>
           </footer>
         </>
@@ -688,12 +688,12 @@ function FixIntro({ mistakes, onStart }: { mistakes: readonly QueueItem[]; onSta
         <p className="fix-intro-mark" aria-hidden="true">
           <span lang="ko">다시</span>
         </p>
-        <h1 className="fix-intro-title">Теперь исправим ошибки</h1>
+        <h1 className="fix-intro-title">Now let's fix the mistakes</h1>
         <p className="finished-text muted">
-          {n === 1 ? "В одном задании была ошибка." : `Ошибки были в ${n} ${inTasks(n)}.`} Пройдём {n === 1 ? "его" : "их"} ещё
-          раз, пока всё не будет верно. На расписание это не влияет: ошибка уже учтена.
+          {n === 1 ? "One task had a mistake." : `${n} tasks had mistakes.`} Let's go over {n === 1 ? "it" : "them"} again until
+          everything is right. This doesn't change the schedule: the mistake already counts.
         </p>
-        <ul className="fix-intro-words" aria-label="Слова с ошибками">
+        <ul className="fix-intro-words" aria-label="Words with mistakes">
           {words.map((w, i) => (
             <li key={w.id} lang="ko" style={{ "--i": i } as CSSProperties}>
               {w.korean}
@@ -701,17 +701,14 @@ function FixIntro({ mistakes, onStart }: { mistakes: readonly QueueItem[]; onSta
           ))}
         </ul>
         <button type="button" className="button primary" onClick={onStart} autoFocus>
-          Исправить
+          Fix mistakes
         </button>
       </div>
     </div>
   );
 }
 
-/** Prepositional after a number: в 2 заданиях, в 21 задании. */
-const inTasks = (n: number): string => (n % 10 === 1 && n % 100 !== 11 ? "задании" : "заданиях");
-
-/** The end of a session's stretch: where its words got to, in words, and "Ещё" for another. */
+/** The end of a session's stretch: where its words got to, in words, and "Another round" for another. */
 function SessionDone({
   met,
   climbed,
@@ -725,19 +722,19 @@ function SessionDone({
   const learning = [...met].filter((id) => !climbed.has(id) && !learned.has(id)).length;
   const rows = (
     [
-      ["learned", learned.size, "выучено", one(learned.size, "прошло проверку и теперь в повторении", "прошли проверку и теперь в повторении")],
+      ["learned", learned.size, "learned", one(learned.size, "passed the check and is now in reviews", "passed the check and are now in reviews")],
       [
         "climbed",
         waiting,
-        "почти выучено",
+        "almost learned",
         one(
           waiting,
-          "прошло все шаги. Через 3 часа спрошу ещё раз, и оно станет выученным",
-          "прошли все шаги. Через 3 часа спрошу ещё раз, и они станут выученными",
+          "went through every step. I'll ask again in 3 hours, and then it's learned",
+          "went through every step. I'll ask again in 3 hours, and then they're learned",
         ),
       ],
-      ["learning", learning, "в процессе", "в следующем подходе продолжите с того же шага"],
-      ["reviewed", reviewed.size, "повторено", "из уже выученных: освежили в памяти"],
+      ["learning", learning, "in progress", "the next round picks up from the same step"],
+      ["reviewed", reviewed.size, "reviewed", "already learned, now fresh again"],
     ] as const
   ).filter(([, n]) => n > 0);
   return (
@@ -763,17 +760,17 @@ function SessionDone({
         )}
         <p className="finished-text muted">
           {empty
-            ? "Сейчас учить и повторять больше нечего. Новые слова можно добавить в любой момент."
-            : "Можно остановиться или пройти ещё один подход."}
+            ? "Nothing more to learn or review right now. You can add new words any time."
+            : "You can stop here or do another round."}
         </p>
         <div className="session-done-actions">
           {!empty && (
             <button type="button" className="button primary" onClick={onMore}>
-              Ещё подход
+              Another round
             </button>
           )}
           <a className={`button${empty ? " primary" : ""}`} href="#/">
-            На главную
+            Home
           </a>
         </div>
       </div>
@@ -781,9 +778,9 @@ function SessionDone({
   );
 }
 
-/** Singular for one word, plural otherwise (21 is "one" too). */
+/** Singular for one word, plural otherwise. */
 function one(n: number, singular: string, plural: string): string {
-  return n % 10 === 1 && n % 100 !== 11 ? singular : plural;
+  return n === 1 ? singular : plural;
 }
 
 /** A phrase is built from blocks: from its translation, or from what is heard when typed by ear would be asked. */
@@ -916,7 +913,7 @@ function SwipeCard({
         }}
       >
         <span className="swipe-badge" style={{ opacity: leaving ? 1 : strength }} aria-hidden="true">
-          {tone === "good" ? "Хорошо" : tone === "again" ? "Снова" : "Назад"}
+          {tone === "good" ? "Good" : tone === "again" ? "Again" : "Back"}
         </span>
         {children}
       </div>
@@ -932,10 +929,10 @@ function Finished({ count }: { count: number }) {
           잘했어요!
         </p>
         <p className="finished-text">
-          {count ? `Повторено карточек: ${count}. На сегодня всё.` : "Сейчас повторять нечего."}
+          {count ? `Cards reviewed: ${count}. That's all for today.` : "Nothing to review right now."}
         </p>
         <a className="button primary" href="#/">
-          На главную
+          Home
         </a>
       </div>
     </div>

@@ -1,14 +1,15 @@
 import { useEffect, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { api, remembered } from "../lib/api";
+import { wordsWord } from "../lib/plural";
 import type { StatsOverview } from "../lib/types";
 import "./Stats.css";
 
 // Modes in a fixed order with fixed colors (checked for color blindness against --bg); a mode the
 // server adds later gets the next color and its own name until it is labelled here.
 const MODES: { mode: string; label: string }[] = [
-  { mode: "meaning", label: "Значение" },
-  { mode: "speech", label: "Произношение" },
-  { mode: "listening", label: "На слух" },
+  { mode: "meaning", label: "Meaning" },
+  { mode: "speech", label: "Pronunciation" },
+  { mode: "listening", label: "Listening" },
 ];
 const SERIES_COLORS = ["#6b7cf5", "#2fa992", "#b47d28"];
 
@@ -29,7 +30,7 @@ export function StatsScreen() {
   const [error, setError] = useState<string>();
 
   useEffect(() => {
-    document.title = "Статистика · KQuiz";
+    document.title = "Stats · KQuiz";
     api.statsOverview().then(setStats, (e: Error) => setError(e.message));
   }, []);
 
@@ -41,10 +42,10 @@ export function StatsScreen() {
         <h1 className="title" lang="ko">
           통계
         </h1>
-        <p className="subtitle">статистика</p>
+        <p className="subtitle">stats</p>
       </header>
 
-      {error && <p className="notice notice-error">Не получилось загрузить статистику: {error}. Обнови страницу.</p>}
+      {error && <p className="notice notice-error">Couldn't load stats: {error}. Reload the page.</p>}
       {!stats && !error && (
         <div className="stats-loading" aria-busy="true">
           <div className="skeleton" />
@@ -55,19 +56,19 @@ export function StatsScreen() {
       {stats && (
         <>
           <Streak stats={stats} />
-          <Section i={1} title="Прогноз по выученным словам">
+          <Section i={1} title="Forecast for learned words">
             <Forecast stats={stats} modes={modes} />
           </Section>
-          <Section i={2} title="Запоминание" aside="за 30 дней">
+          <Section i={2} title="Recall" aside="last 30 days">
             <Retention stats={stats} modes={modes} />
           </Section>
-          <Section i={3} title="Активность" aside={`${sum(stats.activity.map((a) => a.reviews))} за 17 недель`}>
+          <Section i={3} title="Activity" aside={`${sum(stats.activity.map((a) => a.reviews))} in 17 weeks`}>
             <Activity stats={stats} />
           </Section>
-          <Section i={4} title="Карточки" aside={`всего ${stats.cards.total}`}>
+          <Section i={4} title="Cards" aside={`${stats.cards.total} total`}>
             <CardStates stats={stats} modes={modes} />
           </Section>
-          <Section i={5} title="Произношение">
+          <Section i={5} title="Pronunciation">
             <SpeechTrend stats={stats} />
             <WeakSounds stats={stats} />
           </Section>
@@ -101,17 +102,17 @@ function Section({ title, aside, i, children }: { title: string; aside?: ReactNo
 function Streak({ stats }: { stats: StatsOverview }) {
   const { current, best, reviewedToday } = stats.streak;
   let note: string;
-  if (current === 0) note = best ? `Рекорд — ${best} ${days(best)}. Новая серия начнётся с первого повторения.` : "Серия начнётся с первого повторения.";
-  else if (!reviewedToday) note = "Сегодня ещё не было повторений: одно занятие сохранит серию.";
-  else if (current >= best) note = "Это твой рекорд.";
-  else note = `Рекорд — ${best} ${days(best)}.`;
+  if (current === 0) note = best ? `Best: ${best} ${days(best)}. A new streak starts with your next review.` : "Your streak starts with your first review.";
+  else if (!reviewedToday) note = "No reviews yet today: one session keeps the streak.";
+  else if (current >= best) note = "This is your best.";
+  else note = `Best: ${best} ${days(best)}.`;
   return (
-    <section className="streak" aria-label="Серия">
+    <section className="streak" aria-label="Streak">
       <p className="streak-number" data-alive={current === 0 ? undefined : reviewedToday ? "today" : "pending"}>
         {current}
       </p>
       <div>
-        <p className="streak-label">{days(current)} подряд</p>
+        <p className="streak-label">day streak</p>
         <p className="muted">{note}</p>
       </div>
     </section>
@@ -150,7 +151,7 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
   if (learned === 0) {
     return (
       <p className="stats-note forecast-empty">
-        Выученных слов пока нет. Прогноз появится, когда пройдёшь первые слова через «Учить».
+        No learned words yet. The forecast appears once your first words go through “Learn”.
       </p>
     );
   }
@@ -168,21 +169,21 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
         <div className="forecast-tile" data-kind="now">
           <span className="forecast-tile-value">{now}</span>
           <span className="forecast-tile-label">
-            {plural(now, "слово", "слова", "слов")} на сегодня
+            {wordsWord(now)} for today
           </span>
-          <span className="forecast-tile-hint">включая просроченные</span>
+          <span className="forecast-tile-hint">including overdue</span>
         </div>
         <div className="forecast-tile" data-kind="ahead">
           <span className="forecast-tile-value">{ahead}</span>
-          <span className="forecast-tile-label">{plural(ahead, "повторение", "повторения", "повторений")} впереди</span>
-          <span className="forecast-tile-hint">прогноз на {range === 30 ? "месяц" : "неделю"}</span>
+          <span className="forecast-tile-label">{plural(ahead, "review", "reviews")} ahead</span>
+          <span className="forecast-tile-hint">forecast for the next {range === 30 ? "month" : "week"}</span>
         </div>
       </div>
 
-      <div className="segmented segmented-small" role="tablist" aria-label="Период" data-mode={range === 30 ? "single" : "bulk"}>
+      <div className="segmented segmented-small" role="tablist" aria-label="Period" data-mode={range === 30 ? "single" : "bulk"}>
         {([30, 7] as const).map((r) => (
           <button key={r} role="tab" aria-selected={range === r} onClick={() => (setRange(r), select(undefined))}>
-            {r === 30 ? "Месяц" : "Неделя"}
+            {r === 30 ? "Month" : "Week"}
           </button>
         ))}
       </div>
@@ -192,7 +193,7 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
           <>
             <span className="readout-value">{totals[shown]}</span>
             <span className="readout-label">
-              {plural(totals[shown]!, "слово", "слова", "слов")} · {dayName(day.day, shown).toLowerCase()}
+              {wordsWord(totals[shown]!)} · {dayName(day.day, shown, true)}
             </span>
             {modes.length > 1 && totals[shown]! > 0 && (
               <span className="readout-parts readout-modes">
@@ -211,7 +212,7 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
         data-range={range}
         data-picking={selected !== undefined}
         role="img"
-        aria-label={`Слов к повторению по дням: ${items.map((f, i) => `${shortDate(f.day)} — ${totals[i]}`).join(", ")}`}
+        aria-label={`Words due by day: ${items.map((f, i) => `${shortDate(f.day)} — ${totals[i]}`).join(", ")}`}
         {...pick}
       >
         {items.map((f, i) => (
@@ -222,23 +223,23 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
       </div>
       <div className="bars-axis" data-range={range} aria-hidden="true">
         {items.map((f, i) => (
-          <span key={f.day}>{range === 7 ? weekday(f.day, i) : i % 7 === 0 && i < 28 ? (i === 0 ? "сег." : shortDate(f.day)) : ""}</span>
+          <span key={f.day}>{range === 7 ? weekday(f.day, i) : i % 7 === 0 && i < 28 ? (i === 0 ? "today" : shortDate(f.day)) : ""}</span>
         ))}
       </div>
 
       <div className="legend forecast-legend">
         <span>
           <i data-kind="now" />
-          сегодня
+          today
         </span>
         <span>
           <i data-kind="ahead" />
-          прогноз
+          forecast
         </span>
       </div>
       <p className="stats-note">
-        Выучено {learned} {plural(learned, "слово", "слова", "слов")}: только они и попадают в прогноз, новые слова — после «Учить».
-        {totals[peak]! > 0 ? ` Больше всего ${dayName(items[peak]!.day, peak).toLowerCase()}: ${totals[peak]} ${plural(totals[peak]!, "слово", "слова", "слов")}.` : ""}
+        You've learned {learned} {wordsWord(learned)}: only these go into the forecast, new words join after “Learn”.
+        {totals[peak]! > 0 ? ` Busiest day: ${dayName(items[peak]!.day, peak, true)}, ${totals[peak]} ${wordsWord(totals[peak]!)}.` : ""}
       </p>
     </>
   );
@@ -265,16 +266,16 @@ function Retention({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
             </div>
             <p className="stats-note">
               {enough
-                ? `Вспомнил ${r.recalled} из ${r.reviews}. ${pct >= target - 3 ? (pct > target + 5 ? "Выше цели: интервалы можно растянуть." : "Около цели FSRS.") : "Ниже цели: стоит повторять вовремя."}`
+                ? `Recalled ${r.recalled} of ${r.reviews}. ${pct >= target - 3 ? (pct > target + 5 ? "Above target: intervals could be longer." : "Close to the FSRS target.") : "Below target: try to review on time."}`
                 : r.reviews
-                  ? `Пока мало данных: ${r.reviews} из ${MIN_RETENTION_REVIEWS} повторений.`
-                  : "Появится после повторений в разные дни."}
+                  ? `Not enough data yet: ${r.reviews} of ${MIN_RETENTION_REVIEWS} reviews.`
+                  : "Shows up after reviews on several days."}
             </p>
           </li>
         );
       })}
       <li className="stats-note retention-target">
-        <i aria-hidden="true" /> цель FSRS{targets.size === 1 ? ` — ${[...targets][0]}%` : ", своя для каждого режима"}. Первые показы и шаги заучивания не считаются.
+        <i aria-hidden="true" /> FSRS target{targets.size === 1 ? `: ${[...targets][0]}%` : ", one per mode"}. First showings and learning steps don't count.
       </li>
     </ul>
   );
@@ -297,7 +298,7 @@ function Activity({ stats }: { stats: StatsOverview }) {
     const prev = col > 0 ? days[Math.max((col - 1) * 7 - pad, 0)] : undefined;
     const date = parseDay(first.day);
     if (prev && parseDay(prev.day).getMonth() === date.getMonth()) return null;
-    return col === 0 && date.getDate() > 20 ? null : new Intl.DateTimeFormat("ru-RU", { month: "short" }).format(date).replace(".", "");
+    return col === 0 && date.getDate() > 20 ? null : new Intl.DateTimeFormat("en-US", { month: "short" }).format(date);
   });
 
   return (
@@ -312,7 +313,7 @@ function Activity({ stats }: { stats: StatsOverview }) {
             <span key={i}>{m}</span>
           ))}
         </div>
-        <div className="heatmap-grid" role="img" aria-label={`Занимался ${active} из ${days.length} дней`}>
+        <div className="heatmap-grid" role="img" aria-label={`Practised on ${active} of ${days.length} days`}>
           {Array.from({ length: pad }, (_, i) => (
             <span key={`pad-${i}`} className="heatmap-cell" data-level="none" />
           ))}
@@ -329,24 +330,24 @@ function Activity({ stats }: { stats: StatsOverview }) {
         </div>
       </div>
       <div className="heatmap-legend" aria-hidden="true">
-        <span>меньше</span>
+        <span>less</span>
         {[0, 1, 2, 3, 4].map((l) => (
           <span key={l} className="heatmap-cell" data-level={l} />
         ))}
-        <span>больше</span>
+        <span>more</span>
       </div>
       <p className="stats-note">
-        Занимался {active} из {days.length} {daysGenitive(days.length)}.
+        Practised on {active} of {days.length} {plural(days.length, "day", "days")}.
       </p>
     </>
   );
 }
 
 const STATES = [
-  { key: "new", label: "Новые" },
-  { key: "learning", label: "Учу" },
-  { key: "young", label: "Повторяю" },
-  { key: "mature", label: "Выучены" },
+  { key: "new", label: "New" },
+  { key: "learning", label: "Learning" },
+  { key: "young", label: "Reviewing" },
+  { key: "mature", label: "Learned" },
 ] as const;
 
 function CardStates({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
@@ -380,7 +381,7 @@ function CardStates({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
           );
         })}
       </ul>
-      <p className="stats-note">Выучены — карточки с интервалом от трёх недель.</p>
+      <p className="stats-note">Learned: cards with an interval of three weeks or more.</p>
     </>
   );
 }
@@ -391,7 +392,7 @@ function SpeechTrend({ stats }: { stats: StatsOverview }) {
   const pick = usePointerPick(weeks.length, select);
   const lastWithData = weeks.map((w) => w.avgScore !== null).lastIndexOf(true);
   if (lastWithData < 0) {
-    return <p className="stats-note">Здесь появится средняя оценка по неделям, когда начнёшь тренировать произношение.</p>;
+    return <p className="stats-note">Your weekly average score will show here once you start practising pronunciation.</p>;
   }
   const shown = selected ?? lastWithData;
   const week = weeks[shown]!;
@@ -400,15 +401,15 @@ function SpeechTrend({ stats }: { stats: StatsOverview }) {
       <div className="readout" aria-live="polite">
         <span className="readout-value">{week.avgScore ?? "—"}</span>
         <span className="readout-label">
-          средняя оценка, {weekRange(week.start)}
-          {week.attempts ? ` · ${week.attempts} ${plural(week.attempts, "попытка", "попытки", "попыток")}` : ""}
+          average score, {weekRange(week.start)}
+          {week.attempts ? ` · ${week.attempts} ${plural(week.attempts, "attempt", "attempts")}` : ""}
         </span>
       </div>
       <div
         className="bars bars-score"
         data-picking={selected !== undefined}
         role="img"
-        aria-label={`Средняя оценка по неделям: ${weeks.map((w) => w.avgScore ?? "нет").join(", ")}`}
+        aria-label={`Average score by week: ${weeks.map((w) => w.avgScore ?? "none").join(", ")}`}
         {...pick}
       >
         {weeks.map((w, i) => (
@@ -421,7 +422,7 @@ function SpeechTrend({ stats }: { stats: StatsOverview }) {
       </div>
       <div className="bars-axis" aria-hidden="true">
         {weeks.map((w, i) => (
-          <span key={w.start}>{i === weeks.length - 1 ? "эта" : i % 2 === 1 ? shortDate(w.start) : ""}</span>
+          <span key={w.start}>{i === weeks.length - 1 ? "this" : i % 2 === 1 ? shortDate(w.start) : ""}</span>
         ))}
       </div>
     </>
@@ -433,7 +434,7 @@ function WeakSounds({ stats }: { stats: StatsOverview }) {
   if (!sounds.length) return null;
   return (
     <>
-      <h3 className="stats-subhead">Трудные звуки</h3>
+      <h3 className="stats-subhead">Hard sounds</h3>
       <ul className="sounds">
         {sounds.map((s) => {
           const rate = Math.round((s.errors / s.attempts) * 100);
@@ -446,7 +447,7 @@ function WeakSounds({ stats }: { stats: StatsOverview }) {
               <div className="sound-body">
                 <div className="retention-head">
                   <span>
-                    <b>{rate}%</b> <span className="muted">ошибок · [{s.phone}]</span>
+                    <b>{rate}%</b> <span className="muted">errors · [{s.phone}]</span>
                   </span>
                   {trend && (
                     <span className="trend" data-trend={trend.kind}>
@@ -459,7 +460,7 @@ function WeakSounds({ stats }: { stats: StatsOverview }) {
                   <span style={{ width: `${rate}%` }} />
                 </div>
                 <p className="stats-note">
-                  {s.errors} из {s.attempts}
+                  {s.errors} of {s.attempts}
                   {trend?.detail ? ` · ${trend.detail}` : ""}
                 </p>
               </div>
@@ -467,7 +468,7 @@ function WeakSounds({ stats }: { stats: StatsOverview }) {
           );
         })}
       </ul>
-      <p className="stats-note">Сравниваются последние две недели с двумя неделями до них.</p>
+      <p className="stats-note">Compares the last two weeks with the two weeks before.</p>
     </>
   );
 }
@@ -476,17 +477,17 @@ type Window = { attempts: number; errors: number };
 
 function soundTrend(recent: Window, previous: Window) {
   if (recent.attempts < MIN_TREND_ATTEMPTS) {
-    return { kind: "none" as const, label: "нет данных", detail: "за 2 недели почти не встречался" };
+    return { kind: "none" as const, label: "no data", detail: "hardly came up in 2 weeks" };
   }
   const now = recent.errors / recent.attempts;
   if (previous.attempts < MIN_TREND_ATTEMPTS) {
-    return { kind: "none" as const, label: "новый", detail: `за 2 недели ${Math.round(now * 100)}%` };
+    return { kind: "none" as const, label: "new", detail: `${Math.round(now * 100)}% in 2 weeks` };
   }
   const before = previous.errors / previous.attempts;
-  const detail = `было ${Math.round(before * 100)}%, стало ${Math.round(now * 100)}%`;
-  if (now <= before - 0.05) return { kind: "better" as const, label: "лучше", detail };
-  if (now >= before + 0.05) return { kind: "worse" as const, label: "хуже", detail };
-  return { kind: "same" as const, label: "так же", detail };
+  const detail = `was ${Math.round(before * 100)}%, now ${Math.round(now * 100)}%`;
+  if (now <= before - 0.05) return { kind: "better" as const, label: "better", detail };
+  if (now >= before + 0.05) return { kind: "worse" as const, label: "worse", detail };
+  return { kind: "same" as const, label: "same", detail };
 }
 
 function TrendArrow({ kind }: { kind: "better" | "worse" | "same" | "none" }) {
@@ -535,16 +536,11 @@ function usePointerPick(count: number, select: (i: number | undefined) => void) 
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
-function plural(n: number, one: string, few: string, many: string) {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return one;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
-  return many;
+function plural(n: number, one: string, many: string) {
+  return n === 1 ? one : many;
 }
 
-const days = (n: number) => plural(n, "день", "дня", "дней");
-const daysGenitive = (n: number) => plural(n, "дня", "дней", "дней");
+const days = (n: number) => plural(n, "day", "days");
 
 function parseDay(day: string): Date {
   const [y, m, d] = day.split("-").map(Number);
@@ -552,19 +548,21 @@ function parseDay(day: string): Date {
 }
 
 const shortDate = (day: string) =>
-  new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" }).format(parseDay(day)).replace(".", "");
+  new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short" }).format(parseDay(day));
 
 function weekday(day: string, offset: number) {
-  if (offset === 0) return "сег.";
-  return new Intl.DateTimeFormat("ru-RU", { weekday: "short" }).format(parseDay(day));
+  if (offset === 0) return "today";
+  return new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(parseDay(day));
 }
 
-/** "Сегодня", "Завтра", "Вчера" or "Пн, 27 окт", with `offset` days from today. */
-function dayName(day: string, offset: number) {
-  if (offset === 0) return "Сегодня";
-  if (offset === 1) return "Завтра";
-  if (offset === -1) return "Вчера";
-  const name = new Intl.DateTimeFormat("ru-RU", { weekday: "short" }).format(parseDay(day));
+/**
+ * "Today", "Tomorrow", "Yesterday" or "Mon, Oct 27", with `offset` days from today. `inline`
+ * lowercases the relative words for use inside a sentence.
+ */
+function dayName(day: string, offset: number, inline = false) {
+  const relative = offset === 0 ? "Today" : offset === 1 ? "Tomorrow" : offset === -1 ? "Yesterday" : undefined;
+  if (relative) return inline ? relative.toLowerCase() : relative;
+  const name = new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(parseDay(day));
   return `${name[0]!.toUpperCase()}${name.slice(1)}, ${shortDate(day)}`;
 }
 
@@ -572,6 +570,6 @@ function weekRange(start: string) {
   const from = parseDay(start);
   const to = new Date(from);
   to.setDate(to.getDate() + 6);
-  const fmt = (d: Date) => new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" }).format(d).replace(".", "");
+  const fmt = (d: Date) => new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short" }).format(d);
   return `${fmt(from)} – ${fmt(to)}`;
 }

@@ -63,7 +63,7 @@ describe("invites", () => {
     expect((await t.friend.request("/users/invites", { body: {} })).status).toBe(403);
     const list = await t.request("/users");
     expect(list.json.users.map((u: { name: string; role: string }) => [u.name, u.role])).toEqual([
-      ["Владелец", "owner"],
+      ["Owner", "owner"],
       ["Миша", "member"],
     ]);
   });

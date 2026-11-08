@@ -1,30 +1,45 @@
 # kquiz-scorer
 
-Внутренний сервис оценки произношения (docs/PLAN.md §4.3). Слушает только `127.0.0.1`, к нему ходит `apps/api` после авторизации и лимитов.
+Internal pronunciation scoring and TTS service (docs/PLAN.md §4.3). It listens on `127.0.0.1` only; `apps/api` calls it after checking the session and the rate limits.
 
-## Запуск
+## Running
 
 ```sh
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
-python -m nltk.downloader cmudict          # g2pkiwi читает словарь при импорте
-# модель (на сервере без GPU — torch с CPU-индекса):
+python -m nltk.downloader cmudict          # g2pkiwi reads the dictionary on import
+# the model (on a server without a GPU, torch from the CPU index):
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements-ml.txt
 uvicorn app.main:app --host 127.0.0.1 --port 8788
 ```
 
-Переменные: `SCORER_MODEL` (id на Hugging Face или локальный путь, по умолчанию `slplab/wav2vec2-xls-r-300m_phone-mfa_korean`), `SCORER_THREADS` (потоки torch, 2), `SCORER_TIMEOUT` (секунд на задачу, 15), `SCORER_LOAD_MODEL=0` — не грузить модель (работает только `/g2p`).
+Without the ML requirements, start it with `SCORER_LOAD_MODEL=0`: `/g2p` works, while `/score` answers 503 and `/tts` fails (it needs `supertonic` from `requirements-ml.txt`).
+
+## Environment
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SCORER_MODEL` | `slplab/wav2vec2-xls-r-300m_phone-mfa_korean` | Hugging Face model id or a local path |
+| `SCORER_THREADS` | torch's default (Docker Compose sets 2) | torch threads |
+| `SCORER_TIMEOUT` | `15` | Seconds per scoring job |
+| `SCORER_LOAD_MODEL` | `1` | `0` skips loading the scoring model: `/g2p` and `/tts` still work, `/score` answers 503 |
+| `TTS_VOICE` | `F1` | Default Supertonic voice: `F1`–`F5`, `M1`–`M5` |
+| `TTS_SPEED` | `0.7` | Speech rate (0.7 is the model's minimum) |
+| `TTS_STEPS` | `32` | Synthesis steps; more is slower and cleaner |
+| `TTS_TIMEOUT` | `60` | Seconds per TTS job |
+| `TTS_IDLE` | `300` | Seconds without TTS requests before the TTS model is unloaded |
 
 ## API
 
-| Запрос | Ответ |
+| Request | Response |
 |---|---|
 | `GET /health` | `{"ok": true, "model": true}` |
-| `GET /g2p?text=국물` | `{"text", "pronunciation": "궁물", "romanization": "gungmul", "phones": [{"syllable", "position", "ipa", "jamo"}]}` — для автозаполнения карточки |
-| `POST /score?text=국물`, тело — WAV | результат ниже |
+| `GET /g2p?text=국물` | `{"text", "pronunciation": "궁물", "romanization": "gungmul", "phones": [{"syllable", "position", "ipa", "jamo"}]}`, used to autofill a card |
+| `POST /score?text=국물`, body: WAV | the result below |
+| `POST /tts?text=…&voice=F1` | MP3 (`audio/mpeg`, header `X-TTS-Voice`); called by the API's background worker only |
 
-Ответ `/score`:
+`/score` response:
 
 ```json
 {
@@ -41,53 +56,53 @@ uvicorn app.main:app --host 127.0.0.1 --port 8788
 }
 ```
 
-`status`: `ok` / `weak` / `wrong`. `kind`: `substitution`, `deletion`, `insertion` (лишний звук, `position: "extra"`), `unclear` (звук тот, но модель не уверена).
+`status`: `ok` / `weak` / `wrong`. `kind`: `substitution`, `deletion`, `insertion` (an extra sound, `position: "extra"`), `unclear` (the right sound, but the model isn't confident).
 
-Ошибки: `422` — плохой текст или запись (не WAV, тишина, длиннее 10 с), `413` — тело больше 1 МБ, `503` — модель не загружена или уже ждут две задачи, `504` — задача не уложилась в 15 с. Задачи выполняются строго по одной.
+Errors: `422` bad text or recording (not WAV, silence, longer than 10 s), `413` body larger than 1 MB, `503` model not loaded or two jobs already waiting, `504` job didn't finish in 15 s. Jobs run strictly one at a time.
 
-Запись: WAV PCM, лучше 16 кГц моно 16 бит (так пишет PWA). Другие частоты и стерео принимаются и приводятся к 16 кГц моно.
+Recording: WAV PCM, ideally 16 kHz mono 16-bit (what the PWA records). Other sample rates and stereo are accepted and converted to 16 kHz mono.
 
-## Как считается
+## How the score is computed
 
-1. WAV → 16 кГц моно, обрезка тишины с запасом 200 мс, нормализация громкости.
-2. Модель wav2vec2 выдаёт вероятности своих меток по кадрам. Метки сводятся к нашему набору фонем (`app/phones.py`): аллофоны вроде звонкого [ɡ], нераскрытого [k̚] или [ɾ] для ㄹ не считаются ошибкой, ㅐ = ㅔ.
-3. Эталон: g2pkiwi даёт произносимую форму (국물 → 궁물), она раскладывается на фонемы по слогам.
-4. Услышанное выравнивается с эталоном взвешенным Левенштейном: ㄱ/ㅋ/ㄲ и ㅓ/ㅗ — близкие замены (weak), далёкие — wrong. Потеря скольжения (계 [ke]) и слабого ㅎ стоит дёшево.
-5. Принудительное CTC-выравнивание эталона даёт уверенность по каждому звуку; совпавший звук с низкой уверенностью — weak.
-6. Балл — среднее по слогам; слог с ошибкой ограничен сверху (weak ≤ 80, wrong ≤ 40), чтобы одна ошибка в коротком слове не давала «good».
+1. WAV → 16 kHz mono, silence trimmed with 200 ms of margin, loudness normalized.
+2. The wav2vec2 model gives per-frame probabilities of its labels. The labels are mapped onto our phone set (`app/phones.py`): allophones such as voiced [ɡ], unreleased [k̚] or [ɾ] for ㄹ are not errors, and ㅐ = ㅔ.
+3. Reference: g2pkiwi gives the spoken form (국물 → 궁물), which is split into phones syllable by syllable.
+4. What was heard is aligned with the reference by weighted Levenshtein: ㄱ/ㅋ/ㄲ and ㅓ/ㅗ are close substitutions (weak), distant ones are wrong. A lost glide (계 [ke]) and a weak ㅎ cost little.
+5. Forced CTC alignment of the reference gives a confidence for each sound; a matching sound with low confidence is weak.
+6. The score is the mean over syllables; a syllable with an error is capped (weak ≤ 80, wrong ≤ 40), so one error in a short word can't still earn "good".
 
-Пороги (`app/scoring.py`) подбираются на этапе 0.
+The thresholds (`app/scoring.py`) were tuned during stage 0 (docs/PLAN.md §9).
 
-## Этап 0: проверка на своих записях
+## Evaluating on your own recordings
 
 ```sh
-pip install -r requirements-ml.txt   # плюс torch, см. выше
-python -m app.eval vocab             # как метки модели легли на наши фонемы; код 1, если какой-то звук модель не умеет
-python -m app.eval one rec.wav 국물  # один файл, полный ответ
+pip install -r requirements-ml.txt   # plus torch, see above
+python -m app.eval vocab             # how the model's labels map onto our phones; exits 1 if the model lacks a sound
+python -m app.eval one rec.wav 국물  # one file, full response
 python -m app.eval run recordings/manifest.csv --json recordings/report.json
 ```
 
-Записи кладутся в `services/scorer/recordings/` (папка в `.gitignore`, голос в репозиторий не попадает). `manifest.csv` — как в `eval/manifest.example.csv`:
+Recordings go in `services/scorer/recordings/` (git-ignored, so no voice ends up in the repository). `manifest.csv` follows `eval/manifest.example.csv`:
 
-| Колонка | Что писать |
+| Column | What to put |
 |---|---|
-| `file` | путь от манифеста: `.wav` или `.m4a` из «Диктофона» (для m4a нужен `ffmpeg`) |
-| `text` | слово, которое сказано |
-| `kind` | `tts` или `native` — эталон, `mine` — сказано как умеешь, `broken` — нарочно испорчено |
-| `bad` | для `broken`: номера испорченных слогов с 1, через `;` |
+| `file` | path relative to the manifest: `.wav`, or `.m4a` from a phone's voice recorder (m4a needs `ffmpeg`) |
+| `text` | the word that was said |
+| `kind` | `tts` or `native` for references, `mine` for your own attempt, `broken` for a deliberately mispronounced one |
+| `bad` | for `broken`: the numbers of the mispronounced syllables, from 1, separated by `;` |
 
-Отчёт показывает: долю эталонов с баллом ≥ 90 (критерий плана), долю испорченных слогов, которые нашлись, сколько слогов помечено в обычных записях и скорость (p50/p95 и отношение ко времени речи).
+The report shows the share of references scoring ≥ 90 (the stage 0 criterion), the share of broken syllables that were caught, how many syllables were flagged in ordinary recordings, and the speed (p50/p95 and the ratio to speech duration).
 
-### Без своих записей
+### Without your own recordings
 
 ```sh
 python -m app.dataset commons recordings/commons --limit 60
 python -m app.eval run recordings/commons/manifest.csv
 ```
 
-Скачивает записи слов носителями с Wikimedia Commons (Lingua Libre, CC BY-SA, авторы в `CREDITS.tsv`). Каждая запись идёт в манифест дважды: как `native` с правильным текстом и как `broken` с текстом, который отличается ровно одним звуком (сказано 달, ожидается 딸). Изменения, которые правила произношения сводят на нет (학교 и так звучит как 학꾜), отбрасываются. Нужен доступ к `commons.wikimedia.org` и `upload.wikimedia.org`; Wikimedia ограничивает частоту запросов с общих облачных адресов.
+This downloads native speakers' word recordings from Wikimedia Commons (Lingua Libre, CC BY-SA, authors in `CREDITS.tsv`). Each recording goes into the manifest twice: as `native` with the correct text, and as `broken` with a text that differs by exactly one sound (달 said, 딸 expected). Changes that the pronunciation rules cancel out (학교 sounds like 학꾜 anyway) are dropped. It needs access to `commons.wikimedia.org` and `upload.wikimedia.org`; Wikimedia rate-limits requests from shared cloud addresses.
 
-Запасной источник — короткие фразы из тестовой части Zeroth Korean (CC BY 4.0, Hugging Face), нужны `pyarrow` и `ffmpeg`:
+A fallback source is short utterances from the test split of Zeroth Korean (CC BY 4.0, Hugging Face); it needs `pyarrow` and `ffmpeg`:
 
 ```sh
 pip install pyarrow
@@ -95,9 +110,9 @@ python -m app.dataset zeroth recordings/zeroth --limit 60
 python -m app.eval run recordings/zeroth/manifest.csv
 ```
 
-В отчёте `caught_vs_native` — доля испорченных слогов, которые помечены, хотя та же запись с правильным текстом этот слог не помечала.
+In the report, `caught_vs_native` is the share of broken syllables that were flagged although the same recording with the correct text did not flag that syllable.
 
-## Тесты
+## Tests
 
 ```sh
 pip install -r requirements.txt -r requirements-dev.txt
@@ -105,4 +120,4 @@ python -m nltk.downloader cmudict
 pytest && ruff check . && ruff format --check .
 ```
 
-Тесты не требуют torch: модель заменена подставной (`tests/fake.py`).
+The tests don't need torch: the model is replaced by a fake (`tests/fake.py`).

@@ -64,57 +64,57 @@ function root(ko: string, hanja: string, meaning: string) {
 }
 
 const SEED: NewCard[] = [
-  { korean: "안녕하세요", meaning: "здравствуйте", pronunciation: "안녕하세요", romanization: "annyeonghaseyo", examples: [
-      { ko: "선생님, 안녕하세요!", ru: "Здравствуйте, учитель!" },
-      { ko: "여러분, 안녕하세요.", ru: "Здравствуйте, все." },
-      { ko: "안녕하세요, 처음 뵙겠습니다.", ru: "Здравствуйте, приятно познакомиться." },
+  { korean: "안녕하세요", meaning: "hello", pronunciation: "안녕하세요", romanization: "annyeonghaseyo", examples: [
+      { ko: "선생님, 안녕하세요!", ru: "Hello, teacher!" },
+      { ko: "여러분, 안녕하세요.", ru: "Hello, everyone." },
+      { ko: "안녕하세요, 처음 뵙겠습니다.", ru: "Hello, nice to meet you." },
     ] },
-  { korean: "감사합니다", meaning: "спасибо", pronunciation: "감사함니다", romanization: "gamsahamnida" },
-  { korean: "물", meaning: "вода", romanization: "mul", examples: [{ ko: "물 좀 주세요.", ru: "Дайте, пожалуйста, воды." }] },
-  { korean: "괜찮아요", meaning: "всё в порядке", pronunciation: "괜차나요", romanization: "gwaenchanayo" },
-  { korean: "맛있다", meaning: "вкусный", pronunciation: "마싣따", romanization: "masitda", tags: ["еда"], roots: [] },
-  { korean: "학교", meaning: "школа", pronunciation: "학꾜", tags: ["учёба"], roots: [root("학", "學", "учёба"), root("교", "校", "школа")], examples: [
-      { ko: "학교에 가요.", ru: "Иду в школу." },
-      { ko: "우리 학교는 커요.", ru: "Наша школа большая." },
-      { ko: "학교 앞에서 만나요.", ru: "Встретимся перед школой." },
+  { korean: "감사합니다", meaning: "thank you", pronunciation: "감사함니다", romanization: "gamsahamnida" },
+  { korean: "물", meaning: "water", romanization: "mul", examples: [{ ko: "물 좀 주세요.", ru: "Some water, please." }] },
+  { korean: "괜찮아요", meaning: "it's okay", pronunciation: "괜차나요", romanization: "gwaenchanayo" },
+  { korean: "맛있다", meaning: "tasty", pronunciation: "마싣따", romanization: "masitda", tags: ["food"], roots: [] },
+  { korean: "학교", meaning: "school", pronunciation: "학꾜", tags: ["study"], roots: [root("학", "學", "study"), root("교", "校", "school")], examples: [
+      { ko: "학교에 가요.", ru: "I'm going to school." },
+      { ko: "우리 학교는 커요.", ru: "Our school is big." },
+      { ko: "학교 앞에서 만나요.", ru: "Let's meet in front of the school." },
     ] },
-  { korean: "학생", meaning: "студент, ученик", pronunciation: "학쌩", tags: ["учёба"], roots: [root("학", "學", "учёба"), root("생", "生", "жизнь, рождение")] },
-  { korean: "대학교", meaning: "университет", pronunciation: "대학꾜", tags: ["учёба"], roots: [root("대", "大", "большой"), root("학", "學", "учёба"), root("교", "校", "школа")] },
-  { korean: "선생님", meaning: "учитель", tags: ["учёба"], roots: [root("선", "先", "прежде"), root("생", "生", "жизнь, рождение")] },
-  { korean: "가다", meaning: "идти, ехать", tags: ["глаголы"], roots: [] },
-  { korean: "화장실", meaning: "туалет", roots: [root("화", "化", "превращение"), root("장", "粧", "наряд"), root("실", "室", "комната")] },
-  { korean: "어디", meaning: "где, куда", roots: [] },
-  { korean: "화장실이 어디예요?", meaning: "Где здесь туалет?", kind: "phrase", register: "polite", notes: "В кафе, в метро, в гостях.", parts: [
-      { ko: "화장실이", base: "화장실", meaning: "туалет (+이)" },
-      { ko: "어디예요", base: "어디", meaning: "где (+예요)" },
+  { korean: "학생", meaning: "student", pronunciation: "학쌩", tags: ["study"], roots: [root("학", "學", "study"), root("생", "生", "life, birth")] },
+  { korean: "대학교", meaning: "university", pronunciation: "대학꾜", tags: ["study"], roots: [root("대", "大", "big"), root("학", "學", "study"), root("교", "校", "school")] },
+  { korean: "선생님", meaning: "teacher", tags: ["study"], roots: [root("선", "先", "before"), root("생", "生", "life, birth")] },
+  { korean: "가다", meaning: "to go", tags: ["verbs"], roots: [] },
+  { korean: "화장실", meaning: "restroom", roots: [root("화", "化", "change"), root("장", "粧", "adorn"), root("실", "室", "room")] },
+  { korean: "어디", meaning: "where", roots: [] },
+  { korean: "화장실이 어디예요?", meaning: "Where is the restroom?", kind: "phrase", register: "polite", notes: "In a café, in the subway, at someone's home.", parts: [
+      { ko: "화장실이", base: "화장실", meaning: "restroom (+이)" },
+      { ko: "어디예요", base: "어디", meaning: "where (+예요)" },
     ] },
-  { korean: "안녕히 가세요", meaning: "До свидания (уходящему)", kind: "phrase", register: "polite", notes: "Говорит тот, кто остаётся. Уходящий отвечает 안녕히 계세요.", parts: [
-      { ko: "안녕히", meaning: "спокойно, благополучно" },
-      { ko: "가세요", base: "가다", meaning: "идите" },
+  { korean: "안녕히 가세요", meaning: "Goodbye (to someone leaving)", kind: "phrase", register: "polite", notes: "Said by the one who stays. The one leaving answers 안녕히 계세요.", parts: [
+      { ko: "안녕히", meaning: "peacefully, well" },
+      { ko: "가세요", base: "가다", meaning: "go (polite)" },
     ] },
-  { korean: "잘 먹겠습니다", meaning: "Приятного мне аппетита, спасибо за еду", kind: "phrase", register: "formal", notes: "Перед едой, особенно когда угощают.", parts: [
-      { ko: "잘", meaning: "хорошо" },
-      { ko: "먹겠습니다", base: "먹다", meaning: "буду есть" },
+  { korean: "잘 먹겠습니다", meaning: "Thank you for the meal (before eating)", kind: "phrase", register: "formal", notes: "Before a meal, especially when someone treats you.", parts: [
+      { ko: "잘", meaning: "well" },
+      { ko: "먹겠습니다", base: "먹다", meaning: "will eat" },
     ] },
-  { korean: "죄송합니다, 저는 아직 한국어를 배우고 있습니다", meaning: "Извините, я ещё только учу корейский", kind: "phrase", register: "formal", parts: [
-      { ko: "죄송합니다", base: "죄송하다", meaning: "извините" },
-      { ko: "저는", base: "저", meaning: "я (+는)" },
-      { ko: "아직", meaning: "ещё, пока" },
-      { ko: "한국어를", base: "한국어", meaning: "корейский язык (+를)" },
-      { ko: "배우고 있습니다", base: "배우다", meaning: "учу (сейчас)" },
+  { korean: "죄송합니다, 저는 아직 한국어를 배우고 있습니다", meaning: "Sorry, I'm still learning Korean", kind: "phrase", register: "formal", parts: [
+      { ko: "죄송합니다", base: "죄송하다", meaning: "sorry" },
+      { ko: "저는", base: "저", meaning: "I (+는)" },
+      { ko: "아직", meaning: "still, yet" },
+      { ko: "한국어를", base: "한국어", meaning: "Korean language (+를)" },
+      { ko: "배우고 있습니다", base: "배우다", meaning: "am learning (now)" },
     ] },
-  { korean: "어떻게 지내요?", meaning: "Как поживаешь?", kind: "phrase", register: "polite", parts: [
-      { ko: "어떻게", meaning: "как" },
-      { ko: "지내요", base: "지내다", meaning: "поживать" },
+  { korean: "어떻게 지내요?", meaning: "How are you doing?", kind: "phrase", register: "polite", parts: [
+      { ko: "어떻게", meaning: "how" },
+      { ko: "지내요", base: "지내다", meaning: "to get along" },
     ] },
 ];
 
 // As if Claude had just added them: they wait in the new-card queue.
 const SEED_QUEUED: NewCard[] = [
-  { korean: "지하철", meaning: "метро", tags: ["город"], roots: [root("지", "地", "земля"), root("하", "下", "низ"), root("철", "鐵", "железо")] },
-  { korean: "편의점", meaning: "круглосуточный магазин", pronunciation: "펴니점", tags: ["город"] },
-  { korean: "영수증", meaning: "чек", tags: ["покупки"] },
-  { korean: "계산하다", meaning: "расплачиваться, считать", tags: ["покупки", "глаголы"] },
+  { korean: "지하철", meaning: "subway", tags: ["city"], roots: [root("지", "地", "earth"), root("하", "下", "below"), root("철", "鐵", "iron")] },
+  { korean: "편의점", meaning: "convenience store", pronunciation: "펴니점", tags: ["city"] },
+  { korean: "영수증", meaning: "receipt", tags: ["shopping"] },
+  { korean: "계산하다", meaning: "to pay, to count", tags: ["shopping", "verbs"] },
 ];
 
 // A few of the server's grammar look-alikes (apps/api/src/phrases.ts), so the mock's wrong blocks look real.

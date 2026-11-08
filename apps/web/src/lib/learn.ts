@@ -2,7 +2,7 @@ import { shuffled } from "./choice";
 import { clozeFor, type Cloze } from "./cloze";
 import type { Card, ChoiceOption } from "./types";
 
-// "Учить" on a card: one new word taken from meeting it to producing it on its own. Each step asks
+// "Learn" on a card: one new word taken from meeting it to producing it on its own. Each step asks
 // for more recall than the one before: build it from its syllables, type it by ear, type it from the
 // translation, type it into a sentence, say it. A missed step comes back after the next one. Nothing
 // here is a review: no rating reaches the schedule, the review log or the stats.
@@ -56,7 +56,7 @@ export function learnSteps(card: Card, can: LearnAbilities): LearnStep[] {
   ];
 }
 
-/** "Закрепить": the typing steps again from memory, in a new order and through another example. */
+/** "Practice again": the typing steps again from memory, in a new order and through another example. */
 export function reinforceSteps(card: Card, can: LearnAbilities, pass: number): LearnStep[] {
   if (card.kind === "phrase") return shuffled([...(can.hear ? [step(card, "phrase-ear")] : []), step(card, "phrase")]);
   const cloze = exampleCloze(card, pass);
@@ -68,7 +68,7 @@ export function requeue<T>(rest: T[], missed: T, after = 1): T[] {
   return [...rest.slice(0, after), missed, ...rest.slice(after)];
 }
 
-/** How many words "Учить" takes at once; the rest of a group comes as the next portion. */
+/** How many words "Learn" takes at once; the rest of a group comes as the next portion. */
 export const GROUP_SIZE = 10;
 
 // How hard each step is: a group goes through all its words at one level before the next.
@@ -114,7 +114,7 @@ export function groupSteps(cards: Card[], can: (card: Card) => LearnAbilities, r
   return rounds.flat();
 }
 
-/** "Закрепить" for a group: each word's typing steps again, all in one shuffled round. */
+/** "Practice again" for a group: each word's typing steps again, all in one shuffled round. */
 export function groupReinforce(cards: Card[], can: (card: Card) => LearnAbilities, pass: number, random = Math.random): LearnStep[] {
   if (cards.length === 1) return reinforceSteps(cards[0]!, can(cards[0]!), pass);
   return apart(shuffled(cards.flatMap((card) => reinforceSteps(card, can(card), pass)), random));
