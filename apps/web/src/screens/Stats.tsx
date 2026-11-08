@@ -147,6 +147,7 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
   const max = Math.max(...totals, 1);
   const pick = usePointerPick(items.length, select);
   const learned = stats.learned ?? 0;
+  const learning = stats.learning ?? 0;
 
   if (learned === 0) {
     return (
@@ -175,8 +176,8 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
         </div>
         <div className="forecast-tile" data-kind="ahead">
           <span className="forecast-tile-value">{ahead}</span>
-          <span className="forecast-tile-label">{plural(ahead, "review", "reviews")} ahead</span>
-          <span className="forecast-tile-hint">forecast for the next {range === 30 ? "month" : "week"}</span>
+          <span className="forecast-tile-label">word {plural(ahead, "review", "reviews")} ahead</span>
+          <span className="forecast-tile-hint">the {range === 30 ? "month" : "week"} ahead, from tomorrow</span>
         </div>
       </div>
 
@@ -238,7 +239,8 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
         </span>
       </div>
       <p className="stats-note">
-        You've learned {learned} {wordsWord(learned)}: only these go into the forecast, new words join after “Learn”.
+        Counts the {learned} {wordsWord(learned)} you've learned; a word due in several modes counts once.
+        {learning > 0 ? ` ${learning} more ${learning === 1 ? "is" : "are"} still in “Learn” and join once learned.` : ""}
         {totals[peak]! > 0 ? ` Busiest day: ${dayName(items[peak]!.day, peak, true)}, ${totals[peak]} ${wordsWord(totals[peak]!)}.` : ""}
       </p>
     </>

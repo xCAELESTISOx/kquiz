@@ -84,11 +84,12 @@ describe("GET /stats", () => {
 
     expect(seoul.forecast).toHaveLength(FORECAST_DAYS);
     const meaningDue = seoul.forecast.reduce((n: number, f: { due: Record<string, number> }) => n + f.due.meaning, 0);
-    expect(meaningDue).toBe(1); // only the reviewed card; 물 is still new
+    // 물 went into reviews unreviewed (as a word just learned does): it is due too, overdue today.
+    expect(meaningDue).toBe(2);
     expect(seoul.forecast[0].due).toHaveProperty("speech");
-    // 국물 is due in two modes; 물 has not been learned yet.
-    expect(seoul.forecast.reduce((n: number, f: { words: number }) => n + f.words, 0)).toBeGreaterThanOrEqual(1);
-    expect(seoul.learned).toBe(1);
+    expect(seoul.forecast[0].words).toBeGreaterThanOrEqual(1);
+    expect(seoul.learned).toBe(2);
+    expect(seoul.learning).toBe(0);
 
     expect(seoul.retention.meaning).toEqual({ reviews: 2, recalled: 1 });
     expect(seoul.retention.speech).toEqual({ reviews: 0, recalled: 0 });
@@ -134,6 +135,7 @@ describe("MCP get_stats data", () => {
     await t.signIn();
     await t.request("/cards", { body: { korean: "물", meaning: "вода" } });
     const stats = await new SqliteCardStore(t.db, OWNER_ID).stats(t.clock.now);
-    expect(stats).toMatchObject({ cards: 1, dueNext7Days: { meaning: 0, speech: 0 }, retention30d: { meaning: null, speech: null } });
+    // In reviews but never reviewed, like a word just learned: its first review is in the week's load.
+    expect(stats).toMatchObject({ cards: 1, dueNext7Days: { meaning: 1, speech: 1 }, retention30d: { meaning: null, speech: null } });
   });
 });
