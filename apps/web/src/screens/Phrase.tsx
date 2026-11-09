@@ -2,6 +2,7 @@ import { shownPronunciation } from "../lib/korean";
 import { CardNotes } from "../ui/CardNotes";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { submitReview } from "../lib/api";
+import { logAnswer } from "../lib/sessionLog";
 import { useLeechIds } from "../lib/leeches";
 import { bank, buildRating, checkBuild, fallbackTiles, trailingPunctuation, type SlotState, type Tile } from "../lib/phrase";
 import { canSpeak, speak } from "../lib/speech";
@@ -67,6 +68,12 @@ export function PhraseCard({
       const correct = !gaveUp && slots.every((s) => s === "right");
       const elapsedMs = Math.round(performance.now() - startedAt.current);
       const rating = buildRating(correct, elapsedMs, set.blocks.length);
+      logAnswer({
+        given: picked.map((t) => t.text).join(" "),
+        expected: set.blocks.join(" "),
+        ok: correct,
+        ...(gaveUp ? { note: "gave up" } : {}),
+      });
       setResult({ slots: gaveUp ? set.blocks.map(() => "wrong") : slots, rating, gaveUp });
       if (canSpeak()) speak(card);
       if (practice) return;

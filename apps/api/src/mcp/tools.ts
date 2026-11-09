@@ -3,7 +3,7 @@ import { z } from "zod";
 import { CARD_KINDS, EXAMPLES_PER_CARD, MAX_PARTS, MAX_ROOTS, newCardSchema, normalizeKorean, phrasePartSchema, REGISTERS, rootSchema, type NewCard, type Root } from "../cards.js";
 import { MAX_DRILLS_PER_CALL, newDrillSchema } from "../practice.js";
 import { MAX_SIMILAR, similarNoteSchema } from "../similar.js";
-import type { CardStore, DrillStore, NewDrill, SharingStore, SimilarPair } from "./store.js";
+import type { CardStore, DrillStore, NewDrill, SessionLogStore, SharingStore, SimilarPair } from "./store.js";
 
 export const MAX_CARDS_PER_CALL = 50;
 
@@ -154,7 +154,7 @@ async function addAll<T extends { korean: string; similar?: { korean: string; no
   });
 }
 
-export function createMcpServer(store: CardStore, drills?: DrillStore, sharing?: SharingStore): McpServer {
+export function createMcpServer(store: CardStore, drills?: DrillStore, sharing?: SharingStore, logs?: SessionLogStore): McpServer {
   const server = new McpServer({ name: "kquiz", version: "0.1.0" }, { instructions });
 
   server.registerTool(
@@ -322,8 +322,42 @@ export function createMcpServer(store: CardStore, drills?: DrillStore, sharing?:
 
   if (drills) registerDrillTools(server, drills);
   if (sharing) registerSharingTools(server, sharing);
+  if (logs) registerLogTools(server, logs);
 
   return server;
+}
+
+// For looking into a problem the user saw in a session: the app logs every task it showed.
+function registerLogTools(server: McpServer, logs: SessionLogStore) {
+  server.registerTool(
+    "get_session_log",
+    {
+      title: "Get session log",
+      description:
+        'The log of one of the user\'s learning sessions in the app, for finding out what went wrong in it. The user gets a session\'s id by long-pressing the progress bar or the 잘했어요!/다 했어요 heading at the end (it is copied as "KQuiz session ABC234"); without an id, the latest session (back: 1 the one before it). tasks are in the order shown: n, at, phase (main, or fix for the mistakes gone over after the stretch), card {id, korean, meaning}, mode (the schedule: meaning, speech, listening), task (how it was asked: intro, choose, build, aloud, write, dictation for new words; recall, listen, choice, say, write, dictation, build for reviews; cloze when through an example), learn (step of a new word, or check), answers (what the user gave each try: given, expected, options, ok, score...), result (right, wrong, skipped), rating, ms (time on the task), server (where a new word stands after the answer). events: start, queue (the tasks planned, in order), back, switched (between saying aloud and picking), fix-intro, fix-start, summary, another-round, error, left.',
+      inputSchema: {
+        id: z.string().trim().max(40).optional().describe("The session id the user sent, e.g. ABC234"),
+        back: z.number().int().min(0).max(49).default(0).describe("Without id: 0 the latest session, 1 the one before…"),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ id, back }) => {
+      const code = id?.replace(/^.*session\s+/i, "").trim();
+      const log = code ? await logs.get(code) : await logs.recent(back);
+      return log ? json(log) : error(code ? `No session ${code}; list_session_logs shows the recent ones` : "No sessions logged yet");
+    },
+  );
+
+  server.registerTool(
+    "list_session_logs",
+    {
+      title: "List session logs",
+      description: "The user's recent learning sessions, newest first: id, when it started, the screen, how many tasks and mistakes. Read one with get_session_log.",
+      inputSchema: { limit: z.number().int().min(1).max(50).default(10) },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ limit }) => json({ sessions: await logs.list(limit) }),
+  );
 }
 
 // Only the owner's connector: the owner starts a friend's deck with copies of their own words.

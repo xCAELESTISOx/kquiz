@@ -440,3 +440,34 @@
     animation: none;
   }
 }
+
+/* Held for the session's id (SessionId.tsx): no text selection or iOS callout under the finger. */
+.progress-hold {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  min-height: var(--tap);
+}
+
+.press-hold,
+.progress-hold {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.session-id-text {
+  margin: 0;
+}
+
+.session-id-code {
+  margin: 4px 0;
+  text-align: center;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  user-select: all;
+  -webkit-user-select: all;
+}

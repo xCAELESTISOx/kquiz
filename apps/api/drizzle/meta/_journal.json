@@ -120,6 +120,13 @@
       "when": 1794120000000,
       "tag": "0016_pronunciation_brackets",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1794203388390,
+      "tag": "0017_session_logs",
+      "breakpoints": true
     }
   ]
 }
