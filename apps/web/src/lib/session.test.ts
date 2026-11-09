@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { afterFix, afterIntro, buildable, firstTasks, insertAfter, insertNext, interleave, learnTask, toFront, unfinished, withMistake } from "./session";
+import { afterFix, afterIntro, buildable, firstTasks, insertAfter, insertNext, interleave, learnTask, onward, toFront, unfinished, withMistake } from "./session";
 import type { Card, QueueItem } from "./types";
 
 const card = (id: number) => ({ id, korean: `단어${id}`, meaning: `слово ${id}` }) as Card;
@@ -103,5 +103,23 @@ describe("finishing words past the goal", () => {
   it("brings that step to the front", () => {
     expect(toFront(["a", "b", "c", "d"], 2)).toEqual(["c", "a", "b", "d"]);
     expect(toFront(["a", "b"], 0)).toEqual(["a", "b"]);
+  });
+});
+
+describe("the card shown after an answer", () => {
+  const listen = (id: number): QueueItem => ({ ...review(id), mode: "listening" });
+  it("is the head before the goal", () => {
+    const q = [listen(1), learnTask(card(2), 1, true)];
+    expect(onward(q, 14, 15, new Set([2])).shown).toBe(q[0]);
+  });
+  it("past the goal is the step of a word begun, brought to the front, not a review", () => {
+    const step = learnTask(card(2), 1, true);
+    const r = onward([listen(1), step], 16, 15, new Set([2]));
+    expect(r.shown).toBe(step);
+    expect(r.queue[0]).toBe(step);
+  });
+  it("is nothing once the stretch ends", () => {
+    expect(onward([listen(1)], 16, 15, new Set([2])).shown).toBeUndefined();
+    expect(onward([learnTask(card(2), 1, true)], 20, 15, new Set([2])).shown).toBeUndefined();
   });
 });
