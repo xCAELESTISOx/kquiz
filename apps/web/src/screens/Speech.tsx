@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { api, ApiError, submitReview } from "../lib/api";
+import { logAnswer } from "../lib/sessionLog";
 import { playOnce } from "../lib/audioSession";
 import { clozeFor } from "../lib/cloze";
 import { useLeechIds } from "../lib/leeches";
@@ -194,9 +195,18 @@ export function SpeechCard({
     setTake(URL.createObjectURL(new Blob([recorded.wav], { type: "audio/wav" })));
     setTakeWav(recorded.wav);
     try {
-      setResult(await api.score(card.id, recorded.wav, practice));
+      const scored = await api.score(card.id, recorded.wav, practice);
+      logAnswer({
+        given: `(said, ${recorded.seconds.toFixed(1)} s)`,
+        expected: card.korean,
+        score: scored.score,
+        heard: scored.syllables.map((s) => (s.status === "ok" ? s.text : `[${s.text}:${s.status}]`)).join(""),
+        note: `suggested ${scored.suggestedRating}`,
+      });
+      setResult(scored);
       setScoreFailed(undefined);
     } catch (e) {
+      logAnswer({ given: "(said)", note: `scoring failed: ${scoreError(e)}` });
       setResult(undefined);
       setScoreFailed(scoreError(e));
     }
@@ -241,6 +251,7 @@ export function SpeechCard({
   );
 
   const skip = useCallback(() => {
+    logAnswer({ given: "", expected: card.korean, note: "don't know" });
     setSkipped(true);
     setRevealed(true);
     if (canSpeak()) speak(card);

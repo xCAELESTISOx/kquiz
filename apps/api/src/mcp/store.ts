@@ -318,3 +318,11 @@ export class MemoryDrillStore implements DrillStore {
     return this.drills;
   }
 }
+
+/** Logs of the user's learning sessions, kept by the app (apps/api/src/sessionLogs.ts). */
+export interface SessionLogStore {
+  get(id: string): Promise<Record<string, unknown> | undefined>;
+  /** The newest first; `back` skips that many of the most recent. */
+  recent(back: number): Promise<Record<string, unknown> | undefined>;
+  list(limit: number): Promise<{ id: string; startedAt: string; screen: string; tasks: number; mistakes: number }[]>;
+}

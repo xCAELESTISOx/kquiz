@@ -1,6 +1,7 @@
 import { shownPronunciation } from "../lib/korean";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { api } from "../lib/api";
+import { logAnswer } from "../lib/sessionLog";
 import {
   buildTiles,
   GROUP_SIZE,
@@ -345,6 +346,11 @@ export function BuildCard({ card, options, onDone }: { card: Card; options: Choi
   useEffect(() => {
     if (full && canSpeak()) speak(card);
   }, [full, card]);
+
+  useEffect(() => {
+    if (full) logAnswer({ given: picked.map((t) => tiles[t]).join(""), expected: card.korean, options: tiles, ok: right });
+    // Once, as the last syllable goes in.
+  }, [full]);
 
   function tap(index: number) {
     if (full || picked.includes(index)) return;

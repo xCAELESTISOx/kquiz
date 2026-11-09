@@ -14,6 +14,7 @@ import { reviewRoutes } from "./routes/reviews.js";
 import { scoreRoutes } from "./routes/score.js";
 import { statsRoutes } from "./routes/stats.js";
 import { settingsRoutes } from "./routes/settings.js";
+import { sessionLogRoutes } from "./routes/sessionLogs.js";
 import { userRoutes } from "./routes/users.js";
 import { httpScorer, type Scorer } from "./scorer.js";
 import { requireCloudflare } from "./security/origin.js";
@@ -56,6 +57,7 @@ export function createApp({ db, config, setupCode, webauthn, scorer, now = () =>
   app.use("/export", requireSession(db, config.secureCookies, now));
   app.use("/practice/*", requireSession(db, config.secureCookies, now));
   app.use("/users/*", requireSession(db, config.secureCookies, now));
+  app.use("/session-logs/*", requireSession(db, config.secureCookies, now));
   app.route("/cards", cardRoutes(db, now, config.timeZone));
   app.route("/reviews", reviewRoutes(db, now, config.timeZone));
   app.route("/settings", settingsRoutes(db));
@@ -63,6 +65,7 @@ export function createApp({ db, config, setupCode, webauthn, scorer, now = () =>
   app.route("/stats", statsRoutes(db, now, config.timeZone));
   app.route("/practice", practiceRoutes(db, now));
   app.route("/users", userRoutes(db, config, now));
+  app.route("/session-logs", sessionLogRoutes(db, now));
   app.route("/score", scoreRoutes(db, scorer ?? httpScorer(config.scorerUrl), now));
 
   app.notFound((c) => c.json({ error: "not_found" }, 404));

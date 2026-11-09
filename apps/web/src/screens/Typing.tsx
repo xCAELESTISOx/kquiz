@@ -5,6 +5,7 @@ import { useLeechIds } from "../lib/leeches";
 import { canSpeak, speak } from "../lib/speech";
 import { afterNudge, similarAnswer } from "../lib/similar";
 import { heard } from "../lib/voices";
+import { logAnswer } from "../lib/sessionLog";
 import type { QueueItem, RatingName, SimilarWord } from "../lib/types";
 import { checkTyped, joinMarks, typingRating, wrongKeyboard, type TypingCheck } from "../lib/typing";
 import { HiddenTranslation } from "../ui/HiddenTranslation";
@@ -70,6 +71,7 @@ export function TypeCard({
       if (check) return;
       const similar = ask === "meaning" ? similarAnswer(card, typed) : undefined;
       if (similar) {
+        logAnswer({ given: typed, expected, note: `similar word ${similar.korean}, asked again` });
         nudged.current = true;
         setNudge(similar);
         setText("");
@@ -77,6 +79,7 @@ export function TypeCard({
         return;
       }
       const result = checkTyped(expected, typed);
+      logAnswer({ given: typed, expected, ok: result.correct, ...(result.almost ? { note: `almost: ${result.slips.join(", ")}` } : {}) });
       setCheck(result);
       input.current?.blur();
       if (canSpeak()) speak(heard(item));

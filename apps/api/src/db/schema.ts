@@ -323,3 +323,17 @@ export const soundDrills = sqliteTable(
   },
   (t) => [uniqueIndex("sound_drills_user_words").on(t.userId, t.wordsKey)],
 );
+
+// What happened in each learning session, task by task, so Claude can look into a problem the
+// user saw (MCP get_session_log). The id is short so it can be copied and pasted; the app makes it.
+export const sessionLogs = sqliteTable(
+  "session_logs",
+  {
+    id: text("id").primaryKey(),
+    userId: userId(),
+    startedAt: timestamp("started_at").notNull(),
+    updatedAt: timestamp("updated_at").notNull(),
+    data: text("data", { mode: "json" }).$type<Record<string, unknown>>().notNull(),
+  },
+  (t) => [index("session_logs_user").on(t.userId, t.startedAt)],
+);

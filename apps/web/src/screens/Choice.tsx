@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { api, submitReview } from "../lib/api";
+import { logAnswer } from "../lib/sessionLog";
 import { useLeechIds } from "../lib/leeches";
 import { groupHash, navigate } from "../lib/router";
 import { choiceRating, REVEAL_MS, shuffled } from "../lib/choice";
@@ -157,10 +158,18 @@ export function ChoiceCard({
       if (nudges.some((w) => w.id === id)) return;
       const similar = card.similar?.find((w) => w.id === id);
       if (similar) {
+        logAnswer({ given: similar.korean, expected: card.korean, note: "similar word, asked again" });
         setNudges((list) => [...list, similar]);
         return;
       }
       const correct = id === card.id;
+      logAnswer({
+        given: id === DONT_KNOW ? "" : (choices.find((c) => c.id === id)?.korean ?? String(id)),
+        expected: card.korean,
+        options: choices.map((c) => c.korean),
+        ok: correct,
+        ...(revealedAt.current ? {} : { note: "before the options showed" }),
+      });
       const now = performance.now();
       const elapsedMs = Math.round(now - shownAt.current);
       // "Don't know" can come before the options; then there is no pick time to count.

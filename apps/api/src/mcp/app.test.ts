@@ -31,13 +31,23 @@ beforeEach(() => {
   oauth = new MemoryOAuthStore();
   app = createMcpApp({
     publicUrl: ORIGIN,
-    stores: (userId) => (userId === 1 ? { cards, drills } : friendActive ? { cards: friendCards } : null),
+    stores: (userId) => (userId === 1 ? { cards, drills, logs } : friendActive ? { cards: friendCards } : null),
     oauth,
     owner: { session: async () => session, loginUrl: (r) => `/login?return_to=${encodeURIComponent(r)}` },
     maxClients: 3,
     now: () => clock,
   });
 });
+
+const sessions = [
+  { id: "NEW234", startedAt: "2026-10-19T09:00:00.000Z", screen: "learn", tasks: [{ n: 1, result: "wrong" }], events: [] },
+  { id: "OLD234", startedAt: "2026-10-18T09:00:00.000Z", screen: "learn", tasks: [], events: [] },
+];
+const logs = {
+  get: async (id: string) => sessions.find((s) => s.id === id.toUpperCase()),
+  recent: async (back: number) => sessions[back],
+  list: async () => sessions.map((s) => ({ id: s.id, startedAt: s.startedAt, screen: s.screen, tasks: s.tasks.length, mistakes: 0 })),
+};
 
 const call = (path: string, init?: RequestInit) => app.request(`${ORIGIN}${path}`, init);
 const form = (fields: Record<string, string>) => ({
@@ -257,14 +267,25 @@ describe("mcp tools", () => {
       "add_sound_drills",
       "find_cards",
       "get_leeches",
+      "get_session_log",
       "get_stats",
       "get_weak_sounds",
       "link_similar",
+      "list_session_logs",
       "list_sound_drills",
       "set_roots",
       "update_card",
     ]);
     expect(client.getInstructions()).toContain("Hangul");
+  });
+
+  it("reads a session log by the id the user pasted, or the latest", async () => {
+    const client = await mcpClient((await connect()).access_token);
+    expect(parse(await client.callTool({ name: "get_session_log", arguments: {} })).id).toBe("NEW234");
+    expect(parse(await client.callTool({ name: "get_session_log", arguments: { back: 1 } })).id).toBe("OLD234");
+    expect(parse(await client.callTool({ name: "get_session_log", arguments: { id: "KQuiz session old234" } })).id).toBe("OLD234");
+    expect((await client.callTool({ name: "get_session_log", arguments: { id: "ZZZ999" } })).isError).toBe(true);
+    expect(parse(await client.callTool({ name: "list_session_logs", arguments: {} })).sessions).toHaveLength(2);
   });
 
   it("adds cards and reports duplicates and rejects", async () => {

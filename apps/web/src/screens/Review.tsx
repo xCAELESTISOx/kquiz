@@ -7,6 +7,8 @@ import { useLeechIds } from "../lib/leeches";
 import { everyKind, mixWays, serverModes } from "../lib/mix";
 import { afterFix, afterIntro, buildable, firstTasks, insertAfter, insertNext, interleave, introTask, learnTask, SESSION_MAX, SESSION_TASKS, onward, toFront, unfinished, withMistake } from "../lib/session";
 import { navigate } from "../lib/router";
+import { endLog, flushLog, logEvent, logOutcome, logServer, logShown, startLog } from "../lib/sessionLog";
+import { SessionId, useLongPress, type LongPress } from "../ui/SessionId";
 import { canRecord, type Recorder } from "../lib/recorder";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
 import { forgetVoice, heard } from "../lib/voices";
@@ -121,6 +123,14 @@ export function ReviewScreen({
   const summary = ended && !fixIntro && !fixing;
   const pause = summary || fixIntro;
 
+  // Every session keeps a log for Claude to look into (lib/sessionLog.ts); its id is copied by a long press.
+  useEffect(() => {
+    startLog(session ? "learn" : `${group ? "group " : ""}${mode}`);
+    return endLog;
+  }, []);
+  const [showId, setShowId] = useState(false);
+  const longPress = useLongPress(() => setShowId(true));
+
   useEffect(() => {
     document.title = session
       ? "Learn · KQuiz"
@@ -163,13 +173,21 @@ export function ReviewScreen({
         setTyped(
           new Map(items.flatMap((i): [QueueItem, TypeAsk][] => (ways.get(i) === "write" ? [[i, "meaning"]] : ways.get(i) === "dictation" ? [[i, "sound"]] : []))),
         );
+        logEvent("queue", {
+          round,
+          kinds: kinds ? [...kinds] : [mode],
+          items: items.slice(0, 80).map((i) => `${i.card.korean} ${i.learn ? `learn:${i.learn.check ? "check" : i.learn.kind}` : `${i.mode}:${ways.get(i) ?? "recall"}`}`),
+        });
         setQueue(items);
         setTotal(items.length);
         shownAt.current = performance.now();
         // The tap that opened the screen may still count; if not, the big button is right there.
         if (items[0]?.mode === "listening") speak(heard(items[0]));
       },
-      (e: Error) => setError(e.message),
+      (e: Error) => {
+        logEvent("error", { message: e.message });
+        setError(e.message);
+      },
     );
     // A new group is a new screen (App keys it), so `group` never changes here.
   }, [mode, kinds, round]);
@@ -236,6 +254,7 @@ export function ReviewScreen({
 
   /** "Fix mistakes": the mistakes of this stretch, in the order they were made. */
   const startFixes = useCallback(() => {
+    logEvent("fix-start", { mistakes: mistakes.map((m) => m.card.korean) });
     setLast(undefined);
     void releaseHeldReview();
     setFixes(mistakes);
@@ -251,6 +270,7 @@ export function ReviewScreen({
   const rate = useCallback(
     (rating: RatingName, swiped = false) => {
       if (!item || !card || !revealed || !queue || speaking) return;
+      logOutcome({ rating });
       if (fixing) {
         fixed(rating !== "again");
         // A swiped card has already flown off under the finger.
@@ -291,6 +311,7 @@ export function ReviewScreen({
   const spoken = useCallback(
     (rating: RatingName) => {
       if (!queue) return;
+      logOutcome({ rating });
       // A mistake gone over is practice: its card sent nothing.
       if (fixing) return fixed(rating !== "again");
       // Going back over it would rate it twice, so the held rating goes out now.
@@ -329,6 +350,7 @@ export function ReviewScreen({
   const learned = useCallback(
     (ok: boolean, quiet = false) => {
       if (!queue || !item?.learn) return;
+      const logged = logOutcome({ ok, ...(quiet ? { note: "can't speak now" } : {}) });
       // A mistake gone over is practice: the ladder on the server already has the miss.
       if (fixing) return fixed(ok);
       if (!ok) setMistakes((m) => withMistake(m, item));
@@ -372,6 +394,7 @@ export function ReviewScreen({
         .answerLearning(word.id, ok)
         .then(
           (res) => {
+            logServer(logged, `${res.status}${"step" in res && res.step !== undefined ? ` step ${res.step}` : ""}`);
             // Typing it is already in the queue.
             if (res.status === "climbed" && res.step === 1 && typeNext) return;
             if (res.status === "climbed" || res.status === "missed") setQueue((q) => insertAfter(q ?? [], learnTask(word, res.step, canSpeak())));
@@ -385,7 +408,10 @@ export function ReviewScreen({
           },
           // No connection even after a second try: the word stays where it was and comes up again
           // next time, which is not worth a red banner over the session.
-          (e: Error) => !isConnectionError(e) && setError(e.message),
+          (e: Error) => {
+            logServer(logged, `not sent: ${e.message}`);
+            if (!isConnectionError(e)) setError(e.message);
+          },
         )
         .finally(() => setAnswering((n) => n - 1));
     },
@@ -394,6 +420,7 @@ export function ReviewScreen({
 
   /** "Another round": as many answers again; the same queue goes on, or a fresh one if it ran out. */
   const more = useCallback(() => {
+    logEvent("another-round");
     setGoal(answered + SESSION_TASKS);
     setOver(false);
     setStarted(new Set());
@@ -411,6 +438,7 @@ export function ReviewScreen({
     setLast(undefined);
     // Already sent (the screen was left and reopened): that rating stays.
     if (!takeBackReview(last.reviewId)) return;
+    logEvent("back", { to: last.queue[0]?.card.korean });
     setQueue(last.queue);
     setDone(last.done);
     setMistakes(last.mistakes);
@@ -419,6 +447,38 @@ export function ReviewScreen({
     setStep((n) => n + 1);
     shownAt.current = performance.now();
   }, [last, pause, fixing]);
+
+  // The log: each task as it comes on screen, and the screens between them.
+  useEffect(() => {
+    if (!item) return;
+    const way = item.learn
+      ? item.learn.kind
+      : building
+        ? "build"
+        : typing
+          ? typing === "sound"
+            ? "dictation"
+            : "write"
+          : item.mode === "speech"
+            ? quiet.has(item)
+              ? "choice"
+              : "say"
+            : listening
+              ? "listen"
+              : cloze
+                ? "cloze"
+                : "recall";
+    logShown(step, item, way, fixing ? "fix" : "main", cloze ? `${cloze.before}[${cloze.word}]${cloze.after}` : undefined);
+  }, [step, item]);
+  useEffect(() => {
+    if (fixIntro) logEvent("fix-intro", { mistakes: mistakes.length });
+  }, [fixIntro]);
+  useEffect(() => {
+    if (summary) {
+      logEvent("summary", Object.fromEntries(Object.entries(learnt).map(([k, v]) => [k, [...v].length])));
+      void flushLog();
+    }
+  }, [summary]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -460,8 +520,11 @@ export function ReviewScreen({
         <a className="icon-button" href="#/" aria-label={mode === "listening" ? "End listening practice" : "End review"}>
           <CloseIcon />
         </a>
-        <div className={`progress${fixing ? " is-fix" : ""}`} role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
-          <div className="progress-fill" style={{ transform: `scaleX(${progress})` }} />
+        {/* Held: the session's id for Claude (SessionId.tsx). Taller than the bar, so a thumb finds it. */}
+        <div {...longPress} className="progress-hold">
+          <div className={`progress${fixing ? " is-fix" : ""}`} role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
+            <div className="progress-fill" style={{ transform: `scaleX(${progress})` }} />
+          </div>
         </div>
         <span className="review-count">
           {session ? (pause ? "" : fixing ? `${right} / ${mistakes.length}` : counted) : mode !== "mixed" || kinds ? `${Math.min(done, total)} / ${total}` : ""}
@@ -487,9 +550,11 @@ export function ReviewScreen({
 
       {fixIntro && <FixIntro mistakes={mistakes} onStart={startFixes} />}
 
-      {summary && <SessionDone {...learnt} onMore={more} empty={!queue[0]} />}
+      {summary && <SessionDone {...learnt} onMore={more} empty={!queue[0]} press={longPress} />}
 
-      {!session && queue && !card && <Finished count={done} />}
+      {!session && queue && !card && <Finished count={done} press={longPress} />}
+
+      {showId && <SessionId onClose={() => setShowId(false)} />}
 
       {session && queue && !card && !pause && <div className="review-stage" aria-busy="true" />}
 
@@ -518,7 +583,10 @@ export function ReviewScreen({
           practice={fixing}
           onDone={spoken}
           aloud={canRecord() && (
-            <button type="button" className="link-button inline" onClick={() => setQuiet((s) => toggled(s, item))}>
+            <button type="button" className="link-button inline" onClick={() => {
+              logEvent("switched", { to: "say" });
+              setQuiet((s) => toggled(s, item));
+            }}>
               record your voice
             </button>
           )}
@@ -531,7 +599,10 @@ export function ReviewScreen({
           practice={fixing}
           onRated={spoken}
           quiet={(options[item.card.id]?.length ?? 0) > 0 && (
-            <button type="button" className="link-button inline" onClick={() => setQuiet((s) => toggled(s, item))}>
+            <button type="button" className="link-button inline" onClick={() => {
+              logEvent("switched", { to: "choice" });
+              setQuiet((s) => toggled(s, item));
+            }}>
               Choose from options
             </button>
           )}
@@ -743,7 +814,8 @@ function SessionDone({
   reviewed,
   empty,
   onMore,
-}: Record<"met" | "climbed" | "learned" | "reviewed", ReadonlySet<number>> & { empty: boolean; onMore: () => void }) {
+  press,
+}: Record<"met" | "climbed" | "learned" | "reviewed", ReadonlySet<number>> & { empty: boolean; onMore: () => void; press: LongPress }) {
   // A word checked and learned climbed its ladder in an earlier session; one that climbed now waits.
   const waiting = [...climbed].filter((id) => !learned.has(id)).length;
   const learning = [...met].filter((id) => !climbed.has(id) && !learned.has(id)).length;
@@ -767,7 +839,7 @@ function SessionDone({
   return (
     <div className="review-stage">
       <div className="finished session-done">
-        <p className="finished-mark" lang="ko">
+        <p {...press} className="finished-mark press-hold" lang="ko">
           {empty ? "다 했어요" : "잘했어요!"}
         </p>
         {rows.length > 0 && (
@@ -948,11 +1020,11 @@ function SwipeCard({
   );
 }
 
-function Finished({ count }: { count: number }) {
+function Finished({ count, press }: { count: number; press: LongPress }) {
   return (
     <div className="review-stage">
       <div className="finished">
-        <p className="finished-mark" lang="ko">
+        <p {...press} className="finished-mark press-hold" lang="ko">
           잘했어요!
         </p>
         <p className="finished-text">

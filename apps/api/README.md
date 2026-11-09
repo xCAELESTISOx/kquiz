@@ -94,6 +94,10 @@ FSRS weights are fitted per person and mode to their own `review_log` (`src/fsrs
 - Every attempt is saved to `attempts` (no audio) and counted in `phone_stats` for `get_weak_sounds`; only "wrong" sounds count as errors there.
 - 20 recordings a minute per client. Errors: `404` unknown card, `422 not_ready_for_speech` (non-Hangul card), `422 bad_recording` (not WAV, silence, too long), `503 busy` (with `Retry-After`) or `503 unavailable` (scorer down or model not loaded), `504 timeout`.
 
+**Session logs** (`/api/session-logs`): what each learning session showed and what was answered, for Claude to look into a problem.
+- `PUT /:id` `{ startedAt, screen, client?, tasks: [...], events: [...] }` → `{ ok: true }`. The app makes the id (6 characters of `23456789ABCDEFGHJKMNPQRSTUVWXYZ`) and sends the whole log again as the session goes on; an id that is another user's gets `409`. The latest 50 sessions per user are kept (`src/sessionLogs.ts`); tasks are kept as the app sends them (apps/web/src/lib/sessionLog.ts says what they hold).
+- The user long-presses the progress bar or the heading at the end of a session to see and copy its id; Claude reads the log with the MCP tools `get_session_log` (by id, or the latest) and `list_session_logs`.
+
 **Practice** (`/api/practice`): shadowing and sound drills; nothing here changes a schedule.
 - `GET /audio?text=` → MP3 of an example sentence or drill word, `404` until the background worker has made it. The worker (`cardAudio.ts`) does cards first, then drill words, then examples, and keeps them in `speech_audio` by text.
 - `GET /shadowing?limit=10` → `{ items: [{ cardId, word, meaning, ko, ru }] }`: one voiced example per card, studied cards first, random order. The intonation curve is computed in the browser (apps/web/src/lib/intonation.ts), so the server does no pitch work.

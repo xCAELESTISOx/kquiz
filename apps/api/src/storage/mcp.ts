@@ -10,9 +10,10 @@ import { cards, oauthClients, oauthCodes, oauthGrants, phoneStats, reviewLog, us
 import { activeUser } from "../users.js";
 import type { OwnerAuth, UserStores } from "../mcp/app.js";
 import type { OAuthStore } from "../mcp/oauth-store.js";
-import type { CardQuery, CardStore, DrillStore, Member, NewDrill, SharingStore, ShareResult, SimilarPair, SimilarResult } from "../mcp/store.js";
+import type { CardQuery, CardStore, DrillStore, Member, NewDrill, SessionLogStore, SharingStore, ShareResult, SimilarPair, SimilarResult } from "../mcp/store.js";
 import { linkSimilar, unlinkSimilar, withSimilar } from "../similar.js";
 import { findLeeches } from "../leeches.js";
+import { listSessionLogs, recentSessionLogs, sessionLog } from "../sessionLogs.js";
 import { addDrills, listDrills } from "../practice.js";
 import { getStats } from "../reviewStore.js";
 import { statsOverview, zoneOffset } from "../statsStore.js";
@@ -409,6 +410,14 @@ export class SqliteSharingStore implements SharingStore {
   }
 }
 
+function sqliteSessionLogs(db: Db, userId: number): SessionLogStore {
+  return {
+    get: async (id) => sessionLog(db, userId, id) as Record<string, unknown> | undefined,
+    recent: async (back) => recentSessionLogs(db, userId, 1, back)[0] as Record<string, unknown> | undefined,
+    list: async (limit) => listSessionLogs(db, userId, limit),
+  };
+}
+
 export function sqliteStores(db: Db, timeZone: string): UserStores {
   return (userId) => {
     const user = activeUser(db, userId);
@@ -416,6 +425,7 @@ export function sqliteStores(db: Db, timeZone: string): UserStores {
     return {
       cards: new SqliteCardStore(db, userId, timeZone),
       drills: new SqliteDrillStore(db, userId),
+      logs: sqliteSessionLogs(db, userId),
       ...(user.role === "owner" ? { sharing: new SqliteSharingStore(db, userId) } : {}),
     };
   };
