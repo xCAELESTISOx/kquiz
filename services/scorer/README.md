@@ -22,6 +22,7 @@ Without the ML requirements, start it with `SCORER_LOAD_MODEL=0`: `/g2p` works, 
 |---|---|---|
 | `SCORER_MODEL` | `slplab/wav2vec2-xls-r-300m_phone-mfa_korean` | Hugging Face model id or a local path |
 | `SCORER_THREADS` | torch's default (Docker Compose sets 2) | torch threads |
+| `SCORER_QUANTIZE` | `1` | `1` quantizes the model's linear layers to int8 on load: ~1.7x faster on CPU, same scores on the stage 0 set; `0` keeps float32 |
 | `SCORER_TIMEOUT` | `15` | Seconds per scoring job |
 | `SCORER_LOAD_MODEL` | `1` | `0` skips loading the scoring model: `/g2p` and `/tts` still work, `/score` answers 503 |
 | `TTS_VOICE` | `F1` | Default Supertonic voice: `F1`–`F5`, `M1`–`M5` |

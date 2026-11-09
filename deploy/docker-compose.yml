@@ -67,7 +67,10 @@ services:
       - scorer-models:/models
     tmpfs: [/tmp]
     mem_limit: 3g
-    cpus: 1.5
+    # Both vCPUs: with a 1.5 cap the two torch threads were throttled in every scheduler period.
+    # Lower weight than the API and Caddy, so they still get the CPU first while a take is scored.
+    cpus: 2
+    cpu_shares: 512
     pids_limit: 200
 
 volumes:
