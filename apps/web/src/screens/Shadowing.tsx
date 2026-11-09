@@ -241,7 +241,7 @@ export function ShadowingScreen() {
                   disabled={!canRecord()}
                   onPress={() => void record()}
                   idleCaption={together ? "With headphones: tap and speak along" : "Listen, then tap to repeat"}
-                  busyCaption="Comparing…"
+                  busyCaption="Comparing with the sample"
                 />
               </>
             )}

@@ -16,7 +16,6 @@ import { CloseIcon, MicIcon, PlayIcon, RetryIcon, SpeakerIcon, StopIcon } from "
 import { IntonationChart } from "../ui/IntonationChart";
 import { useCountUp } from "../ui/motion";
 import { useFamily, WordFamily } from "../ui/WordFamily";
-import { Spinner } from "../ui/Spinner";
 
 const RATINGS: { name: RatingName; label: string; key: string }[] = [
   { name: "again", label: "Again", key: "1" },
@@ -479,7 +478,7 @@ export function RecordButton({
   disabled,
   onPress,
   idleCaption = "Tap and say the word",
-  busyCaption = "Listening…",
+  busyCaption = "Checking your pronunciation",
 }: {
   phase: Phase;
   level: number;
@@ -492,12 +491,13 @@ export function RecordButton({
   const recording = phase === "recording";
   const scoring = phase === "scoring";
   const left = Math.max(0, MAX_SECONDS - seconds);
+  const slow = useSlow(scoring, 4000);
   return (
     <div className="record">
       <button
         type="button"
-        className={`record-button${recording ? " is-recording" : ""}`}
-        aria-label={recording ? "Stop recording" : "Record"}
+        className={`record-button${recording ? " is-recording" : ""}${scoring ? " is-scoring" : ""}`}
+        aria-label={recording ? "Stop recording" : scoring ? "Checking" : "Record"}
         aria-pressed={recording}
         disabled={disabled || scoring}
         onClick={onPress}
@@ -512,19 +512,52 @@ export function RecordButton({
           </>
         )}
         <span className="record-level" style={{ transform: `scale(${1 + level * 0.3})` }} aria-hidden="true" />
-        {scoring ? <Spinner /> : recording ? <StopIcon /> : <MicIcon />}
+        {scoring && <span className="record-orbit" aria-hidden="true" />}
+        {scoring ? <ScoringBars /> : recording ? <StopIcon /> : <MicIcon />}
       </button>
       <p className="record-caption" aria-live="polite">
         {disabled
           ? "Recording isn't available here"
           : scoring
-            ? busyCaption
+            ? (
+                <span className="record-busy">
+                  {slow ? "Almost there" : busyCaption}
+                  <span className="record-dots" aria-hidden="true">
+                    <span>.</span>
+                    <span>.</span>
+                    <span>.</span>
+                  </span>
+                </span>
+              )
             : recording
               ? `Speak. Tap when you're done · ${Math.ceil(left)} s`
               : idleCaption}
       </p>
     </div>
   );
+}
+
+/** The take being analysed: bars that ripple like a voice level, inside the button. */
+function ScoringBars() {
+  return (
+    <span className="record-bars" aria-hidden="true">
+      {[0, 1, 2, 3, 4].map((i) => (
+        <span key={i} style={{ "--i": i } as CSSProperties} />
+      ))}
+    </span>
+  );
+}
+
+/** True once `active` has lasted `ms`, so a long wait can say it's nearly done. */
+function useSlow(active: boolean, ms: number): boolean {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    setSlow(false);
+    if (!active) return;
+    const id = setTimeout(() => setSlow(true), ms);
+    return () => clearTimeout(id);
+  }, [active, ms]);
+  return slow;
 }
 
 function Finished({ count }: { count: number }) {
