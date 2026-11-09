@@ -5,7 +5,7 @@ import { api, holdReview, isConnectionError, releaseHeldReview, takeBackReview }
 import { clozeFor } from "../lib/cloze";
 import { useLeechIds } from "../lib/leeches";
 import { everyKind, mixWays, serverModes } from "../lib/mix";
-import { afterFix, afterIntro, buildable, firstTasks, insertAfter, insertNext, interleave, introTask, learnTask, SESSION_MAX, SESSION_TASKS, onward, toFront, unfinished, withMistake } from "../lib/session";
+import { afterFix, afterIntro, buildable, firstTasks, insertAfter, insertNext, interleave, introTask, learnTask, SESSION_MAX, SESSION_TASKS, onward, toFront, unfinished, withMistake, withoutMistake } from "../lib/session";
 import { navigate } from "../lib/router";
 import { endLog, flushLog, logEvent, logOutcome, logServer, logShown, startLog } from "../lib/sessionLog";
 import { SessionId, useLongPress, type LongPress } from "../ui/SessionId";
@@ -353,7 +353,7 @@ export function ReviewScreen({
       const logged = logOutcome({ ok, ...(quiet ? { note: "can't speak now" } : {}) });
       // A mistake gone over is practice: the ladder on the server already has the miss.
       if (fixing) return fixed(ok);
-      if (!ok) setMistakes((m) => withMistake(m, item));
+      setMistakes((m) => (ok ? withoutMistake(m, item) : withMistake(m, item)));
       setLast(undefined);
       void releaseHeldReview();
       setExit(undefined);

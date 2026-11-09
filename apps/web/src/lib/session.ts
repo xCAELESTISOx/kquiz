@@ -144,6 +144,15 @@ export function withMistake(mistakes: readonly QueueItem[], item: QueueItem): Qu
 }
 
 /**
+ * A task answered right drops its earlier miss from the mistakes: a word's step missed and then
+ * passed later in the same stretch (the ladder brings it back) is fixed already, not gone over again.
+ */
+export function withoutMistake(mistakes: readonly QueueItem[], item: QueueItem): QueueItem[] {
+  const key = taskKey(item);
+  return mistakes.some((m) => taskKey(m) === key) ? mistakes.filter((m) => taskKey(m) !== key) : [...mistakes];
+}
+
+/**
  * Going over the mistakes: a fixed one is done; one missed again goes to the back, so it comes up
  * after the others (or at once when it is the last one left), until each is answered right.
  */
