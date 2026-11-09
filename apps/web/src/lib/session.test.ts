@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { afterFix, afterIntro, buildable, firstTasks, insertAfter, insertNext, interleave, learnTask, onward, toFront, unfinished, withMistake } from "./session";
+import { afterFix, afterIntro, buildable, firstTasks, insertAfter, insertNext, interleave, learnTask, onward, toFront, unfinished, withMistake, withoutMistake } from "./session";
 import type { Card, QueueItem } from "./types";
 
 const card = (id: number) => ({ id, korean: `단어${id}`, meaning: `слово ${id}` }) as Card;
@@ -76,6 +76,20 @@ describe("right after meeting a word", () => {
     expect(afterFix(again, true)).toEqual([mistakes[2], mistakes[0]]);
     expect(afterFix([mistakes[0]!], false)).toEqual([mistakes[0]]);
     expect(afterFix([], true)).toEqual([]);
+  });
+
+  it("drops a word's missed step once it is passed later in the stretch", () => {
+    // 세탁소: check written wrong, then by ear wrong, then both right on the way back up the ladder.
+    const check = learnTask(card(74), "check", true);
+    const ear = learnTask(card(74), 1, true);
+    const other = learnTask(card(73), "check", true);
+    let mistakes = withMistake(withMistake(withMistake([], check), other), ear);
+    expect(mistakes).toHaveLength(3);
+    mistakes = withoutMistake(mistakes, ear);
+    mistakes = withoutMistake(mistakes, learnTask(card(74), 2, true));
+    expect(mistakes).toEqual([other]);
+    // A review answered right elsewhere doesn't touch a word's other tasks.
+    expect(withoutMistake(mistakes, review(73))).toEqual([other]);
   });
 });
 
