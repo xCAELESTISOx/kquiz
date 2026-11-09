@@ -336,7 +336,9 @@
 .session-rows li {
   display: grid;
   grid-template-columns: 3.2ch 1fr;
-  align-items: baseline;
+  /* The number's top lines up with the top of the white heading beside it: both are trimmed to
+     their cap height, so the boxes start where the letters do. */
+  align-items: start;
   gap: 12px;
 }
 
@@ -346,6 +348,7 @@
   line-height: 1;
   text-align: right;
   font-variant-numeric: tabular-nums;
+  text-box: trim-both cap alphabetic;
 }
 
 .session-rows li[data-kind="learned"] .session-rows-n {
@@ -354,6 +357,7 @@
 
 .session-rows b {
   display: block;
+  text-box: trim-start cap;
   font-weight: 600;
   color: var(--text);
 }
