@@ -25,6 +25,23 @@ export function unfinished(queue: readonly QueueItem[], started: ReadonlySet<num
   return queue.findIndex((i) => !!i.learn && i.learn.kind !== "intro" && started.has(i.card.id));
 }
 
+/**
+ * A session's queue after an answer (`answered` counts it), with the card it shows next brought to
+ * the front: past the goal that is the next step of a word begun in this stretch, and nothing once
+ * none is left or SESSION_MAX is reached. The card shown decides what is played inside the tap.
+ */
+export function onward(
+  queue: readonly QueueItem[],
+  answered: number,
+  goal: number,
+  started: ReadonlySet<number>,
+): { queue: QueueItem[]; shown?: QueueItem } {
+  if (answered < goal) return { queue: [...queue], shown: queue[0] };
+  if (answered >= goal + SESSION_MAX - SESSION_TASKS) return { queue: [...queue] };
+  const at = unfinished(queue, started);
+  return at < 0 ? { queue: [...queue] } : { queue: toFront(queue, at), shown: queue[at] };
+}
+
 /** `queue` with its item at `at` brought to the front. */
 export function toFront<T>(queue: readonly T[], at: number): T[] {
   if (at <= 0) return [...queue];

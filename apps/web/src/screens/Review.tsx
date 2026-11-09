@@ -5,7 +5,7 @@ import { api, holdReview, isConnectionError, releaseHeldReview, takeBackReview }
 import { clozeFor } from "../lib/cloze";
 import { useLeechIds } from "../lib/leeches";
 import { everyKind, mixWays, serverModes } from "../lib/mix";
-import { afterFix, afterIntro, buildable, firstTasks, insertAfter, insertNext, interleave, introTask, learnTask, SESSION_MAX, SESSION_TASKS, toFront, unfinished, withMistake } from "../lib/session";
+import { afterFix, afterIntro, buildable, firstTasks, insertAfter, insertNext, interleave, introTask, learnTask, SESSION_MAX, SESSION_TASKS, onward, toFront, unfinished, withMistake } from "../lib/session";
 import { navigate } from "../lib/router";
 import { canRecord, type Recorder } from "../lib/recorder";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
@@ -204,6 +204,12 @@ export function ReviewScreen({
     if (extra && !fixes && pending > 0) setQueue((q) => (q ? toFront(q, unfinished(q, started)) : q));
   }, [extra, fixes, pending, started]);
 
+  /** The queue after an answer and the card it shows next (session.ts onward). */
+  const ahead = useCallback(
+    (q: QueueItem[], begun: ReadonlySet<number> = started) => (session ? onward(q, answered + 1, goal, begun) : { queue: q, shown: q[0] }),
+    [session, answered, goal, started],
+  );
+
   /** One more answer in a session; past its goal the stretch runs on only to finish its words. */
   const count = useCallback(() => {
     if (!session) return;
@@ -267,10 +273,10 @@ export function ReviewScreen({
       // is heard in a new voice then. In "Learn" that is the mistakes gone over after the stretch.
       if (rating === "again") forgetVoice(item);
       if (rating === "again" && session) setMistakes((m) => withMistake(m, item));
-      const next = rating === "again" && !session ? [...queue.slice(1), queue[0]!] : queue.slice(1);
+      const { queue: next, shown } = ahead(rating === "again" && !session ? [...queue.slice(1), queue[0]!] : queue.slice(1));
       setQueue(next);
       // Inside the tap, where iOS still lets audio play.
-      if (next?.[0]?.mode === "listening") speak(heard(next[0]));
+      if (shown?.mode === "listening") speak(heard(shown));
       if (rating !== "again") setDone((n) => n + 1);
       note("reviewed", card.id);
       setRevealed(false);
@@ -278,7 +284,7 @@ export function ReviewScreen({
       shownAt.current = performance.now();
       count();
     },
-    [item, card, revealed, step, queue, done, speaking, count, note, fixing, fixed, mistakes, session],
+    [item, card, revealed, step, queue, done, speaking, count, note, fixing, fixed, mistakes, session, ahead],
   );
 
   /** A card said aloud has sent its own rating; the session moves on. */
@@ -293,9 +299,9 @@ export function ReviewScreen({
       setExit(undefined);
       if (rating === "again") forgetVoice(queue[0]!);
       if (rating === "again" && session) setMistakes((m) => withMistake(m, queue[0]!));
-      const next = rating === "again" && !session ? [...queue.slice(1), queue[0]!] : queue.slice(1);
+      const { queue: next, shown } = ahead(rating === "again" && !session ? [...queue.slice(1), queue[0]!] : queue.slice(1));
       setQueue(next);
-      if (next[0]?.mode === "listening") speak(heard(next[0]));
+      if (shown?.mode === "listening") speak(heard(shown));
       if (rating !== "again") setDone((n) => n + 1);
       note("reviewed", queue[0]!.card.id);
       setRevealed(false);
@@ -303,7 +309,7 @@ export function ReviewScreen({
       shownAt.current = performance.now();
       count();
     },
-    [queue, count, note, fixing, fixed, session],
+    [queue, count, note, fixing, fixed, session, ahead],
   );
 
   /** Look-alikes and blocks for a new word that joins the session midway. */
@@ -346,10 +352,13 @@ export function ReviewScreen({
           : kind === "choose" && !ok
             ? insertAfter([item, ...rest], item).slice(1)
             : rest;
-      const next = typeNext ? insertNext([item, ...after], learnTask(word, 1, canSpeak())).slice(1) : after;
+      const { queue: next, shown } = ahead(
+        typeNext ? insertNext([item, ...after], learnTask(word, 1, canSpeak())).slice(1) : after,
+        started.has(word.id) ? started : new Set(started).add(word.id),
+      );
       setQueue(next);
       // Inside the tap, where iOS still lets audio play.
-      if (next[0]?.mode === "listening") speak(heard(next[0]));
+      if (shown?.mode === "listening") speak(heard(shown));
       setStep((n) => n + 1);
       shownAt.current = performance.now();
       // Meeting a word is a screen of the session too, so the count moves from the first tap.
@@ -380,7 +389,7 @@ export function ReviewScreen({
         )
         .finally(() => setAnswering((n) => n - 1));
     },
-    [queue, item, prepare, count, options, note, silent, fixing, fixed],
+    [queue, item, prepare, count, options, note, silent, fixing, fixed, ahead, started],
   );
 
   /** "Another round": as many answers again; the same queue goes on, or a fresh one if it ran out. */
