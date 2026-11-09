@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { afterFix, afterIntro, buildable, firstTasks, insertAfter, insertNext, interleave, learnTask, withMistake } from "./session";
+import { afterFix, afterIntro, buildable, firstTasks, insertAfter, insertNext, interleave, learnTask, toFront, unfinished, withMistake } from "./session";
 import type { Card, QueueItem } from "./types";
 
 const card = (id: number) => ({ id, korean: `단어${id}`, meaning: `слово ${id}` }) as Card;
@@ -89,5 +89,19 @@ describe("typing right after", () => {
     expect(insertNext([review(4), review(5)], typed).map((i) => i.card.id)).toEqual([4, 1, 5]);
     // A pick put back further on is not waited for.
     expect(insertNext([aloud!, review(5), choose!], typed).map((i) => i.learn?.kind ?? "review")).toEqual(["aloud", "dictation", "review", "choose"]);
+  });
+});
+
+describe("finishing words past the goal", () => {
+  it("finds the next step of a word begun in this stretch, not new words or reviews", () => {
+    const review = { card: card(9), mode: "meaning", due: "", state: 2, reps: 3, lapses: 0 } as QueueItem;
+    const queue = [review, firstTasks([{ card: card(3), step: 0 }], true)[0]!, learnTask(card(4), 1, true), learnTask(card(1), 1, true)];
+    expect(unfinished(queue, new Set([1, 3]))).toBe(3);
+    expect(unfinished(queue, new Set([3]))).toBe(-1);
+  });
+
+  it("brings that step to the front", () => {
+    expect(toFront(["a", "b", "c", "d"], 2)).toEqual(["c", "a", "b", "d"]);
+    expect(toFront(["a", "b"], 0)).toEqual(["a", "b"]);
   });
 });

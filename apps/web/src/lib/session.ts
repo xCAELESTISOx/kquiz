@@ -7,9 +7,29 @@ import type { Card, ChoiceOption, LearningItem, QueueItem } from "./types";
 
 /**
  * How many answers a session runs to (about five minutes); "Another round" adds as many again. The tasks
- * missed on the way are gone over once more at the end (mistakes below), which makes up the rest.
+ * missed on the way are gone over once more at the end (mistakes below), however many they are.
  */
 export const SESSION_TASKS = 15;
+
+/**
+ * A stretch may run on past SESSION_TASKS up to this many answers, so the words started in it finish
+ * their steps instead of breaking off halfway: nothing new is begun then, no reviews either.
+ */
+export const SESSION_MAX = 20;
+
+/**
+ * Past the goal: where the next step of a word started in this stretch waits in the queue, or -1
+ * when none does and the stretch can end.
+ */
+export function unfinished(queue: readonly QueueItem[], started: ReadonlySet<number>): number {
+  return queue.findIndex((i) => !!i.learn && i.learn.kind !== "intro" && started.has(i.card.id));
+}
+
+/** `queue` with its item at `at` brought to the front. */
+export function toFront<T>(queue: readonly T[], at: number): T[] {
+  if (at <= 0) return [...queue];
+  return [queue[at]!, ...queue.slice(0, at), ...queue.slice(at + 1)];
+}
 
 /** Other cards between two steps of one word, so it isn't answered from the screen just seen. */
 export const LEARN_GAP = 3;

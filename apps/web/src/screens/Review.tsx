@@ -1,11 +1,11 @@
 import { shownPronunciation } from "../lib/korean";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject, type PointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject, type PointerEvent, type ReactNode } from "react";
 import { wordsWord } from "../lib/plural";
 import { api, holdReview, isConnectionError, releaseHeldReview, takeBackReview } from "../lib/api";
 import { clozeFor } from "../lib/cloze";
 import { useLeechIds } from "../lib/leeches";
 import { everyKind, mixWays, serverModes } from "../lib/mix";
-import { afterFix, afterIntro, buildable, firstTasks, insertAfter, insertNext, interleave, introTask, learnTask, SESSION_TASKS, withMistake } from "../lib/session";
+import { afterFix, afterIntro, buildable, firstTasks, insertAfter, insertNext, interleave, introTask, learnTask, SESSION_MAX, SESSION_TASKS, toFront, unfinished, withMistake } from "../lib/session";
 import { navigate } from "../lib/router";
 import { canRecord, type Recorder } from "../lib/recorder";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
@@ -108,8 +108,13 @@ export function ReviewScreen({
   // A session: the tasks missed in this stretch, and, once going over them, the ones not yet right.
   const [mistakes, setMistakes] = useState<QueueItem[]>([]);
   const [fixes, setFixes] = useState<QueueItem[]>();
-  // The stretch is over: its goal is reached, or nothing is left and no answer is on its way.
-  const ended = !!session && !!queue && (over || (!queue[0] && answering === 0));
+  // New words begun in this stretch: past its goal it runs on (up to SESSION_MAX) only for their steps.
+  const [started, setStarted] = useState<ReadonlySet<number>>(() => new Set());
+  const extra = !!session && answered >= goal;
+  const pending = extra && queue ? unfinished(queue, started) : 0;
+  // The stretch is over: its goal is reached and its words have done their steps (or it hit
+  // SESSION_MAX), or nothing is left; either way with no answer on its way.
+  const ended = !!session && !!queue && (over || (answering === 0 && (extra ? pending < 0 : !queue[0])));
   // Then first a screen for the mistakes, then the mistakes themselves, then the summary.
   const fixIntro = ended && !fixes && mistakes.length > 0;
   const fixing = ended && !!fixes && fixes.length > 0;
@@ -169,7 +174,8 @@ export function ReviewScreen({
     // A new group is a new screen (App keys it), so `group` never changes here.
   }, [mode, kinds, round]);
 
-  const item = pause ? undefined : fixing ? fixes![0] : queue?.[0];
+  // Past the goal the step still due is brought to the front first (below), so the queue's head stays the card on screen.
+  const item = pause ? undefined : fixing ? fixes![0] : extra && pending !== 0 ? undefined : queue?.[0];
   const card = item?.card;
   const learning = !!item?.learn;
   const listening = item?.mode === "listening";
@@ -193,12 +199,17 @@ export function ReviewScreen({
     preloadSpeech(...queue.slice(0, 3).map(heard));
   }, [queue]);
 
-  /** One more answer in a session; the stretch is over once it reaches its goal. */
+  // Past the goal, the next step of a word begun in this stretch comes before anything else.
+  useLayoutEffect(() => {
+    if (extra && !fixes && pending > 0) setQueue((q) => (q ? toFront(q, unfinished(q, started)) : q));
+  }, [extra, fixes, pending, started]);
+
+  /** One more answer in a session; past its goal the stretch runs on only to finish its words. */
   const count = useCallback(() => {
     if (!session) return;
     const n = answered + 1;
     setAnswered(n);
-    if (n >= goal) setOver(true);
+    if (n >= goal + SESSION_MAX - SESSION_TASKS) setOver(true);
   }, [session, answered, goal]);
 
   /** A mistake gone over: right, it is done; wrong, it comes again after the others. */
@@ -323,14 +334,19 @@ export function ReviewScreen({
       const rest = quiet ? queue.slice(1).filter((i) => i.learn?.kind !== "aloud") : queue.slice(1);
       const word = item.card;
       note("met", word.id);
+      setStarted((s) => (s.has(word.id) ? s : new Set(s).add(word.id)));
       const kind = item.learn.kind;
+      // Built (or met, with nothing to build): the word climbs to typing it, which comes at once, after
+      // saying it aloud. Put in now rather than on the server's answer, so it never waits on the network.
+      const typeNext = ok && (kind === "build" || (kind === "intro" && !buildable(word)));
       // Meeting a word is followed at once by tasks on it; a missed pick comes back a few cards on.
-      const next =
+      const after =
         kind === "intro"
           ? [...afterIntro(word, options[word.id] ?? [], { hear: canSpeak(), say: !silent && canSay(word) }), ...rest]
           : kind === "choose" && !ok
             ? insertAfter([item, ...rest], item).slice(1)
             : rest;
+      const next = typeNext ? insertNext([item, ...after], learnTask(word, 1, canSpeak())).slice(1) : after;
       setQueue(next);
       // Inside the tap, where iOS still lets audio play.
       if (next[0]?.mode === "listening") speak(heard(next[0]));
@@ -347,10 +363,9 @@ export function ReviewScreen({
         .answerLearning(word.id, ok)
         .then(
           (res) => {
-            // Built (or met, with nothing to build): typing it comes at once, after saying it aloud.
-            if (res.status === "climbed" && res.step === 1 && (kind === "build" || kind === "intro"))
-              setQueue((q) => insertNext(q ?? [], learnTask(word, 1, canSpeak())));
-            else if (res.status === "climbed" || res.status === "missed") setQueue((q) => insertAfter(q ?? [], learnTask(word, res.step, canSpeak())));
+            // Typing it is already in the queue.
+            if (res.status === "climbed" && res.step === 1 && typeNext) return;
+            if (res.status === "climbed" || res.status === "missed") setQueue((q) => insertAfter(q ?? [], learnTask(word, res.step, canSpeak())));
             else if (res.status === "passed") {
               note("climbed", word.id);
               if (res.next) {
@@ -372,6 +387,7 @@ export function ReviewScreen({
   const more = useCallback(() => {
     setGoal(answered + SESSION_TASKS);
     setOver(false);
+    setStarted(new Set());
     setMistakes([]);
     setFixes(undefined);
     if (!queue?.length) {
@@ -418,6 +434,8 @@ export function ReviewScreen({
   }, [revealed, reveal, rate, back, listening, speaking, item, pause]);
 
   const stretch = SESSION_TASKS - (goal - answered);
+  // Past the goal: "15 +2", the steps added to finish the words begun.
+  const counted = stretch > SESSION_TASKS ? `${SESSION_TASKS} +${stretch - SESSION_TASKS}` : `${stretch} / ${SESSION_TASKS}`;
   const right = mistakes.length - (fixes?.length ?? 0);
   const progress = fixing
     ? right / mistakes.length
@@ -437,7 +455,7 @@ export function ReviewScreen({
           <div className="progress-fill" style={{ transform: `scaleX(${progress})` }} />
         </div>
         <span className="review-count">
-          {session ? (pause ? "" : fixing ? `${right} / ${mistakes.length}` : `${stretch} / ${SESSION_TASKS}`) : mode !== "mixed" || kinds ? `${Math.min(done, total)} / ${total}` : ""}
+          {session ? (pause ? "" : fixing ? `${right} / ${mistakes.length}` : counted) : mode !== "mixed" || kinds ? `${Math.min(done, total)} / ${total}` : ""}
         </span>
         <button
           type="button"
