@@ -1,8 +1,7 @@
 // New words. A card doesn't enter reviews when it is added, from Claude or in the app: it waits in
 // the pool until it is learned, so reviews never ask about a word not met yet. The app's session
-// ("Learn", apps/web screens/Review.tsx) learns a few at a time (ACTIVE_WORDS), oldest first, and
-// takes new ones only while few words are still unfinished (IN_PROGRESS_LIMIT), so started words are
-// finished before more come:
+// ("Learn", apps/web screens/Review.tsx) learns a few at a time (ACTIVE_WORDS), oldest first, with no
+// daily cap: a word up the ladder makes room for the next at once, however many wait for their check:
 // each climbs a ladder of LADDER_STEPS tasks (build it from syllables, pick it out by ear, write it
 // from the translation), a miss taking it one step down. A word up the ladder frees its place
 // for the next from the pool and waits CHECK_AFTER; then, in a later session, it is asked once more
@@ -20,11 +19,6 @@ export const reviewModes: ReviewMode[] = ["meaning", "speech", "listening"];
 
 /** How many new words are learned at once, on the ladder. */
 export const ACTIVE_WORDS = 3;
-/**
- * New words come from the pool only while fewer than this are unfinished (on the ladder or waiting
- * for their check), so the words already started are learned before more come.
- */
-export const IN_PROGRESS_LIMIT = 5;
 /** Tasks in a row a word climbs in a session before it waits for its check. */
 export const LADDER_STEPS = 3;
 /** How long a word up the ladder waits before it is checked, so the check is from memory. */
@@ -142,9 +136,12 @@ function counts(db: Pick<Db, "select">, userId: number, now: Date): Counts {
   };
 }
 
-/** How many new words may start now: a free place on the ladder, and few enough unfinished. */
+/**
+ * How many new words may start now: the free places on the ladder. Words waiting for their check
+ * don't hold new ones back (the owner learns as many as they like in a day); their checks come first in a session.
+ */
 export function room(c: Counts): number {
-  return Math.max(0, Math.min(ACTIVE_WORDS - c.active, IN_PROGRESS_LIMIT - c.active - c.passed, c.pool));
+  return Math.max(0, Math.min(ACTIVE_WORDS - c.active, c.pool));
 }
 
 /** A word being learned: the ladder step it is on (0 to LADDER_STEPS - 1), or "check" once it waited. */
@@ -242,7 +239,7 @@ export function answerLearning(db: Db, userId: number, id: number, ok: boolean, 
       return { status: "climbed", step };
     }
     tx.update(cards).set({ learnStep: step, learnPassedAt: now, learningAt: null }).where(where).run();
-    // Its place on the ladder goes to a new word only while few are unfinished.
+    // Its place on the ladder goes to the next new word.
     const [next] = room(counts(tx, userId, now)) > 0 ? pick(tx as unknown as Db, userId, 1, now) : [];
     return { status: "passed", next: next ? { card: withSimilar(tx as unknown as Db, userId, [toCardDto(next)])[0]!, step: 0 } : null };
   });
