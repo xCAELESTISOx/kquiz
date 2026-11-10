@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import type { Db } from "./db/client.js";
 import { attempts, cards, phoneStats, reviewLog, reviewStates } from "./db/schema.js";
 import { getFsrsSetup } from "./fsrs.js";
@@ -9,6 +9,8 @@ import { reviewable } from "./reviewStore.js";
 const DAY = 86_400_000;
 export const ACTIVITY_DAYS = 7 * 17;
 export const FORECAST_DAYS = 30;
+/** Past days shown before today on the forecast chart: half of its month. */
+export const HISTORY_DAYS = 15;
 const RETENTION_DAYS = 30;
 const SPEECH_WEEKS = 8;
 const TREND_DAYS = 14;
@@ -36,6 +38,8 @@ export type StatsOverview = {
    * word just learned is (its first review is due the next day).
    */
   forecast: { day: string; due: ByMode<number>; words: number }[];
+  /** Words gone over per local day before today, oldest first, ending yesterday (any mode counts once). */
+  history: { day: string; words: number }[];
   /** Words (cards) already learned: past the new-word pool and not paused, as on Today. */
   learned: number;
   /** New words taken into "Learn" and not learned yet: they join the forecast once learned. */
@@ -105,6 +109,21 @@ export function statsOverview(db: Db, userId: number, now = new Date(), tzOffset
   const activity = Array.from({ length: ACTIVITY_DAYS }, (_, i) => {
     const day = today - ACTIVITY_DAYS + 1 + i;
     return { day: dateOf(day), reviews: perDay.get(day) ?? 0 };
+  });
+
+  const wordsPerDay = new Map(
+    db
+      .select({ day: localDay, n: sql<number>`count(distinct ${reviewLog.cardId})` })
+      .from(reviewLog)
+      .innerJoin(cards, eq(cards.id, reviewLog.cardId))
+      .where(and(mine, gte(reviewLog.reviewedAt, startOf(today - HISTORY_DAYS)), lt(reviewLog.reviewedAt, startOf(today))))
+      .groupBy(localDay)
+      .all()
+      .map((r) => [r.day, r.n]),
+  );
+  const history = Array.from({ length: HISTORY_DAYS }, (_, i) => {
+    const day = today - HISTORY_DAYS + i;
+    return { day: dateOf(day), words: wordsPerDay.get(day) ?? 0 };
   });
 
   const dueDay = sql<number>`max(cast((${reviewStates.due} + ${shift}) / ${DAY} as integer), ${today})`;
@@ -191,6 +210,7 @@ export function statsOverview(db: Db, userId: number, now = new Date(), tzOffset
     streak: { current, best, reviewedToday: reviewDays[0] === today },
     activity,
     forecast,
+    history,
     learned,
     learning: newCards(db, userId, now).learning,
     retention,

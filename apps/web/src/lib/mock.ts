@@ -541,8 +541,10 @@ export class MockApi {
       const listening = i === 0 ? 2 : Math.round(rand() * 2 * fade);
       return { day: day(i), due: { meaning, speech, listening }, words: Math.max(meaning, speech, listening, i === 0 ? 5 : 0) };
     });
+    const history = Array.from({ length: 15 }, (_, i) => ({ day: day(i - 15), words: i === 6 ? 0 : Math.round(3 + rand() * 9) }));
     return {
       today: day(0),
+      history,
       streak: { current: 8, best: 21, reviewedToday: false },
       activity,
       forecast,

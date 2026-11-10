@@ -141,9 +141,23 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
     }
   };
   const [selected, select] = useState<number>();
-  const items = stats.forecast.slice(0, range);
-  // Words, not mode-reviews: a word due for meaning and pronunciation on one day is one word.
-  const totals = items.map((f) => f.words ?? sum(modes.map((m) => f.due[m.mode] ?? 0)));
+  // Half the chart is what was done, half what is coming: the past makes the forecast readable.
+  const back = Math.floor(range / 2);
+  const history = stats.history ?? [];
+  const past: Day[] = Array.from({ length: back }, (_, k) => {
+    const offset = k - back;
+    const day = addDays(stats.today, offset);
+    return { day, offset, words: history.find((h) => h.day === day)?.words ?? 0 };
+  });
+  const ahead: Day[] = stats.forecast.slice(0, range - back).map((f, i) => ({
+    day: f.day,
+    offset: i,
+    // Words, not mode-reviews: a word due for meaning and pronunciation on one day is one word.
+    words: f.words ?? sum(modes.map((m) => f.due[m.mode] ?? 0)),
+    due: f.due,
+  }));
+  const items = [...past, ...ahead];
+  const totals = items.map((d) => d.words);
   const max = Math.max(...totals, 1);
   const pick = usePointerPick(items.length, select);
   const learned = stats.learned ?? 0;
@@ -157,11 +171,11 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
     );
   }
 
-  const now = totals[0] ?? 0;
-  const ahead = sum(totals.slice(1));
-  const future = totals.slice(1);
-  const peak = future.length ? future.indexOf(Math.max(...future)) + 1 : 0;
-  const shown = selected ?? 1;
+  const now = ahead[0]?.words ?? 0;
+  const future = ahead.slice(1).map((d) => d.words);
+  const coming = sum(future);
+  const peak = future.length ? back + future.indexOf(Math.max(...future)) + 1 : 0;
+  const shown = selected ?? back + 1;
   const day = items[shown];
 
   return (
@@ -175,9 +189,9 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
           <span className="forecast-tile-hint">including overdue</span>
         </div>
         <div className="forecast-tile" data-kind="ahead">
-          <span className="forecast-tile-value">{ahead}</span>
-          <span className="forecast-tile-label">word {plural(ahead, "review", "reviews")} ahead</span>
-          <span className="forecast-tile-hint">the {range === 30 ? "month" : "week"} ahead, from tomorrow</span>
+          <span className="forecast-tile-value">{coming}</span>
+          <span className="forecast-tile-label">word {plural(coming, "review", "reviews")} ahead</span>
+          <span className="forecast-tile-hint">the next {future.length} days</span>
         </div>
       </div>
 
@@ -194,13 +208,13 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
           <>
             <span className="readout-value">{totals[shown]}</span>
             <span className="readout-label">
-              {wordsWord(totals[shown]!)} · {dayName(day.day, shown, true)}
+              {wordsWord(totals[shown]!)} {day.offset < 0 ? "gone over" : "due"} · {dayName(day.day, day.offset, true)}
             </span>
-            {modes.length > 1 && totals[shown]! > 0 && (
+            {day.due && modes.length > 1 && totals[shown]! > 0 && (
               <span className="readout-parts readout-modes">
                 {modes
-                  .filter((m) => day.due[m.mode])
-                  .map((m) => `${m.label.toLowerCase()} ${day.due[m.mode]}`)
+                  .filter((m) => day.due![m.mode])
+                  .map((m) => `${m.label.toLowerCase()} ${day.due![m.mode]}`)
                   .join(" · ")}
               </span>
             )}
@@ -213,22 +227,41 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
         data-range={range}
         data-picking={selected !== undefined}
         role="img"
-        aria-label={`Words due by day: ${items.map((f, i) => `${shortDate(f.day)} — ${totals[i]}`).join(", ")}`}
+        aria-label={`Words gone over, then due, by day: ${items.map((f, i) => `${shortDate(f.day)} — ${totals[i]}`).join(", ")}`}
         {...pick}
       >
         {items.map((f, i) => (
-          <div key={f.day} className="bar" data-selected={i === selected} data-today={i === 0} data-empty={totals[i] === 0}>
+          <div
+            key={f.day}
+            className="bar"
+            data-selected={i === selected}
+            data-past={f.offset < 0}
+            data-today={f.offset === 0}
+            data-empty={totals[i] === 0}
+          >
             <div className="bar-stack" style={{ height: `${(totals[i]! / max) * 100}%` }} />
           </div>
         ))}
       </div>
       <div className="bars-axis" data-range={range} aria-hidden="true">
         {items.map((f, i) => (
-          <span key={f.day}>{range === 7 ? weekday(f.day, i) : i % 7 === 0 && i < 28 ? (i === 0 ? "today" : shortDate(f.day)) : ""}</span>
+          <span key={f.day}>
+            {range === 7
+              ? weekday(f.day, f.offset)
+              : f.offset % 7 === 0 && i < items.length - 2
+                ? f.offset === 0
+                  ? "today"
+                  : shortDate(f.day)
+                : ""}
+          </span>
         ))}
       </div>
 
       <div className="legend forecast-legend">
+        <span>
+          <i data-kind="past" />
+          done
+        </span>
         <span>
           <i data-kind="now" />
           today
@@ -239,12 +272,21 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
         </span>
       </div>
       <p className="stats-note">
-        Counts the {learned} {wordsWord(learned)} you've learned; a word due in several modes counts once.
+        Counts the {learned} {wordsWord(learned)} you've learned; a word due in several modes counts once. Only each
+        word's next review is shown: once gone over, it comes back later.
         {learning > 0 ? ` ${learning} more ${learning === 1 ? "is" : "are"} still in “Learn” and join once learned.` : ""}
         {totals[peak]! > 0 ? ` Busiest day: ${dayName(items[peak]!.day, peak, true)}, ${totals[peak]} ${wordsWord(totals[peak]!)}.` : ""}
       </p>
     </>
   );
+}
+
+type Day = { day: string; offset: number; words: number; due?: Record<string, number> };
+
+function addDays(day: string, n: number) {
+  const d = parseDay(day);
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function Retention({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
