@@ -228,6 +228,8 @@ export interface StatsOverview {
   activity: { day: string; reviews: number }[];
   /** words: distinct words due that day (a word due in two modes counts once). */
   forecast: { day: string; due: Record<string, number>; words?: number }[];
+  /** Words gone over per day before today, oldest first, ending yesterday. */
+  history?: { day: string; words: number }[];
   /** Words past the new-word pool ("Learn") and not paused. */
   learned?: number;
   /** New words taken into "Learn" and not learned yet: not in the forecast until they are. */

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { recordAttempt } from "./attemptStore.js";
 import type { ScoreResult } from "./scorer.js";
-import { ACTIVITY_DAYS, FORECAST_DAYS, streaks, zoneOffset } from "./statsStore.js";
+import { ACTIVITY_DAYS, FORECAST_DAYS, HISTORY_DAYS, streaks, zoneOffset } from "./statsStore.js";
 import { testApp } from "./testing.js";
 import { OWNER_ID } from "./users.js";
 
@@ -81,6 +81,13 @@ describe("GET /stats", () => {
     expect(seoul.activity.at(-1)).toEqual({ day: "2026-10-19", reviews: 0 });
     expect(seoul.activity.at(-2)).toEqual({ day: "2026-10-18", reviews: 2 });
     expect(seoul.activity.at(-5)).toEqual({ day: "2026-10-15", reviews: 2 });
+
+    expect(seoul.history).toHaveLength(HISTORY_DAYS);
+    expect(seoul.history.at(-1)).toEqual({ day: "2026-10-18", words: 1 });
+    // Two modes of one word on the 18th are one word; the first sighting and its step on the 15th too.
+    expect(seoul.history.at(-4)).toEqual({ day: "2026-10-15", words: 1 });
+    expect(seoul.history.at(-2)).toEqual({ day: "2026-10-17", words: 1 });
+    expect(seoul.history.at(-3)).toEqual({ day: "2026-10-16", words: 0 });
 
     expect(seoul.forecast).toHaveLength(FORECAST_DAYS);
     const meaningDue = seoul.forecast.reduce((n: number, f: { due: Record<string, number> }) => n + f.due.meaning, 0);

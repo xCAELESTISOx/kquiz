@@ -334,6 +334,16 @@
   box-shadow: 0 0 16px rgb(124 140 255 / 0.35);
 }
 
+/* Days gone by are facts: solid and quiet, so the forecast stays the thing to read. */
+.forecast-bars .bar[data-past="true"] .bar-stack {
+  background: rgb(255 255 255 / 0.2);
+  box-shadow: none;
+}
+
+.forecast-legend i[data-kind="past"] {
+  background: rgb(255 255 255 / 0.28);
+}
+
 .forecast-legend i[data-kind="now"] {
   background: linear-gradient(to bottom, var(--accent-hi), var(--accent));
 }
