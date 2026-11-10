@@ -96,7 +96,7 @@ export function TodayScreen() {
     (k) => k,
     left,
   ).slice(0, Math.max(PREVIEW - wall.length, 0));
-  // What "Learn" goes on with: words already started first, new ones only when few are unfinished.
+  // What "Learn" goes on with: words already started first, then new ones.
   const started = stats?.newCards.started ?? 0;
   const portion = stats?.newCards.fresh ?? 0;
   const learning = stats?.newCards.learning ?? 0;

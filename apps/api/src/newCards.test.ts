@@ -100,7 +100,7 @@ describe("new words", () => {
     expect((await t.request("/reviews/stats")).json.due.meaning).toBe(1);
   });
 
-  it("come only while few words are unfinished", async () => {
+  it("keep coming with no daily cap: a word up the ladder makes room at once", async () => {
     const t = testApp({}, { learnNewWords: false });
     await t.signIn();
     const words = fromClaude(t, 10);
@@ -111,19 +111,16 @@ describe("new words", () => {
       await answer(card);
       return answer(card);
     };
-    // Three on the ladder; each one up it is replaced while fewer than five are unfinished.
-    expect((await climb(words[0]!.id)).next.card.id).toBe(words[3]!.id);
-    expect((await climb(words[1]!.id)).next.card.id).toBe(words[4]!.id);
-    // Five unfinished now (two waiting, three on the ladder): no more until some are learned.
-    expect(await climb(words[2]!.id)).toEqual({ status: "passed", next: null });
+    // Three on the ladder; each one up it is replaced by the next from the pool, however many wait.
+    for (let i = 0; i < 6; i++) expect((await climb(words[i]!.id)).next.card.id).toBe(words[i + 3]!.id);
     let session = (await t.request("/cards/learning")).json;
-    expect(session.items.map((i: any) => i.card.id)).toEqual([words[3]!.id, words[4]!.id]);
-    expect((await t.request("/reviews/stats")).json.newCards).toMatchObject({ started: 2, fresh: 0, pool: 5 });
-    // Three hours on, the checks come first; learned, they make room again.
+    expect(session.items.map((i: any) => i.card.id)).toEqual([words[6]!.id, words[7]!.id, words[8]!.id]);
+    expect((await t.request("/reviews/stats")).json.newCards).toMatchObject({ started: 3, fresh: 0, pool: 1 });
+    // Three on, the last one comes too; three hours later, the checks come first.
+    expect((await climb(words[6]!.id)).next.card.id).toBe(words[9]!.id);
     t.clock.now = new Date(t.clock.now.getTime() + 3 * HOUR);
-    for (const w of words.slice(0, 3)) expect((await answer(w.id)).status).toBe("learned");
     session = (await t.request("/cards/learning")).json;
-    expect(session.items.map((i: any) => i.card.id)).toEqual([words[3]!.id, words[4]!.id, words[5]!.id]);
+    expect(session.items.slice(0, 7).map((i: any) => i.step)).toEqual(Array(7).fill("check"));
   });
 
   it("enter reviews after learning a group: tomorrow, or later today if missed", async () => {

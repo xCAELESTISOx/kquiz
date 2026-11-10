@@ -53,7 +53,6 @@ export interface KeyValueStorage {
 const KEY = "kquiz.mock.v5";
 
 const ACTIVE_WORDS = 3;
-const IN_PROGRESS_LIMIT = 5;
 const LADDER_STEPS = 3;
 const CHECK_AFTER = 3 * 3_600_000;
 const MINUTE = 60_000;
@@ -304,14 +303,13 @@ export class MockApi {
     return { introduced };
   }
 
-  /** How many new words may start: a free place on the ladder, and few enough unfinished. */
+  /** How many new words may start: the free places on the ladder (no daily cap). */
   private room(): number {
     const learn = this.state.learn ?? {};
     const waiting = this.state.cards.filter((c) => c.queued && !c.suspended);
     const active = waiting.filter((c) => learn[c.id]?.at && !learn[c.id]!.passedAt).length;
-    const passed = waiting.filter((c) => learn[c.id]?.passedAt).length;
     const pool = waiting.filter((c) => !learn[c.id]).length;
-    return Math.max(0, Math.min(ACTIVE_WORDS - active, IN_PROGRESS_LIMIT - active - passed, pool));
+    return Math.max(0, Math.min(ACTIVE_WORDS - active, pool));
   }
 
   learning(): { items: LearningItem[]; pool: number } {
