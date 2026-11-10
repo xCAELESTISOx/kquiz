@@ -3,7 +3,7 @@ import { api, submitReview } from "../lib/api";
 import { logAnswer } from "../lib/sessionLog";
 import { useLeechIds } from "../lib/leeches";
 import { groupHash, navigate } from "../lib/router";
-import { choiceRating, REVEAL_MS, shuffled } from "../lib/choice";
+import { arranged, choiceRating, REVEAL_MS } from "../lib/choice";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
 import type { ChoiceOption, GroupFilter, QueueItem, RatingName, SimilarWord } from "../lib/types";
 import { CloseIcon, SpeakerIcon } from "../ui/icons";
@@ -132,7 +132,7 @@ export function ChoiceCard({
   const [nudges, setNudges] = useState<SimilarWord[]>([]);
 
   const choices = useMemo(
-    () => shuffled([{ id: card.id, korean: card.korean, meaning: card.meaning }, ...options]),
+    () => arranged({ id: card.id, korean: card.korean, meaning: card.meaning }, options),
     [card, options],
   );
 
