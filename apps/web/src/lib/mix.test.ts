@@ -20,3 +20,12 @@ it("leaves out items nothing picked can ask", () => {
 it("maps typing onto the schedules it reviews", () => {
   expect(serverModes(new Set(["write", "dictation"]))).toEqual(["speech", "listening"]);
 });
+
+it("asks each item the way used least so far, counting the tasks the session has anyway", () => {
+  const items = [1, 2, 3, 4, 5, 6].map((id) => item("speech", id));
+  const ways = mixWays(items, new Set(["choice", "write", "aloud"]), { record: true, pick: () => true }, () => 0, ["write", "write"]);
+  const counts = { aloud: 0, choice: 0, write: 0 } as Record<string, number>;
+  for (const i of items) counts[ways.get(i)!]!++;
+  // Two written already: the six go mostly to the other two.
+  expect(counts).toEqual({ aloud: 3, choice: 3, write: 0 });
+});
