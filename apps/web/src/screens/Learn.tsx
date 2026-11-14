@@ -288,8 +288,11 @@ export function LearnScreen({ id, group }: { id?: number; group?: GroupFilter })
   );
 }
 
-/** The whole card at once, heard first: the word is met before anything is asked about it. */
-export function IntroCard({ card, onDone }: { card: Card; onDone: () => void }) {
+/**
+ * The whole card at once, heard first: the word is met before anything is asked about it. `onSkip`
+ * offers, quietly, to leave this word for later and meet another instead.
+ */
+export function IntroCard({ card, onDone, onSkip }: { card: Card; onDone: () => void; onSkip?: () => void }) {
   const families = useFamily(card);
   useEffect(() => {
     if (canSpeak()) speak(card);
@@ -329,6 +332,11 @@ export function IntroCard({ card, onDone }: { card: Card; onDone: () => void }) 
           Got it, next
         </button>
         <p className="review-tip muted small">Listen a couple of times and read the example aloud</p>
+        {onSkip && (
+          <button type="button" className="link-button skip-word" onClick={onSkip}>
+            Not now, another word
+          </button>
+        )}
       </footer>
     </>
   );

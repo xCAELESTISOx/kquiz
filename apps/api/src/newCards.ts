@@ -8,7 +8,7 @@
 // from its translation. Right, and it is learned: it enters reviews (FSRS), first due the next day.
 // Wrong, and it goes one step down too: back among the words being learned on the ladder's last
 // step, to be passed in that session and checked again later. The owner can also pull a card in by hand, unlearned.
-import { and, asc, eq, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, lte, ne, or, sql } from "drizzle-orm";
 import type { Db } from "./db/client.js";
 import { cards, reviewStates } from "./db/schema.js";
 import { toCardDto, type CardDto } from "./cardStore.js";
@@ -111,7 +111,7 @@ export function newCards(db: Db, userId: number, now = new Date()): NewCards {
         .select({ korean: cards.korean })
         .from(cards)
         .where(and(waiting(userId), isNull(cards.learningAt), isNull(cards.learnPassedAt)))
-        .orderBy(asc(cards.createdAt), asc(cards.id))
+        .orderBy(...poolOrder)
         .limit(fresh)
         .all(),
     )
@@ -119,6 +119,12 @@ export function newCards(db: Db, userId: number, now = new Date()): NewCards {
     .map((row) => row.korean);
   return { queued, learning, next, started, fresh, pool: c.pool };
 }
+
+/**
+ * The pool's order: oldest added first (the tutor's lessons in turn), except that a word skipped as
+ * it was met goes to the back, behind every word added before it was skipped.
+ */
+const poolOrder = [sql`coalesce(${cards.skippedAt}, ${cards.createdAt})`, asc(cards.id)];
 
 const checkTime = (now: Date) => new Date(now.getTime() - CHECK_AFTER);
 
@@ -185,13 +191,13 @@ export function learningWords(db: Db, userId: number, now: Date): { items: Learn
   });
 }
 
-/** Takes the next `n` words from the pool (oldest added first) into learning. */
-function pick(tx: Db, userId: number, n: number, now: Date) {
+/** Takes the next `n` words from the pool (oldest added first) into learning, `except` one just skipped. */
+function pick(tx: Db, userId: number, n: number, now: Date, except?: number) {
   const rows = tx
     .select()
     .from(cards)
-    .where(and(waiting(userId), isNull(cards.learningAt), isNull(cards.learnPassedAt)))
-    .orderBy(asc(cards.createdAt), asc(cards.id))
+    .where(and(waiting(userId), isNull(cards.learningAt), isNull(cards.learnPassedAt), except === undefined ? undefined : ne(cards.id, except)))
+    .orderBy(...poolOrder)
     .limit(n)
     .all();
   if (rows.length)
@@ -242,6 +248,24 @@ export function answerLearning(db: Db, userId: number, id: number, ok: boolean, 
     // Its place on the ladder goes to the next new word.
     const [next] = room(counts(tx, userId, now)) > 0 ? pick(tx as unknown as Db, userId, 1, now) : [];
     return { status: "passed", next: next ? { card: withSimilar(tx as unknown as Db, userId, [toCardDto(next)])[0]!, step: 0 } : null };
+  });
+}
+
+export type SkipAnswer = { status: "skipped"; next: LearningItem | null } | { status: "not_new" } | { status: "not_found" };
+
+/**
+ * "Not now" on a word just met: it goes back to the pool, at its very end, and the next word from
+ * the pool takes its place (`next`, none when it was the last). Only a word not yet started up the
+ * ladder can be skipped; one partly learned stays where it is.
+ */
+export function skipLearning(db: Db, userId: number, id: number, now: Date): SkipAnswer {
+  return db.transaction((tx) => {
+    const row = tx.select().from(cards).where(and(eq(cards.id, id), eq(cards.userId, userId))).get();
+    if (!row) return { status: "not_found" };
+    if (row.introducedAt || row.learnPassedAt || row.learnStep > 0) return { status: "not_new" };
+    tx.update(cards).set({ learningAt: null, learnStep: 0, skippedAt: now }).where(eq(cards.id, id)).run();
+    const [next] = room(counts(tx, userId, now)) > 0 ? pick(tx as unknown as Db, userId, 1, now, id) : [];
+    return { status: "skipped", next: next ? { card: withSimilar(tx as unknown as Db, userId, [toCardDto(next)])[0]!, step: 0 } : null };
   });
 }
 

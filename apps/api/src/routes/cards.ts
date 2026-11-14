@@ -5,7 +5,7 @@ import { getCardAudio } from "../cardAudio.js";
 import { cardCounts, cardFamily, createCards, deleteCard, getCard, listCards, listTags, updateCard } from "../cardStore.js";
 import { CARD_KINDS, newCardSchema, parseBulk } from "../cards.js";
 import type { Db } from "../db/client.js";
-import { answerLearning, introduceEarly, introduceLearned, learningWords } from "../newCards.js";
+import { answerLearning, introduceEarly, introduceLearned, learningWords, skipLearning } from "../newCards.js";
 import { linkParts } from "../phrases.js";
 import { linkSimilar, similarNoteSchema, unlinkSimilar } from "../similar.js";
 import { isExtraVoice } from "../voices.js";
@@ -172,6 +172,15 @@ export function cardRoutes(db: Db, now: () => Date, timeZone: string) {
     const result = id.success ? answerLearning(db, c.get("user").id, id.data, body.data.ok, now(), timeZone) : { status: "not_found" as const };
     if (result.status === "not_found") return c.json({ error: "not_found" }, 404);
     if (result.status === "not_queued") return c.json({ error: "not_queued" }, 409);
+    return c.json(result);
+  });
+
+  // "Not now" on a new word as it is met: back to the end of the pool, the next word in its place.
+  app.post("/:id/learning/skip", (c) => {
+    const id = idParam.safeParse(c.req.param("id"));
+    const result = id.success ? skipLearning(db, c.get("user").id, id.data, now()) : { status: "not_found" as const };
+    if (result.status === "not_found") return c.json({ error: "not_found" }, 404);
+    if (result.status === "not_new") return c.json({ error: "not_new" }, 409);
     return c.json(result);
   });
 

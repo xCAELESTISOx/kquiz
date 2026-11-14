@@ -161,6 +161,8 @@ export type LearningAnswer =
   | { status: "passed"; next: LearningItem | null }
   | { status: "learned"; due: string };
 
+export type SkipAnswer = { status: "skipped"; next: LearningItem | null };
+
 export interface ReviewResult {
   id: string;
   status: "applied" | "duplicate" | "card_not_found";

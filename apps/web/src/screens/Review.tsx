@@ -458,6 +458,38 @@ export function ReviewScreen({
     [queue, item, prepare, count, options, note, silent, fixing, fixed, ahead, started, hush, kindOf],
   );
 
+  /**
+   * "Not now" on a word as it is met: the server sends it to the back of the pool and gives the next
+   * new word in its place, met right away. Not an answer, so the session's count stays where it is.
+   */
+  const [skipping, setSkipping] = useState(false);
+  const skipWord = useCallback(() => {
+    if (!item || item.learn?.kind !== "intro" || skipping || fixing) return;
+    const word = item.card;
+    const logged = logOutcome({ result: "skipped", note: "not now" });
+    logEvent("skip-new", { korean: word.korean });
+    setSkipping(true);
+    api
+      .skipLearning(word.id)
+      .then(
+        (res) => {
+          logServer(logged, res.next ? `skipped, next ${res.next.card.korean}` : "skipped");
+          if (res.next) prepare(res.next.card);
+          setQueue((q) => {
+            const rest = (q ?? []).filter((i) => i.card.id !== word.id);
+            return res.next ? [introTask(res.next.card), ...rest] : rest;
+          });
+          setStep((n) => n + 1);
+          shownAt.current = performance.now();
+        },
+        (e: Error) => {
+          logServer(logged, `not sent: ${e.message}`);
+          if (!isConnectionError(e)) setError(e.message);
+        },
+      )
+      .finally(() => setSkipping(false));
+  }, [item, skipping, fixing, prepare]);
+
   /** "Another round": as many answers again; the same queue goes on, or a fresh one if it ran out. */
   const more = useCallback(() => {
     logEvent("another-round");
@@ -599,7 +631,7 @@ export function ReviewScreen({
       {session && queue && !card && !pause && <div className="review-stage" aria-busy="true" />}
 
       {queue && item?.learn && (
-        <LearnStep key={step} item={item} options={options[item.card.id] ?? []} tiles={tiles[item.card.id]} recorder={recorder} onDone={learned} />
+        <LearnStep key={step} item={item} options={options[item.card.id] ?? []} tiles={tiles[item.card.id]} recorder={recorder} onDone={learned} onSkip={skipWord} />
       )}
 
       {!learning && queue && item && building && (
@@ -787,6 +819,7 @@ function LearnStep({
   tiles,
   recorder,
   onDone,
+  onSkip,
 }: {
   item: QueueItem;
   options: ChoiceOption[];
@@ -794,10 +827,12 @@ function LearnStep({
   recorder: RefObject<Recorder | undefined>;
   /** `quiet`: the word can't be said now, and nothing more is to be said this session. */
   onDone: (ok: boolean, quiet?: boolean) => void;
+  /** Leaves a word just met for later; another new word comes instead. */
+  onSkip?: () => void;
 }) {
   const kind = item.learn!.kind;
   const { card } = item;
-  if (kind === "intro") return <IntroCard card={card} onDone={() => onDone(true)} />;
+  if (kind === "intro") return <IntroCard card={card} onDone={() => onDone(true)} onSkip={onSkip} />;
   if (kind === "choose") return <ChoiceCard item={item} options={options} practice instant onDone={(r) => onDone(r !== "again")} />;
   if (kind === "aloud")
     return (
