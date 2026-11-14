@@ -2476,6 +2476,17 @@ p {
 }
 
 /* "Don't know": a quiet way out that counts as forgotten. */
+/* Skipping a new word as it is met: there if wanted, not in the way. */
+.review-actions > .skip-word {
+  align-self: center;
+  min-height: 32px;
+  margin-top: -6px;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  opacity: 0.75;
+}
+
 .review-actions > .dont-know {
   align-self: center;
   color: var(--text-muted);

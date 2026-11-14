@@ -2,6 +2,7 @@ import { isKoreanOnly, normalizeKorean } from "./korean";
 import { fallbackTiles } from "./phrase";
 import type {
   LearningAnswer,
+  SkipAnswer,
   LearningItem,
   AddCardResult,
   AddCardsResult,
@@ -43,6 +44,8 @@ interface MockState {
   newPerDay: number;
   /** New words being learned (apps/api newCards.ts): since when, the ladder step, when it was climbed. */
   learn?: Record<number, { at: string | null; step: number; passedAt: string | null }>;
+  /** When a new word was skipped as met: it waits at the back of the pool from then on. */
+  skipped?: Record<number, string>;
 }
 
 export interface KeyValueStorage {
@@ -314,7 +317,7 @@ export class MockApi {
 
   learning(): { items: LearningItem[]; pool: number } {
     const learn = (this.state.learn ??= {});
-    const waiting = this.state.cards.filter((c) => c.queued && !c.suspended).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id - b.id);
+    const waiting = this.state.cards.filter((c) => c.queued && !c.suspended).sort(this.poolOrder);
     const now = this.now().getTime();
     const checks = waiting.filter((c) => learn[c.id]?.passedAt && now - Date.parse(learn[c.id]!.passedAt!) >= CHECK_AFTER);
     const active = waiting.filter((c) => learn[c.id]?.at && !learn[c.id]!.passedAt);
@@ -329,6 +332,26 @@ export class MockApi {
       items: [...checks.map((card) => ({ card, step: "check" as const })), ...active.map((card) => ({ card, step: learn[card.id]!.step }))],
       pool: waiting.filter((c) => !learn[c.id]).length,
     };
+  }
+
+  /** Oldest added first; a word skipped as met counts from when it was skipped. */
+  private poolOrder = (a: Card, b: Card): number => {
+    const at = (c: Card) => this.state.skipped?.[c.id] ?? c.createdAt;
+    return at(a).localeCompare(at(b)) || a.id - b.id;
+  };
+
+  skipLearning(id: number): SkipAnswer {
+    const learn = (this.state.learn ??= {});
+    const at = this.now().toISOString();
+    if (learn[id] && (learn[id]!.step > 0 || learn[id]!.passedAt)) throw new Error("not_new");
+    delete learn[id];
+    (this.state.skipped ??= {})[id] = at;
+    const next = this.room() > 0
+      ? this.state.cards.filter((c) => c.queued && !c.suspended && !learn[c.id] && c.id !== id).sort(this.poolOrder)[0]
+      : undefined;
+    if (next) learn[next.id] = { at, step: 0, passedAt: null };
+    this.save();
+    return { status: "skipped", next: next ? { card: next, step: 0 } : null };
   }
 
   answerLearning(id: number, ok: boolean): LearningAnswer {
@@ -355,7 +378,7 @@ export class MockApi {
       const next = this.room() > 0
         ? this.state.cards
             .filter((c) => c.queued && !c.suspended && !learn[c.id])
-            .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id - b.id)[0]
+            .sort(this.poolOrder)[0]
         : undefined;
       if (next) learn[next.id] = { at, step: 0, passedAt: null };
       answer = { status: "passed", next: next ? { card: next, step: 0 } : null };

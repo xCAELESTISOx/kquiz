@@ -1,0 +1,1 @@
+ALTER TABLE `cards` ADD `skipped_at` integer;
