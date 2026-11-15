@@ -53,6 +53,8 @@ export type StatsOverview = {
   toLearn: number;
   /** Words learned over the last `days` days, today included (days start with the first word learned). */
   pace: { days: number; learned: number };
+  /** New words learned (passed "Learn") per local day, oldest first, the last HISTORY_DAYS days and today. */
+  learnedDays: { day: string; words: number }[];
   /** Share of reviews in the last 30 days not rated "again", leaving out first sightings and learning steps. */
   retention: ByMode<{ reviews: number; recalled: number }>;
   /** Retention FSRS schedules for, per mode (set on the FSRS settings screen). */
@@ -205,6 +207,7 @@ export function statsOverview(db: Db, userId: number, now = new Date(), tzOffset
     learning: pending.learning,
     toLearn: pending.queued,
     pace: learnPace(db, userId, today, startOf, dayOf),
+    learnedDays: learnedPerDay(db, userId, today, startOf, dateOf, shift),
     retention,
     targetRetention: Object.fromEntries([...modes].map((mode) => [mode, getFsrsSetup(db, userId, mode as ReviewMode).desiredRetention])),
     cards: { total: db.select({ n: sql<number>`count(*)` }).from(cards).where(mine).get()?.n ?? 0, byMode },
@@ -356,4 +359,29 @@ function learnPace(db: Db, userId: number, today: number, startOf: (day: number)
       .where(and(learnedAt, gte(cards.introducedAt, startOf(firstDay))))
       .get()?.n ?? 0;
   return { days: today - firstDay + 1, learned };
+}
+
+/** See StatsOverview.learnedDays. */
+function learnedPerDay(
+  db: Db,
+  userId: number,
+  today: number,
+  startOf: (day: number) => Date,
+  dateOf: (day: number) => string,
+  shift: number,
+): StatsOverview["learnedDays"] {
+  const localDay = sql<number>`cast((${cards.introducedAt} + ${shift}) / ${DAY} as integer)`;
+  const counts = new Map(
+    db
+      .select({ day: localDay, n: sql<number>`count(*)` })
+      .from(cards)
+      .where(and(eq(cards.userId, userId), eq(cards.introduction, "learned"), gte(cards.introducedAt, startOf(today - HISTORY_DAYS))))
+      .groupBy(localDay)
+      .all()
+      .map((r) => [r.day, r.n]),
+  );
+  return Array.from({ length: HISTORY_DAYS + 1 }, (_, i) => {
+    const day = today - HISTORY_DAYS + i;
+    return { day: dateOf(day), words: counts.get(day) ?? 0 };
+  });
 }

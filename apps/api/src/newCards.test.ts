@@ -94,6 +94,8 @@ describe("new words", () => {
     expect(overview.forecast[1]).toMatchObject({ words: 1 });
     // Learned today, the first day of learning: the pace counts from it.
     expect(overview.pace).toEqual({ days: 1, learned: 1 });
+    expect(overview.learnedDays.at(-1)).toEqual({ day: "2026-10-20", words: 1 });
+    expect(overview.learnedDays.slice(0, -1).every((d: { words: number }) => d.words === 0)).toBe(true);
     expect(overview.toLearn).toBe((await t.request("/reviews/stats")).json.newCards.queued);
     expect((await answer(true)).status).toBeUndefined();
     expect((await t.request(`/cards/${id}/learning`, { body: { ok: true } })).status).toBe(409);
