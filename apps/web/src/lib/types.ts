@@ -243,6 +243,8 @@ export interface StatsOverview {
   toLearn?: number;
   /** Words learned over the last `days` days, today included. */
   pace?: { days: number; learned: number };
+  /** New words learned per day, the last 15 days and today, oldest first. */
+  learnedDays?: { day: string; words: number }[];
   retention: Record<string, { reviews: number; recalled: number }>;
   targetRetention: Record<string, number>;
   cards: { total: number; byMode: Record<string, { new: number; learning: number; young: number; mature: number }> };
