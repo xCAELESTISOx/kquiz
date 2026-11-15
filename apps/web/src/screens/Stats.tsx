@@ -56,7 +56,8 @@ export function StatsScreen() {
       {stats && (
         <>
           <Streak stats={stats} />
-          <Section i={1} title="Forecast for learned words">
+          <Pace stats={stats} />
+          <Section i={1} title="Reviews ahead">
             <Forecast stats={stats} modes={modes} />
           </Section>
           <Section i={2} title="Recall" aside="last 30 days">
@@ -172,11 +173,13 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
   }
 
   const now = ahead[0]?.words ?? 0;
+  const nowReviews = sum(Object.values(ahead[0]?.due ?? {}));
   const future = ahead.slice(1).map((d) => d.words);
-  const coming = sum(future);
+  const perDay = future.length ? Math.round(sum(future) / future.length) : 0;
   const peak = future.length ? back + future.indexOf(Math.max(...future)) + 1 : 0;
   const shown = selected ?? back + 1;
   const day = items[shown];
+  const reviewsOn = day?.due ? sum(Object.values(day.due)) : 0;
 
   return (
     <>
@@ -184,14 +187,16 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
         <div className="forecast-tile" data-kind="now">
           <span className="forecast-tile-value">{now}</span>
           <span className="forecast-tile-label">
-            {wordsWord(now)} for today
+            {wordsWord(now)} to review today
           </span>
-          <span className="forecast-tile-hint">including overdue</span>
+          <span className="forecast-tile-hint">
+            {nowReviews > now ? `${nowReviews} ${plural(nowReviews, "task", "tasks")} in all modes` : "overdue included"}
+          </span>
         </div>
         <div className="forecast-tile" data-kind="ahead">
-          <span className="forecast-tile-value">{coming}</span>
-          <span className="forecast-tile-label">word {plural(coming, "review", "reviews")} ahead</span>
-          <span className="forecast-tile-hint">the next {future.length} days</span>
+          <span className="forecast-tile-value">{perDay}</span>
+          <span className="forecast-tile-label">{wordsWord(perDay)} a day ahead</span>
+          <span className="forecast-tile-hint">average over {future.length} days</span>
         </div>
       </div>
 
@@ -208,10 +213,11 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
           <>
             <span className="readout-value">{totals[shown]}</span>
             <span className="readout-label">
-              {wordsWord(totals[shown]!)} {day.offset < 0 ? "gone over" : "due"} · {dayName(day.day, day.offset, true)}
+              {wordsWord(totals[shown]!)} {day.offset < 0 ? "gone over" : "to review"} · {dayName(day.day, day.offset, true)}
             </span>
             {day.due && modes.length > 1 && totals[shown]! > 0 && (
               <span className="readout-parts readout-modes">
+                {reviewsOn > totals[shown]! ? `${reviewsOn} tasks: ` : ""}
                 {modes
                   .filter((m) => day.due![m.mode])
                   .map((m) => `${m.label.toLowerCase()} ${day.due![m.mode]}`)
@@ -272,13 +278,71 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
         </span>
       </div>
       <p className="stats-note">
-        Counts the {learned} {wordsWord(learned)} you've learned; a word due in several modes counts once. Only each
-        word's next review is shown: once gone over, it comes back later.
-        {learning > 0 ? ` ${learning} more ${learning === 1 ? "is" : "are"} still in “Learn” and join once learned.` : ""}
-        {totals[peak]! > 0 ? ` Busiest day: ${dayName(items[peak]!.day, peak, true)}, ${totals[peak]} ${wordsWord(totals[peak]!)}.` : ""}
+        Each of your {learned} learned {wordsWord(learned)} comes back just before you'd start to forget it: the next day
+        at first, then less and less often. The chart assumes you review every day and remember each word; a word
+        missed comes back sooner. A word counts once a day, even when it's due in several modes.
+        {learning > 0 ? ` The ${learning} ${wordsWord(learning)} now in “Learn” add to it once learned.` : ""}
+        {peak > 0 && totals[peak]! > 0 ? ` Busiest day ahead: ${dayName(items[peak]!.day, items[peak]!.offset, true)}, ${totals[peak]} ${wordsWord(totals[peak]!)}.` : ""}
       </p>
     </>
   );
+}
+
+/** A pace only from this many days of learning: one or two days say little. */
+const MIN_PACE_DAYS = 3;
+/** How far ahead "at this pace" looks. */
+const PACE_HORIZON = 30;
+
+/** "Keep this pace and in N days you'll know K words": from the words learned over the last two weeks. */
+function Pace({ stats }: { stats: StatsOverview }) {
+  const pace = stats.pace;
+  const learned = stats.learned ?? 0;
+  const toLearn = stats.toLearn ?? 0;
+  if (!pace) return null;
+  const rate = pace.learned / pace.days;
+  let headline: ReactNode;
+  let note: string;
+  if (pace.learned === 0) {
+    if (!toLearn) return null;
+    headline = <>No new words learned in the last {pace.days} days.</>;
+    note = `${toLearn} ${wordsWord(toLearn)} ${toLearn === 1 ? "is" : "are"} waiting in “Learn”.`;
+  } else if (pace.days < MIN_PACE_DAYS) {
+    headline = <>{pace.learned} {wordsWord(pace.learned)} learned so far.</>;
+    note = `Your pace shows up after ${MIN_PACE_DAYS} days of learning.`;
+  } else {
+    const finish = toLearn > 0 ? Math.ceil(toLearn / rate) : 0;
+    const total = learned + toLearn;
+    const lately = `You learned ${pace.learned} ${wordsWord(pace.learned)} in the last ${pace.days} days, about ${round1(rate)} a day.`;
+    if (toLearn === 0) {
+      headline = <>All {learned} of your words are learned.</>;
+      note = `${lately} Add more words to keep going.`;
+    } else if (finish <= PACE_HORIZON) {
+      headline = (
+        <>
+          Keep this pace and in <strong>{finish} {days(finish)}</strong> you'll know all <strong>{total} {wordsWord(total)}</strong> you've added.
+        </>
+      );
+      note = lately;
+    } else {
+      const k = learned + Math.round(rate * PACE_HORIZON);
+      headline = (
+        <>
+          Keep this pace and in <strong>{PACE_HORIZON} days</strong> you'll know about <strong>{k} {wordsWord(k)}</strong>.
+        </>
+      );
+      note = `${lately} All ${total} you've added would take ${finish} days.`;
+    }
+  }
+  return (
+    <section className="pace" aria-label="Pace">
+      <p className="pace-headline">{headline}</p>
+      <p className="stats-note">{note}</p>
+    </section>
+  );
+}
+
+function round1(n: number) {
+  return n >= 10 ? String(Math.round(n)) : String(Math.round(n * 10) / 10);
 }
 
 type Day = { day: string; offset: number; words: number; due?: Record<string, number> };
