@@ -569,7 +569,7 @@ export class MockApi {
       streak: { current: 8, best: 21, reviewedToday: false },
       activity,
       forecast,
-      learned: 12,
+      learned: 30,
       learning: 4,
       toLearn: 60,
       pace: { days: 9, learned: 23 },

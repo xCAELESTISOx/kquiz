@@ -57,7 +57,7 @@ export function StatsScreen() {
         <>
           <Streak stats={stats} />
           <Pace stats={stats} />
-          <Section i={1} title="New words learned">
+          <Section i={1} title="Words learned">
             <LearnedChart stats={stats} />
           </Section>
           <Section i={2} title="Recall" aside="last 30 days">
@@ -131,8 +131,8 @@ function savedRange(): 7 | 30 {
 }
 
 /**
- * New words learned per day: the last two weeks as they were, then the days ahead at the recent
- * pace (see Pace), until the words added so far run out.
+ * Words learned in all, day by day: the last two weeks as they were, then the days ahead growing at
+ * the recent pace (see Pace), until the words added so far run out.
  */
 function LearnedChart({ stats }: { stats: StatsOverview }) {
   // A month by default; the week stays one tap away and is remembered.
@@ -163,7 +163,7 @@ function LearnedChart({ stats }: { stats: StatsOverview }) {
   let known = learned;
   const knownBy = new Map<number, number>();
   for (let i = past.length - 1; i >= 0; i--) {
-    knownBy.set(past[i]!.offset, known);
+    knownBy.set(past[i]!.offset, Math.max(known, 0));
     known -= past[i]!.words;
   }
   const ahead: Day[] = Array.from({ length: range - back - 1 }, (_, k) => {
@@ -174,7 +174,8 @@ function LearnedChart({ stats }: { stats: StatsOverview }) {
     return { day: addDays(stats.today, offset), offset, words: after - before };
   });
   const items = [...past, ...ahead];
-  const totals = items.map((d) => d.words);
+  // Bars are the words known by the end of each day; `words` stays what that day added.
+  const totals = items.map((d) => knownBy.get(d.offset) ?? 0);
   const max = Math.max(...totals, 1);
   const pick = usePointerPick(items.length, select);
   const shown = selected ?? back;
@@ -197,13 +198,15 @@ function LearnedChart({ stats }: { stats: StatsOverview }) {
       <div className="readout" aria-live="polite">
         {day && (
           <>
-            <span className="readout-value">{day.offset > 0 ? `~${round1(day.words)}` : day.words}</span>
+            <span className="readout-value">
+              {day.offset > 0 ? "~" : ""}
+              {Math.round(totals[shown]!)}
+            </span>
             <span className="readout-label">
-              {wordsWord(Math.round(day.words))} {day.offset > 0 ? "at your pace" : "learned"} · {dayName(day.day, day.offset, true)}
+              {wordsWord(Math.round(totals[shown]!))} in all{day.offset > 0 ? " at your pace" : ""} · {dayName(day.day, day.offset, true)}
             </span>
             <span className="readout-parts readout-modes">
-              {day.offset > 0 ? "about " : ""}
-              {Math.round(knownBy.get(day.offset) ?? 0)} {wordsWord(Math.round(knownBy.get(day.offset) ?? 0))} known {day.offset > 0 ? "by then" : day.offset === 0 ? "now" : "by that day"}
+              {day.offset > 0 ? `about +${round1(day.words)} that day` : `+${day.words} that day`}
             </span>
           </>
         )}
@@ -214,7 +217,7 @@ function LearnedChart({ stats }: { stats: StatsOverview }) {
         data-range={range}
         data-picking={selected !== undefined}
         role="img"
-        aria-label={`Words learned by day, then at your pace: ${items.map((f, i) => `${shortDate(f.day)} — ${round1(totals[i]!)}`).join(", ")}`}
+        aria-label={`Words learned in all by day, then at your pace: ${items.map((f, i) => `${shortDate(f.day)} — ${Math.round(totals[i]!)}`).join(", ")}`}
         {...pick}
       >
         {items.map((f, i) => (
@@ -259,11 +262,12 @@ function LearnedChart({ stats }: { stats: StatsOverview }) {
         </span>
       </div>
       <p className="stats-note">
-        A word counts as learned once it has gone through “Learn” and passed its check a few hours later.
+        How many words you know in all at the end of each day. A word counts as learned once it has gone through
+        “Learn” and passed its check a few hours later.
         {rate > 0
           ? toLearn > 0 && rate * ahead.length > toLearn
-            ? ` The days ahead follow your pace until the ${toLearn} ${wordsWord(toLearn)} you've added run out.`
-            : " The days ahead follow your pace of the last two weeks."
+            ? ` The days ahead grow at your pace until the ${toLearn} ${wordsWord(toLearn)} you've added run out.`
+            : ` The days ahead grow at your pace of the last two weeks, about ${round1(rate)} a day.`
           : ""}
       </p>
     </>
