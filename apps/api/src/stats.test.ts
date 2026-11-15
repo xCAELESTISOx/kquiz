@@ -90,9 +90,11 @@ describe("GET /stats", () => {
     expect(seoul.history.at(-3)).toEqual({ day: "2026-10-16", words: 0 });
 
     expect(seoul.forecast).toHaveLength(FORECAST_DAYS);
-    const meaningDue = seoul.forecast.reduce((n: number, f: { due: Record<string, number> }) => n + f.due.meaning, 0);
     // 물 went into reviews unreviewed (as a word just learned does): it is due too, overdue today.
-    expect(meaningDue).toBe(2);
+    expect(seoul.forecast[0].due.meaning).toBeGreaterThanOrEqual(1);
+    // Not only each word's next review: a word comes back again within the month, as FSRS would bring it.
+    const meaningDue = seoul.forecast.reduce((n: number, f: { due: Record<string, number> }) => n + f.due.meaning, 0);
+    expect(meaningDue).toBeGreaterThan(2);
     expect(seoul.forecast[0].due).toHaveProperty("speech");
     expect(seoul.forecast[0].words).toBeGreaterThanOrEqual(1);
     expect(seoul.learned).toBe(2);
@@ -104,6 +106,25 @@ describe("GET /stats", () => {
     expect(seoul.cards.byMode.meaning.new).toBe(1);
     expect(seoul.cards.byMode.speech.new).toBe(1);
     expect(seoul.cards.byMode.meaning.young + seoul.cards.byMode.meaning.learning).toBe(1);
+  });
+
+  it("brings words back as often as FSRS would, counts a word once a day, and gives the pace", async () => {
+    const t = testApp();
+    await t.signIn();
+    t.clock.now = new Date("2026-10-15T01:00:00Z");
+    for (const korean of ["물", "불", "꽃"]) await t.request("/cards", { body: { korean, meaning: "x" } });
+    const stats = (await t.request("/stats?tz=540")).json;
+    // Every word is due today in each of its modes, but is one word to go over.
+    expect(stats.forecast[0].words).toBe(3);
+    expect(stats.forecast[0].due.meaning).toBe(3);
+    // Each comes back later in the month: the days ahead add up to more than one review per word.
+    const ahead = stats.forecast.slice(1).reduce((n: number, f: { words: number }) => n + f.words, 0);
+    expect(ahead).toBeGreaterThan(3);
+    // The intervals grow: the gaps between a word's reviews get longer.
+    const days = stats.forecast.flatMap((f: { words: number }, i: number) => (f.words ? [i] : []));
+    expect(days.at(-1) - days.at(-2)).toBeGreaterThan(days[1] - days[0]);
+    expect(stats.toLearn).toBe(0);
+    expect(stats.pace).toEqual({ days: 14, learned: 0 });
   });
 
   it("leaves paused cards out of the forecast and card states", async () => {
@@ -143,6 +164,7 @@ describe("MCP get_stats data", () => {
     await t.request("/cards", { body: { korean: "물", meaning: "вода" } });
     const stats = await new SqliteCardStore(t.db, OWNER_ID).stats(t.clock.now);
     // In reviews but never reviewed, like a word just learned: its first review is in the week's load.
-    expect(stats).toMatchObject({ cards: 1, dueNext7Days: { meaning: 1, speech: 1 }, retention30d: { meaning: null, speech: null } });
+    // Today, then again a few days later once remembered.
+    expect(stats).toMatchObject({ cards: 1, dueNext7Days: { meaning: 2, speech: 2 }, retention30d: { meaning: null, speech: null } });
   });
 });

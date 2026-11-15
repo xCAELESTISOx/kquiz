@@ -228,7 +228,10 @@ export interface StatsOverview {
   today: string;
   streak: { current: number; best: number; reviewedToday: boolean };
   activity: { day: string; reviews: number }[];
-  /** words: distinct words due that day (a word due in two modes counts once). */
+  /**
+   * Simulated with FSRS: every learned word comes back as often as it would if reviewed on time and
+   * remembered. due: reviews per mode; words: distinct words that day (two modes of one word, one word).
+   */
   forecast: { day: string; due: Record<string, number>; words?: number }[];
   /** Words gone over per day before today, oldest first, ending yesterday. */
   history?: { day: string; words: number }[];
@@ -236,6 +239,10 @@ export interface StatsOverview {
   learned?: number;
   /** New words taken into "Learn" and not learned yet: not in the forecast until they are. */
   learning?: number;
+  /** Words not learned yet: in "Learn" or waiting in the pool. */
+  toLearn?: number;
+  /** Words learned over the last `days` days, today included. */
+  pace?: { days: number; learned: number };
   retention: Record<string, { reviews: number; recalled: number }>;
   targetRetention: Record<string, number>;
   cards: { total: number; byMode: Record<string, { new: number; learning: number; young: number; mature: number }> };

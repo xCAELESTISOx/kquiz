@@ -1,9 +1,9 @@
-import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, lt, sql } from "drizzle-orm";
 import type { Db } from "./db/client.js";
 import { attempts, cards, phoneStats, reviewLog, reviewStates } from "./db/schema.js";
-import { getFsrsSetup } from "./fsrs.js";
+import { getFsrsSetup, schedulerFor } from "./fsrs.js";
 import { newCards } from "./newCards.js";
-import type { ReviewMode } from "./review.js";
+import { fromStateRow, ratings, type ReviewMode } from "./review.js";
 import { reviewable } from "./reviewStore.js";
 
 const DAY = 86_400_000;
@@ -19,6 +19,10 @@ const MIN_RECALL_GAP = 12 * 3_600_000;
 // FSRS calls a card mature at three weeks between reviews, as Anki does.
 const MATURE_DAYS = 21;
 const MIN_SOUND_ATTEMPTS = 3;
+/** Days of learning the pace of new words is taken over (fewer when the owner started later). */
+export const PACE_DAYS = 14;
+// A guard for the forecast's simulation: no state is reviewed more often than this in a month.
+const MAX_STEPS = 60;
 
 /**
  * Counts per mode. Keys are whatever modes `review_states` holds, so a new mode shows up without
@@ -33,9 +37,10 @@ export type StatsOverview = {
   /** Reviews per local day, oldest first, ending today. */
   activity: { day: string; reviews: number }[];
   /**
-   * Reviews coming due per local day, today first; today includes everything overdue. Words still
-   * in the new-word pool or being learned have no review states yet, so they are not counted; a
-   * word just learned is (its first review is due the next day).
+   * Words to go over per local day, today first; today includes everything overdue. Simulated with
+   * FSRS: each word is assumed reviewed on the day it is due and remembered ("good"), so it comes
+   * back as often as it really would, not only once. `due` counts reviews per mode (a word due for
+   * meaning and by ear is two), `words` counts each word once. Words not learned yet are left out.
    */
   forecast: { day: string; due: ByMode<number>; words: number }[];
   /** Words gone over per local day before today, oldest first, ending yesterday (any mode counts once). */
@@ -44,6 +49,10 @@ export type StatsOverview = {
   learned: number;
   /** New words taken into "Learn" and not learned yet: they join the forecast once learned. */
   learning: number;
+  /** Words not learned yet: those in "Learn" and those still waiting in the pool. */
+  toLearn: number;
+  /** Words learned over the last `days` days, today included (days start with the first word learned). */
+  pace: { days: number; learned: number };
   /** Share of reviews in the last 30 days not rated "again", leaving out first sightings and learning steps. */
   retention: ByMode<{ reviews: number; recalled: number }>;
   /** Retention FSRS schedules for, per mode (set on the FSRS settings screen). */
@@ -126,19 +135,7 @@ export function statsOverview(db: Db, userId: number, now = new Date(), tzOffset
     return { day: dateOf(day), words: wordsPerDay.get(day) ?? 0 };
   });
 
-  const dueDay = sql<number>`max(cast((${reviewStates.due} + ${shift}) / ${DAY} as integer), ${today})`;
   const forecast = Array.from({ length: FORECAST_DAYS }, (_, i) => ({ day: dateOf(today + i), due: {} as ByMode<number>, words: 0 }));
-  // Every state belongs to a learned word (newCards.ts), so a "new" one (state 0) is a word just
-  // learned, waiting for its first review: it counts like any other.
-  const dueSoon = and(mine, reviewable, sql`${reviewStates.due} < ${startOf(today + FORECAST_DAYS).getTime()}`);
-  // A word due in two modes on one day is still one word to go over.
-  const wordRows = db
-    .select({ day: dueDay, n: sql<number>`count(distinct ${reviewStates.cardId})` })
-    .from(reviewStates)
-    .innerJoin(cards, sql`${cards.id} = ${reviewStates.cardId}`)
-    .where(dueSoon)
-    .groupBy(dueDay)
-    .all();
   const learned =
     db
       .select({ n: sql<number>`count(distinct ${reviewStates.cardId})` })
@@ -146,13 +143,6 @@ export function statsOverview(db: Db, userId: number, now = new Date(), tzOffset
       .innerJoin(cards, sql`${cards.id} = ${reviewStates.cardId}`)
       .where(and(mine, reviewable))
       .get()?.n ?? 0;
-  const dueRows = db
-    .select({ mode: reviewStates.mode, day: dueDay, n: sql<number>`count(*)` })
-    .from(reviewStates)
-    .innerJoin(cards, sql`${cards.id} = ${reviewStates.cardId}`)
-    .where(dueSoon)
-    .groupBy(reviewStates.mode, dueDay)
-    .all();
   const modes = new Set<string>();
   const stateRows = db
     .select({
@@ -176,14 +166,14 @@ export function statsOverview(db: Db, userId: number, now = new Date(), tzOffset
     else counts.learning += n;
   }
   for (const entry of forecast) for (const mode of modes) entry.due[mode] = 0;
-  for (const { mode, day, n } of dueRows) {
-    const entry = forecast[day - today];
-    if (entry) entry.due[mode] = (entry.due[mode] ?? 0) + n;
+  const reviews = simulateReviews(db, userId, now, today, dayOf);
+  for (const [day, byCard] of reviews) {
+    const entry = forecast[day - today]!;
+    entry.words = byCard.size;
+    for (const cardModes of byCard.values()) for (const mode of cardModes) entry.due[mode] = (entry.due[mode] ?? 0) + 1;
   }
-  for (const { day, n } of wordRows) {
-    const entry = forecast[day - today];
-    if (entry) entry.words += n;
-  }
+
+  const pending = newCards(db, userId, now);
 
   const retention: StatsOverview["retention"] = {};
   for (const mode of modes) retention[mode] = { reviews: 0, recalled: 0 };
@@ -212,7 +202,9 @@ export function statsOverview(db: Db, userId: number, now = new Date(), tzOffset
     forecast,
     history,
     learned,
-    learning: newCards(db, userId, now).learning,
+    learning: pending.learning,
+    toLearn: pending.queued,
+    pace: learnPace(db, userId, today, startOf, dayOf),
     retention,
     targetRetention: Object.fromEntries([...modes].map((mode) => [mode, getFsrsSetup(db, userId, mode as ReviewMode).desiredRetention])),
     cards: { total: db.select({ n: sql<number>`count(*)` }).from(cards).where(mine).get()?.n ?? 0, byMode },
@@ -311,4 +303,57 @@ export function streaks(days: number[], today: number): { current: number; best:
     best = Math.max(best, run);
   }
   return { current, best };
+}
+
+/**
+ * The reviews of the coming FORECAST_DAYS, day → card → modes: every state of a learned word is
+ * reviewed when due (overdue ones today) and rated "good", again and again, with its mode's FSRS
+ * setup. No fuzz, so the screen doesn't change between two loads.
+ */
+function simulateReviews(db: Db, userId: number, now: Date, today: number, dayOf: (ms: number) => number) {
+  const rows = db
+    .select({ cardId: reviewStates.cardId, mode: reviewStates.mode, state: reviewStates })
+    .from(reviewStates)
+    .innerJoin(cards, sql`${cards.id} = ${reviewStates.cardId}`)
+    .where(and(eq(cards.userId, userId), reviewable))
+    .all();
+  const schedulers = new Map<string, ReturnType<typeof schedulerFor>>();
+  const out = new Map<number, Map<number, Set<string>>>();
+  const end = today + FORECAST_DAYS;
+  for (const { cardId, mode, state } of rows) {
+    let scheduler = schedulers.get(mode);
+    if (!scheduler) schedulers.set(mode, (scheduler = schedulerFor(getFsrsSetup(db, userId, mode), false)));
+    let card = fromStateRow(state);
+    for (let step = 0; step < MAX_STEPS; step++) {
+      const at = new Date(Math.max(card.due.getTime(), now.getTime()));
+      const day = dayOf(at.getTime());
+      if (day >= end) break;
+      let byCard = out.get(day);
+      if (!byCard) out.set(day, (byCard = new Map()));
+      let modes = byCard.get(cardId);
+      if (!modes) byCard.set(cardId, (modes = new Set()));
+      modes.add(mode);
+      card = scheduler.next(card, at, ratings.good).card;
+    }
+  }
+  return out;
+}
+
+/** How many words were learned lately, for "at this pace": see StatsOverview.pace. */
+function learnPace(db: Db, userId: number, today: number, startOf: (day: number) => Date, dayOf: (ms: number) => number): StatsOverview["pace"] {
+  const learnedAt = and(eq(cards.userId, userId), eq(cards.introduction, "learned"), isNotNull(cards.introducedAt));
+  const first = db
+    .select({ at: sql<number | null>`min(${cards.introducedAt})` })
+    .from(cards)
+    .where(and(learnedAt, gte(cards.introducedAt, startOf(today - PACE_DAYS + 1))))
+    .get()?.at;
+  if (first == null) return { days: PACE_DAYS, learned: 0 };
+  const firstDay = Math.max(today - PACE_DAYS + 1, dayOf(first));
+  const learned =
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(cards)
+      .where(and(learnedAt, gte(cards.introducedAt, startOf(firstDay))))
+      .get()?.n ?? 0;
+  return { days: today - firstDay + 1, learned };
 }

@@ -92,6 +92,9 @@ describe("new words", () => {
     const overview = (await t.request("/stats?tz=540")).json;
     expect(overview).toMatchObject({ learned: 1, learning: 3 });
     expect(overview.forecast[1]).toMatchObject({ words: 1 });
+    // Learned today, the first day of learning: the pace counts from it.
+    expect(overview.pace).toEqual({ days: 1, learned: 1 });
+    expect(overview.toLearn).toBe((await t.request("/reviews/stats")).json.newCards.queued);
     expect((await answer(true)).status).toBeUndefined();
     expect((await t.request(`/cards/${id}/learning`, { body: { ok: true } })).status).toBe(409);
     expect((await t.request("/cards/999/learning", { body: { ok: true } })).status).toBe(404);

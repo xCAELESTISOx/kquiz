@@ -571,6 +571,8 @@ export class MockApi {
       forecast,
       learned: 12,
       learning: 4,
+      toLearn: 60,
+      pace: { days: 9, learned: 23 },
       retention: { meaning: { reviews: 412, recalled: 361 }, speech: { reviews: 96, recalled: 88 }, listening: { reviews: 64, recalled: 51 } },
       targetRetention: { meaning: 0.9, speech: 0.9, listening: 0.88 },
       cards: {
