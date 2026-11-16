@@ -1,4 +1,5 @@
 import { NotesField } from "../ui/CardNotes";
+import { CardImage } from "../ui/CardImage";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { api, remembered } from "../lib/api";
 import { isKoreanOnly } from "../lib/korean";
@@ -191,6 +192,7 @@ export function CardScreen({ id }: { id: number }) {
 
       {card && draft && (
         <form className="form" onSubmit={save}>
+          <CardImage card={card} size="prompt" />
           {card.queued && (
             <div className="queue-note">
               <p>

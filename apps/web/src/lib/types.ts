@@ -74,6 +74,29 @@ export interface NewCard {
   register?: Register;
 }
 
+/** A picture of the word: any shape, laid into a fixed frame by ui/CardImage.tsx. */
+export interface CardPicture {
+  url: string;
+  width: number;
+  height: number;
+  /** The Korean is written on it (a sign, a label), so it can't show while the word is being recalled. */
+  hasText: boolean;
+  /** The card's own picture, or the picture library's for the word. */
+  from?: "own" | "library";
+}
+
+/** What a batch of a picture pack did (POST /api/pictures/library). */
+export interface PictureImportResult {
+  added: number;
+  updated: number;
+  unchanged: number;
+  rejected: { korean: string; reason: string }[];
+  /** Cards whose picture changed. */
+  cardsUpdated: number;
+  /** Words in the library now. */
+  total: number;
+}
+
 export interface Card {
   id: number;
   korean: string;
@@ -99,6 +122,8 @@ export interface Card {
   queued: boolean;
   /** Words easy to mix up with this one (휴지통 / 쓰레기통), linked both ways. */
   similar?: SimilarWord[];
+  /** A picture of the word, if it has one. */
+  picture?: CardPicture | null;
   createdAt: string;
   updatedAt: string;
 }

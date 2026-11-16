@@ -1,0 +1,96 @@
+/* ---------- Card pictures (ui/CardImage.tsx) ---------- */
+
+.card-image {
+  position: relative;
+  flex: none;
+  align-self: stretch;
+  aspect-ratio: var(--frame);
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.06),
+    0 12px 32px -16px rgb(2 4 12 / 0.9);
+  isolation: isolate;
+}
+
+/* The same picture, blurred and dimmed, fills whatever the picture itself leaves empty. */
+.card-image-backdrop {
+  position: absolute;
+  inset: -24px;
+  z-index: -1;
+  background: var(--src) center / cover no-repeat;
+  filter: blur(22px) saturate(1.25) brightness(0.42);
+}
+
+.card-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: var(--fit, cover);
+  /* Most pictures are drawings on white: take the glare off in the dark interface. */
+  filter: brightness(0.93);
+  opacity: 0;
+  transform: scale(1.015);
+  transition:
+    opacity var(--dur-2) var(--ease-out),
+    transform var(--dur-3) var(--ease-out);
+}
+
+.card-image[data-fit="contain"] img {
+  --fit: contain;
+  /* A drawing floating on its blurred self reads better with a soft edge of its own. */
+  filter: brightness(0.93) drop-shadow(0 6px 18px rgb(2 4 12 / 0.55));
+}
+
+.card-image[data-loaded] img {
+  opacity: 1;
+  transform: none;
+}
+
+/* A card with a picture starts at the top: the frame leads, the word follows. */
+.intro-card:has(> .card-image) {
+  justify-content: flex-start;
+  padding-top: 16px;
+}
+
+.review-card > .card-image {
+  margin: 0 -8px 4px;
+}
+
+.card-image.is-prompt {
+  max-height: 172px;
+}
+
+/* Shown after the answer: the picture slides in under the word, sealing the image to it. */
+.card-image.is-answer {
+  animation: answer-in var(--dur-3) var(--ease-out) 80ms backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-image img {
+    transition: none;
+    transform: none;
+  }
+  .card-image.is-answer {
+    animation: none;
+  }
+}
+
+/* ---------- Picture pack import (screens/Pictures.tsx) ---------- */
+
+.import-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-raised);
+  overflow: hidden;
+}
+
+.import-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width var(--dur-2) var(--ease-out);
+}

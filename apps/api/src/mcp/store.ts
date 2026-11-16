@@ -32,6 +32,8 @@ export interface StoredCard extends NewCard {
   speakable: boolean;
   /** Waiting to be learned, not yet in reviews. */
   queued: boolean;
+  /** Where its picture comes from; left out when it has none. hasText: the Korean is written on it. */
+  picture?: { from: "own" | "library"; hasText: boolean };
   source: CardSource;
   createdAt: string;
   updatedAt: string;
@@ -101,6 +103,23 @@ export interface CardStore {
   stats(now: Date): Promise<Stats>;
   weakSounds(limit: number): Promise<WeakSound[]>;
   hardCards(limit: number): Promise<HardCard[]>;
+}
+
+/** A word's picture, as set_picture changes it. */
+export interface PictureChange {
+  /** An https address of a picture to download and use. */
+  url?: string;
+  /** Back to the picture library's one for the word (or none if the library has none). */
+  library?: boolean;
+  /** No picture at all for this word, not even the library's. */
+  remove?: boolean;
+  /** Whether the Korean word is written on the picture. */
+  hasText?: boolean;
+}
+
+export interface PictureStore {
+  /** The card's picture afterwards, or an error message for the user. */
+  set(id: string, change: PictureChange): Promise<{ ok: true; picture: StoredCard["picture"] | null } | { ok: false; error: string }>;
 }
 
 /** Someone the owner invited, as the owner sees them. */

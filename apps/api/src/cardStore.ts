@@ -3,6 +3,7 @@ import { and, count, desc, eq, isNull, lt, sql, type SQL } from "drizzle-orm";
 import { isKoreanOnly, isSpeakable, koreanKey, normalizeKorean, type CardKind, type CardPatch, type Example, type NewCard, type PhrasePart, type Register, type Root } from "./cards.js";
 import type { Db } from "./db/client.js";
 import { cards, reviewStates } from "./db/schema.js";
+import { libraryPictureFor, pictureDto, type PictureDto } from "./pictures.js";
 import { withSimilar, type SimilarWord } from "./similar.js";
 import { cardsLeft, QuotaError } from "./users.js";
 
@@ -35,6 +36,8 @@ export type CardDto = {
   queued: boolean;
   /** Words easy to mix up with this one (similar.ts); filled in by withSimilar, [] until then. */
   similar: SimilarWord[];
+  /** The word's picture: its own or the library's; null when it has none. */
+  picture: PictureDto | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -59,6 +62,7 @@ export function toCardDto(row: CardRow): CardDto {
     suspended: row.suspended,
     queued: row.introducedAt === null,
     similar: [],
+    picture: pictureDto(row.picture),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -115,6 +119,7 @@ export function createCards(db: Db, userId: number, inputs: NewCard[], source: C
           register: input.register ?? null,
           speakable: (input.speakable ?? isSpeakable(korean)) && isKoreanOnly(korean),
           source,
+          picture: libraryPictureFor(tx as unknown as Db, key),
           createdAt: now,
           updatedAt: now,
         })
@@ -286,6 +291,11 @@ export function updateCard(
         register: patch.register ?? current.register,
         suspended: patch.suspended ?? current.suspended,
         speakable: (patch.speakable ?? (patch.korean === undefined ? current.speakable : isSpeakable(korean))) && isKoreanOnly(korean),
+        // A new word takes the library's picture for it, unless the card has its own or none.
+        picture:
+          key !== current.koreanKey && (!current.picture || current.picture.from === "library")
+            ? libraryPictureFor(tx as unknown as Db, key)
+            : current.picture,
         updatedAt: now,
       })
       .where(eq(cards.id, id))

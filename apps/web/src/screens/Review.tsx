@@ -1,4 +1,5 @@
 import { shownPronunciation } from "../lib/korean";
+import { CardImage, pictureHelps } from "../ui/CardImage";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject, type PointerEvent, type ReactNode } from "react";
 import { wordsWord } from "../lib/plural";
 import { api, holdReview, isConnectionError, releaseHeldReview, takeBackReview } from "../lib/api";
@@ -738,6 +739,7 @@ export function ReviewScreen({
             )}
             {revealed ? (
               <div className="review-answer">
+                <CardImage card={card} size="prompt" className="is-answer" />
                 {cloze && (
                   <p className="review-word" lang="ko">
                     {card.korean}

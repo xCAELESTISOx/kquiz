@@ -134,6 +134,13 @@
       "when": 1794685758619,
       "tag": "0018_new_word_skip",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1794810000000,
+      "tag": "0019_pictures",
+      "breakpoints": true
     }
   ]
 }

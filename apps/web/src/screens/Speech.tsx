@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { CardImage, pictureHelps } from "../ui/CardImage";
 import { api, ApiError, submitReview } from "../lib/api";
 import { logAnswer } from "../lib/sessionLog";
 import { playOnce } from "../lib/audioSession";
@@ -298,6 +299,7 @@ export function SpeechCard({
         <div className="review-card speech-card">
           <div className="speech-body">
           {leeches.has(card.id) && <LeechBadge />}
+          {!cloze && pictureHelps(card) && <CardImage card={card} size="prompt" />}
           <p className="speech-ask">
             {cloze ? `Say the missing word${card.korean.endsWith("다") ? " in dictionary form" : ""}` : "Say it in Korean"}
           </p>

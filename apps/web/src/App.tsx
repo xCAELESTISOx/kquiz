@@ -3,6 +3,7 @@ import { flushPendingReviews, releaseHeldReview } from "./lib/api";
 import { useLocation } from "./lib/router";
 import { hideSplash } from "./lib/splash";
 import { AccessScreen } from "./screens/Access";
+import { PicturesScreen } from "./screens/Pictures";
 import { AddScreen } from "./screens/Add";
 import { InviteScreen } from "./screens/Invite";
 import { LearnScreen } from "./screens/Learn";
@@ -67,6 +68,8 @@ export function App() {
         <LeechesScreen />
       ) : route === "access" ? (
         <AccessScreen />
+      ) : route === "pictures" ? (
+        <PicturesScreen />
       ) : (
         <TodayScreen />
       )}
