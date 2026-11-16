@@ -167,7 +167,7 @@ export function TypeCard({
 
       <div aria-live="polite">
         {error && <p className="notice notice-error speech-notice">{error}</p>}
-        {check && (
+        {check && (check.correct ? nudged.current : true) && (
           <p className={`sounds-feedback tone-${check.correct ? "ok" : "wrong"}`}>
             {feedback(check, text, nudged.current)}
           </p>
@@ -213,7 +213,7 @@ export function TypeCard({
 
 /** Letter by letter only while the answer was close; a different word is just shown right. */
 function feedback(check: TypingCheck, typed: string, nudged: boolean): string {
-  if (check.correct) return nudged ? "Correct, with a hint" : "Correct";
+  if (check.correct) return nudged ? "With a hint" : "";
   if (check.almost) return `Almost: ${check.slips[0]}`;
   if (!typed.trim()) return "Here's how it's spelled";
   const close = check.marks.filter((m) => m.status === "ok").length >= check.marks.length / 2;
