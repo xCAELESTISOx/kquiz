@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { afterFix, afterIntro, buildable, firstTasks, insertAfter, insertNext, interleave, learnTask, onward, toFront, unfinished, withMistake, withoutMistake } from "./session";
+import { afterFix, afterIntro, buildable, firstTasks, taskKey, unseen, insertAfter, insertNext, interleave, learnTask, onward, toFront, unfinished, withMistake, withoutMistake } from "./session";
 import type { Card, QueueItem } from "./types";
 
 const card = (id: number) => ({ id, korean: `단어${id}`, meaning: `слово ${id}` }) as Card;
@@ -148,5 +148,16 @@ describe("the card shown after an answer", () => {
     expect(onward(r.queue.slice(1), 18, 15, new Set([2]), 1).shown).toBe(own);
     // Nothing to put in between: the stretch ends, the word goes on next time.
     expect(onward([own], 17, 15, new Set([2]), 2).shown).toBeUndefined();
+  });
+});
+
+describe("a task once a session", () => {
+  it("drops the tasks already answered, a word's check and last step being one", () => {
+    const w = card(2);
+    const check = learnTask(w, "check", true);
+    const step = learnTask(w, 2, true);
+    const ear = learnTask(w, 1, true);
+    const seen = new Set([taskKey(check)]);
+    expect(unseen([step, ear, review(5)], seen)).toEqual([ear, review(5)]);
   });
 });
