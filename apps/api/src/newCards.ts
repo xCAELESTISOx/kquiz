@@ -153,6 +153,9 @@ export function room(c: Counts): number {
 /** A word being learned: the ladder step it is on (0 to LADDER_STEPS - 1), or "check" once it waited. */
 export type LearningItem = { card: CardDto; step: number | "check" };
 
+/** How many words ahead in the pool a session looks for pictures to fetch early: more than a long session meets. */
+const UPCOMING = 12;
+
 const waiting = (userId: number) =>
   and(eq(cards.userId, userId), isNull(cards.introducedAt), eq(cards.suspended, false));
 
@@ -160,7 +163,7 @@ const waiting = (userId: number) =>
  * The new words for a session: the ones due for their check, then the ones being learned, and new
  * ones from the pool (oldest added first) only where there is room for them. `pool` is how many more wait after them.
  */
-export function learningWords(db: Db, userId: number, now: Date): { items: LearningItem[]; pool: number } {
+export function learningWords(db: Db, userId: number, now: Date): { items: LearningItem[]; pool: number; upcoming: string[] } {
   return db.transaction((tx) => {
     const checks = tx
       .select()
@@ -187,7 +190,16 @@ export function learningWords(db: Db, userId: number, now: Date): { items: Learn
       ...active.map((row): LearningItem => ({ card: toCardDto(row), step: Math.min(row.learnStep, LADDER_STEPS - 1) })),
     ];
     withSimilar(tx as unknown as Db, userId, items.map((i) => i.card));
-    return { items, pool };
+    // Pictures of the words that join next from the pool, so the app can fetch them before they are met.
+    const upcoming = tx
+      .select()
+      .from(cards)
+      .where(and(waiting(userId), isNull(cards.learningAt), isNull(cards.learnPassedAt)))
+      .orderBy(...poolOrder)
+      .limit(UPCOMING)
+      .all()
+      .flatMap((row) => toCardDto(row).picture?.url ?? []);
+    return { items, pool, upcoming };
   });
 }
 
