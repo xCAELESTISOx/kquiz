@@ -8,6 +8,7 @@ import { useLeechIds } from "../lib/leeches";
 import { everyKind, mixWays, serverModes } from "../lib/mix";
 import { learnKind, vary, type TaskKind } from "../lib/variety";
 import { afterFix, afterIntro, buildable, firstTasks, insertAfter, insertNext, interleave, introTask, LEARN_GAP, learnTask, SESSION_MAX, SESSION_TASKS, onward, toFront, unfinished, withMistake, withoutMistake } from "../lib/session";
+import { prefetchPictures } from "../lib/pictureCache";
 import { navigate } from "../lib/router";
 import { endLog, flushLog, logEvent, logOutcome, logServer, logShown, startLog } from "../lib/sessionLog";
 import { SessionId, useLongPress, type LongPress } from "../ui/SessionId";
@@ -150,6 +151,13 @@ export function ReviewScreen({
       session ? api.learning() : { items: [], pool: 0 },
     ]).then(
       async ([{ items: all }, learning]) => {
+        // Every picture the session may show, fetched now so none waits on the network later:
+        // the words in the queue, then the ones that join from the pool as words are learned.
+        void prefetchPictures([
+          ...learning.items.map((i) => i.card.picture?.url),
+          ...all.map((i) => i.card.picture?.url),
+          ...(("upcoming" in learning && learning.upcoming) || []),
+        ]);
         const fresh = firstTasks(learning.items, canSpeak());
         // Look-alikes give the wrong options for picking a word.
         const ids = [

@@ -334,7 +334,7 @@ export class MockApi {
     return Math.max(0, Math.min(ACTIVE_WORDS - active, pool));
   }
 
-  learning(): { items: LearningItem[]; pool: number } {
+  learning(): { items: LearningItem[]; pool: number; upcoming: string[] } {
     const learn = (this.state.learn ??= {});
     const waiting = this.state.cards.filter((c) => c.queued && !c.suspended).sort(this.poolOrder);
     const now = this.now().getTime();
@@ -350,6 +350,7 @@ export class MockApi {
     return {
       items: [...checks.map((card) => ({ card, step: "check" as const })), ...active.map((card) => ({ card, step: learn[card.id]!.step }))],
       pool: waiting.filter((c) => !learn[c.id]).length,
+      upcoming: waiting.filter((c) => !learn[c.id]).slice(0, 12).flatMap((c) => c.picture?.url ?? []),
     };
   }
 

@@ -3,6 +3,7 @@ import { CardImage, pictureHelps } from "../ui/CardImage";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { api } from "../lib/api";
 import { logAnswer } from "../lib/sessionLog";
+import { prefetchPictures } from "../lib/pictureCache";
 import {
   buildTiles,
   GROUP_SIZE,
@@ -107,6 +108,7 @@ export function LearnScreen({ id, group }: { id?: number; group?: GroupFilter })
     const words = cards.filter((c) => c.kind !== "phrase").map((c) => c.id);
     const phrases = cards.filter((c) => c.kind === "phrase").map((c) => c.id);
     for (const card of cards) preloadSpeech(card);
+    void prefetchPictures(cards.map((c) => c.picture?.url));
     Promise.all([
       words.length ? api.choices(words).catch(() => ({ options: {} })) : { options: {} },
       phrases.length ? api.blocks(phrases).catch(() => ({ tiles: {} })) : { tiles: {} },

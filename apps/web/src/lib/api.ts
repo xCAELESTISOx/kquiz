@@ -346,7 +346,7 @@ export const api = {
 
   /** Takes a queued card into reviews now, outside the daily allowance. */
   /** The new words for a session: due for their check, then being learned (filled up from the pool). */
-  learning: () => request<{ items: LearningItem[]; pool: number }>("GET", "/cards/learning", { fallback: (m) => m.learning() }),
+  learning: () => request<{ items: LearningItem[]; pool: number; upcoming?: string[] }>("GET", "/cards/learning", { fallback: (m) => m.learning() }),
 
   /** One answer for a word being learned: up its ladder, a step down, or into reviews. */
   answerLearning: (id: number, ok: boolean) =>

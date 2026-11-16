@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createCards, getCard, updateCard } from "./cardStore.js";
 import { openDb } from "./db/client.js";
 import { pictures } from "./db/schema.js";
+import { learningWords } from "./newCards.js";
 import { fetchPicture, importLibrary, isPrivateAddress, libraryKeys, MAX_SIDE, processPicture, setCardPicture } from "./pictures.js";
 import { SqlitePictureStore } from "./storage/mcp.js";
 import { testApp } from "./testing.js";
@@ -78,6 +79,20 @@ describe("the picture library", () => {
     expect(water!.picture).toBeNull();
     updateCard(db, OWNER_ID, water!.id, { korean: "사과" }, now);
     expect(getCard(db, OWNER_ID, water!.id)!.picture).toMatchObject({ from: "library", width: 140 });
+  });
+});
+
+describe("a session's pictures ahead of time", () => {
+  it("names the pictures of the next words from the pool", async () => {
+    const db = openDb(":memory:");
+    await importLibrary(db, [{ korean: "지하철", data: await b64(237, 123) }, { korean: "학교", data: await b64(188, 115) }], now);
+    // Words beyond the few taken into learning stay in the pool; their pictures are named.
+    const words = ["사과", "물", "책", "집", "지하철", "의자", "학교"].map((korean) => ({ korean, meaning: korean }));
+    createCards(db, OWNER_ID, words, "app", now);
+    const { items, upcoming } = learningWords(db, OWNER_ID, now);
+    expect(items.length).toBeLessThan(5);
+    expect(upcoming).toHaveLength(2);
+    for (const url of upcoming) expect(url).toMatch(/^\/api\/pictures\/[0-9a-f]{32}$/);
   });
 });
 
