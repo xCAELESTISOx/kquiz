@@ -115,10 +115,12 @@ export function ReviewScreen({
   const [fixes, setFixes] = useState<QueueItem[]>();
   // New words begun in this stretch: past its goal it runs on (up to SESSION_MAX) only for their steps.
   const [started, setStarted] = useState<ReadonlySet<number>>(() => new Set());
+  // The card answered last: past the goal, a word's next step doesn't come straight after it.
+  const [just, setJust] = useState<number>();
   // Saying aloud turned off for this session ("Can't speak now" on a new word, or a review switched to options).
   const [silent, setSilent] = useState(false);
   const extra = !!session && answered >= goal;
-  const pending = extra && queue ? unfinished(queue, started) : 0;
+  const pending = extra && queue ? unfinished(queue, started, just) : 0;
   // The stretch is over: its goal is reached and its words have done their steps (or it hit
   // SESSION_MAX), or nothing is left; either way with no answer on its way.
   const ended = !!session && !!queue && (over || (answering === 0 && (extra ? pending < 0 : !queue[0])));
@@ -270,18 +272,19 @@ export function ReviewScreen({
 
   // Past the goal, the next step of a word begun in this stretch comes before anything else.
   useLayoutEffect(() => {
-    if (extra && !fixes && pending > 0) setQueue((q) => (q ? toFront(q, unfinished(q, started)) : q));
-  }, [extra, fixes, pending, started]);
+    if (extra && !fixes && pending > 0) setQueue((q) => (q ? toFront(q, unfinished(q, started, just)) : q));
+  }, [extra, fixes, pending, started, just]);
 
   /** The queue after an answer and the card it shows next (session.ts onward). */
   const ahead = useCallback(
-    (q: QueueItem[], begun: ReadonlySet<number> = started) => (session ? onward(q, answered + 1, goal, begun) : { queue: q, shown: q[0] }),
-    [session, answered, goal, started],
+    (q: QueueItem[], begun: ReadonlySet<number> = started) => (session ? onward(q, answered + 1, goal, begun, queue?.[0]?.card.id) : { queue: q, shown: q[0] }),
+    [session, answered, goal, started, queue],
   );
 
   /** One more answer in a session; past its goal the stretch runs on only to finish its words. */
-  const count = useCallback(() => {
+  const count = useCallback((id: number) => {
     if (!session) return;
+    setJust(id);
     const n = answered + 1;
     setAnswered(n);
     if (n >= goal + SESSION_MAX - SESSION_TASKS) setOver(true);
@@ -353,7 +356,7 @@ export function ReviewScreen({
       setRevealed(false);
       setStep((n) => n + 1);
       shownAt.current = performance.now();
-      count();
+      count(card.id);
     },
     [item, card, revealed, step, queue, done, speaking, count, note, fixing, fixed, mistakes, session, ahead],
   );
@@ -379,7 +382,7 @@ export function ReviewScreen({
       setRevealed(false);
       setStep((n) => n + 1);
       shownAt.current = performance.now();
-      count();
+      count(queue[0]!.card.id);
     },
     [queue, count, note, fixing, fixed, session, ahead],
   );
@@ -433,7 +436,7 @@ export function ReviewScreen({
       setStep((n) => n + 1);
       shownAt.current = performance.now();
       // Meeting a word is a screen of the session too, so the count moves from the first tap.
-      count();
+      count(word.id);
       // Picking and saying are practice on the spot; the ladder on the server starts with building.
       if (kind === "choose" || kind === "aloud") return;
       // A word of one syllable has nothing to build: meeting it climbs that step.
