@@ -20,26 +20,35 @@ export const SESSION_MAX = 20;
 
 /**
  * Past the goal: where the next step of a word started in this stretch waits in the queue, or -1
- * when none does and the stretch can end.
+ * when none does and the stretch can end. A word's step doesn't come right after that word's own
+ * task (`just`, the card answered last): another word's step goes first, or a review in between when
+ * only that word is left, and with no review left the stretch ends there (the word goes on next time).
+ * Otherwise a word missed past the goal ran as one string of the same typing: by ear, from the
+ * translation, by ear again.
  */
-export function unfinished(queue: readonly QueueItem[], started: ReadonlySet<number>): number {
-  return queue.findIndex((i) => !!i.learn && i.learn.kind !== "intro" && started.has(i.card.id));
+export function unfinished(queue: readonly QueueItem[], started: ReadonlySet<number>, just?: number): number {
+  const step = (i: QueueItem) => !!i.learn && i.learn.kind !== "intro" && started.has(i.card.id);
+  const other = queue.findIndex((i) => step(i) && i.card.id !== just);
+  if (other >= 0 || !queue.some(step)) return other;
+  return queue.findIndex((i) => !i.learn && i.card.id !== just);
 }
 
 /**
- * A session's queue after an answer (`answered` counts it), with the card it shows next brought to
- * the front: past the goal that is the next step of a word begun in this stretch, and nothing once
- * none is left or SESSION_MAX is reached. The card shown decides what is played inside the tap.
+ * A session's queue after an answer (`answered` counts it, `just` is its card), with the card it
+ * shows next brought to the front: past the goal that is the next step of a word begun in this
+ * stretch (see unfinished), and nothing once none is left or SESSION_MAX is reached. The card shown
+ * decides what is played inside the tap.
  */
 export function onward(
   queue: readonly QueueItem[],
   answered: number,
   goal: number,
   started: ReadonlySet<number>,
+  just?: number,
 ): { queue: QueueItem[]; shown?: QueueItem } {
   if (answered < goal) return { queue: [...queue], shown: queue[0] };
   if (answered >= goal + SESSION_MAX - SESSION_TASKS) return { queue: [...queue] };
-  const at = unfinished(queue, started);
+  const at = unfinished(queue, started, just);
   return at < 0 ? { queue: [...queue] } : { queue: toFront(queue, at), shown: queue[at] };
 }
 

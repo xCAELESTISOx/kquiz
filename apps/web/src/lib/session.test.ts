@@ -136,4 +136,17 @@ describe("the card shown after an answer", () => {
     expect(onward([listen(1)], 16, 15, new Set([2])).shown).toBeUndefined();
     expect(onward([learnTask(card(2), 1, true)], 20, 15, new Set([2])).shown).toBeUndefined();
   });
+  // Session N4F9NC: 책장 missed past the goal ran by ear, from the translation, by ear, from the translation in a row.
+  it("past the goal is never the word just answered again", () => {
+    const own = learnTask(card(2), 2, true);
+    const other = learnTask(card(3), 1, true);
+    // Another word's step goes first.
+    expect(onward([own, listen(1), other], 17, 15, new Set([2, 3]), 2).shown).toBe(other);
+    // Only that word left: a review in between, then its step.
+    const r = onward([own, listen(1)], 17, 15, new Set([2]), 2);
+    expect(r.shown?.card.id).toBe(1);
+    expect(onward(r.queue.slice(1), 18, 15, new Set([2]), 1).shown).toBe(own);
+    // Nothing to put in between: the stretch ends, the word goes on next time.
+    expect(onward([own], 17, 15, new Set([2]), 2).shown).toBeUndefined();
+  });
 });
