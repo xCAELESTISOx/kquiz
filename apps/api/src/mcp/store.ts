@@ -109,11 +109,8 @@ export interface CardStore {
 export interface PictureChange {
   /** An https address of a picture to download and use. */
   url?: string;
-<<<<<<< HEAD
   /** The picture itself. */
   data?: Buffer;
-=======
->>>>>>> 178b94092bba59c5683242acc5fddcd5c8e6f3b3
   /** Back to the picture library's one for the word (or none if the library has none). */
   library?: boolean;
   /** No picture at all for this word, not even the library's. */

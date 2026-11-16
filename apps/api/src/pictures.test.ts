@@ -108,13 +108,10 @@ describe("pictures from the web", () => {
     expect(await store.set(String(card!.id), { hasText: true })).toEqual({ ok: true, picture: { from: "own", hasText: true } });
     expect(await store.set(String(card!.id), { remove: true })).toEqual({ ok: true, picture: null });
     expect(await store.set("999", { remove: true })).toMatchObject({ ok: false });
-<<<<<<< HEAD
     // The picture itself, sent as base64 by Claude.
     expect(await store.set(String(card!.id), { data: await png(120, 90, "#884422"), hasText: false })).toEqual({ ok: true, picture: { from: "own", hasText: false } });
     expect(getCard(db, OWNER_ID, card!.id)!.picture).toMatchObject({ width: 120, height: 90 });
     expect(await store.set(String(card!.id), { data: Buffer.from("nope") })).toMatchObject({ ok: false, error: expect.stringMatching(/^Picture not set: not a picture/) });
-=======
->>>>>>> 178b94092bba59c5683242acc5fddcd5c8e6f3b3
     const broken = new SqlitePictureStore(db, OWNER_ID, () => now, async () => Buffer.from("not an image"));
     expect(await broken.set(String(card!.id), { url: "https://pics.example/x" })).toMatchObject({ ok: false, error: expect.stringMatching(/Picture not set/) });
   });
