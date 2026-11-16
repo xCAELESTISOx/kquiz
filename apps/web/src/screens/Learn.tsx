@@ -1,4 +1,5 @@
 import { shownPronunciation } from "../lib/korean";
+import { CardImage, pictureHelps } from "../ui/CardImage";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { api } from "../lib/api";
 import { logAnswer } from "../lib/sessionLog";
@@ -299,6 +300,7 @@ export function IntroCard({ card, onDone }: { card: Card; onDone: () => void }) 
     <>
       <div className="review-stage">
         <div className="review-card intro-card">
+          <CardImage card={card} />
           <p className="intro-word" lang="ko">
             {card.korean}
           </p>
@@ -361,6 +363,7 @@ export function BuildCard({ card, options, onDone }: { card: Card; options: Choi
     <>
       <div className="review-stage">
         <div className="review-card build-card">
+          {pictureHelps(card) && <CardImage card={card} size="prompt" />}
           <p className="speech-ask">Build the word</p>
           <p className="speech-meaning">{card.meaning}</p>
           {canSpeak() && (

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { CardImage, pictureHelps } from "../ui/CardImage";
 import { api, submitReview } from "../lib/api";
 import { logAnswer } from "../lib/sessionLog";
 import { useLeechIds } from "../lib/leeches";
@@ -218,6 +219,7 @@ export function ChoiceCard({
       <div className="review-stage">
         <div className="review-card choice-card">
           {leeches.has(card.id) && <LeechBadge />}
+          {(pictureHelps(card) || answered) && <CardImage card={card} size="prompt" className={pictureHelps(card) ? undefined : "is-answer"} />}
           <p className="speech-ask">Choose it in Korean</p>
           <p className="speech-meaning">{card.meaning}</p>
           {answered && canSpeak() && (

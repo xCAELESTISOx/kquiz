@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { CardImage, pictureHelps } from "../ui/CardImage";
 import { submitReview } from "../lib/api";
 import type { Cloze } from "../lib/cloze";
 import { useLeechIds } from "../lib/leeches";
@@ -120,6 +121,11 @@ export function TypeCard({
       <div className="review-stage">
         <div className="review-card type-card">
           {leeches.has(card.id) && <LeechBadge />}
+          {ask === "meaning" && pictureHelps(card) ? (
+            <CardImage card={card} size="prompt" />
+          ) : (
+            check && <CardImage card={card} size="prompt" className="is-answer" />
+          )}
           <p className="speech-ask">{ASK[ask]}</p>
           {ask === "sound" && (
             <button type="button" className="listen-play" aria-label="Listen again" onClick={() => speak(heard(item))}>

@@ -9,6 +9,7 @@ import type {
   CardFilter,
   CardKind,
   CardList,
+  CardPicture,
   CardPatch,
   CardSource,
   CardSummary,
@@ -124,6 +125,24 @@ const MOCK_SWAPS: [string, string][] = [
   ["이", "을"],
   ["요", ""],
 ];
+
+// Pictures for the sample words. The files aren't in the repository (public/dev-pictures is ignored):
+// drop your own there under these names to see pictures in dev.
+const DEV_PICTURES: Record<string, CardPicture> = Object.fromEntries(
+  (
+    [
+      ["지하철", 237, 123],
+      ["편의점", 150, 84],
+      ["영수증", 140, 151],
+      ["계산하다", 148, 107],
+      ["학교", 188, 115],
+      ["학생", 94, 172],
+      ["선생님", 113, 172],
+      ["대학교", 186, 115],
+      ["가다", 251, 137],
+    ] as const
+  ).map(([ko, width, height]) => [ko, { url: `/dev-pictures/${ko}.webp`, width, height, hasText: false }]),
+);
 
 /** Same rule as the server: duplicates ignore spaces and punctuation. */
 function dedupeKey(korean: string): string {
@@ -649,6 +668,7 @@ export class MockApi {
       source,
       suspended: false,
       queued: !learned,
+      picture: DEV_PICTURES[input.korean] ?? null,
       createdAt: at,
       updatedAt: at,
     };
