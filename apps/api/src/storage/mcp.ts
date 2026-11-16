@@ -412,7 +412,7 @@ export class SqliteSharingStore implements SharingStore {
   }
 }
 
-// Downloads per person per hour: plenty for picking pictures with Claude, nothing to run up a bill with.
+// Pictures set per person per hour (downloaded or sent): plenty for picking pictures with Claude, nothing to run up a bill with.
 const FETCHES_PER_HOUR = 120;
 const fetches = new Map<number, number[]>();
 
@@ -429,19 +429,19 @@ export class SqlitePictureStore implements PictureStore {
     if (!Number.isInteger(cardId) || !getCard(this.db, this.userId, cardId)) return { ok: false as const, error: `No card ${id}; see find_cards` };
     if (change.remove) setCardPicture(this.db, this.userId, cardId, "none", this.now());
     else if (change.library) setCardPicture(this.db, this.userId, cardId, "library", this.now());
-    else if (change.url) {
+    else if (change.url || change.data) {
       const at = this.now().getTime();
       const recent = (fetches.get(this.userId) ?? []).filter((t) => at - t < 3_600_000);
       if (recent.length >= FETCHES_PER_HOUR) return { ok: false as const, error: `At most ${FETCHES_PER_HOUR} pictures an hour; try again later` };
       fetches.set(this.userId, [...recent, at]);
       try {
-        const own = await processPicture(await this.download(change.url));
+        const own = await processPicture(change.data ?? (await this.download(change.url!)));
         setCardPicture(this.db, this.userId, cardId, { own, hasText: change.hasText ?? false }, this.now());
       } catch (e) {
         return { ok: false as const, error: e instanceof PictureError ? `Picture not set: ${e.message}` : "Picture not set: download failed" };
       }
     }
-    if (change.hasText !== undefined && !change.url) setPictureHasText(this.db, this.userId, cardId, change.hasText);
+    if (change.hasText !== undefined && !change.url && !change.data) setPictureHasText(this.db, this.userId, cardId, change.hasText);
     const card = getCard(this.db, this.userId, cardId)!;
     return { ok: true as const, picture: card.picture ? { from: card.picture.from, hasText: card.picture.hasText } : null };
   }
