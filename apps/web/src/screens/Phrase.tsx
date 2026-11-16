@@ -206,9 +206,9 @@ export function PhraseCard({
 
       <div aria-live="polite">
         {error && <p className="notice notice-error speech-notice">{error}</p>}
-        {result && (
+        {result && (!correct || result.rating === "hard") && (
           <p className={`sounds-feedback tone-${correct ? "ok" : "wrong"}`}>
-            {correct ? (result.rating === "hard" ? "Correct, after a try" : "Correct") : result.gaveUp ? "Here's the right one" : "Not quite, the right one is above"}
+            {correct ? "After a try" : result.gaveUp ? "Here's the right one" : "Not quite, the right one is above"}
           </p>
         )}
       </div>

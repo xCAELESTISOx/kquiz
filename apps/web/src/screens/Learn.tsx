@@ -404,7 +404,7 @@ export function BuildCard({ card, options, onDone }: { card: Card; options: Choi
       </div>
 
       <div aria-live="polite">
-        {full && <p className={`sounds-feedback tone-${right ? "ok" : "wrong"}`}>{right ? "Correct" : "Not quite"}</p>}
+        {full && !right && <p className="sounds-feedback tone-wrong">Not quite</p>}
       </div>
 
       <footer className="review-actions">
