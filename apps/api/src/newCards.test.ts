@@ -92,6 +92,11 @@ describe("new words", () => {
     const overview = (await t.request("/stats?tz=540")).json;
     expect(overview).toMatchObject({ learned: 1, learning: 3 });
     expect(overview.forecast[1]).toMatchObject({ words: 1 });
+    // Learned today, the first day of learning: the pace counts from it.
+    expect(overview.pace).toEqual({ days: 1, learned: 1 });
+    expect(overview.learnedDays.at(-1)).toEqual({ day: "2026-10-20", words: 1 });
+    expect(overview.learnedDays.slice(0, -1).every((d: { words: number }) => d.words === 0)).toBe(true);
+    expect(overview.toLearn).toBe((await t.request("/reviews/stats")).json.newCards.queued);
     expect((await answer(true)).status).toBeUndefined();
     expect((await t.request(`/cards/${id}/learning`, { body: { ok: true } })).status).toBe(409);
     expect((await t.request("/cards/999/learning", { body: { ok: true } })).status).toBe(404);
@@ -121,6 +126,35 @@ describe("new words", () => {
     t.clock.now = new Date(t.clock.now.getTime() + 3 * HOUR);
     session = (await t.request("/cards/learning")).json;
     expect(session.items.slice(0, 7).map((i: any) => i.step)).toEqual(Array(7).fill("check"));
+  });
+
+  it("can be skipped as met: to the back of the pool, the next word in its place", async () => {
+    const t = testApp({}, { learnNewWords: false });
+    await t.signIn();
+    const words = fromClaude(t, 5);
+    await t.request("/cards/learning");
+    const skip = (card: number) => {
+      t.clock.now = new Date(t.clock.now.getTime() + 60_000);
+      return t.request(`/cards/${card}/learning/skip`, { body: {} });
+    };
+    const res = await skip(words[0]!.id);
+    expect(res.status).toBe(200);
+    expect(res.json).toMatchObject({ status: "skipped", next: { step: 0, card: { id: words[3]!.id } } });
+    const session = (await t.request("/cards/learning")).json;
+    expect(session.items.map((i: any) => i.card.id)).toEqual([words[1]!.id, words[2]!.id, words[3]!.id]);
+    expect((await t.request("/reviews/stats")).json.newCards.pool).toBe(2);
+    // A word added after the skip (the next lesson) waits behind the skipped one.
+    t.clock.now = new Date(t.clock.now.getTime() + HOUR);
+    const [later] = createCards(t.db, OWNER_ID, [{ korean: "물", meaning: "вода", tags: [] }], "claude", t.clock.now).created;
+    expect((await skip(words[1]!.id)).json.next.card.id).toBe(words[4]!.id);
+    expect((await skip(words[2]!.id)).json.next.card.id).toBe(words[0]!.id);
+    expect((await skip(words[3]!.id)).json.next.card.id).toBe(later!.id);
+    // Skipped words come round again, the one skipped first first.
+    expect((await skip(later!.id)).json.next.card.id).toBe(words[1]!.id);
+    // A word started up the ladder can't be skipped.
+    await t.request(`/cards/${words[4]!.id}/learning`, { body: { ok: true } });
+    expect((await skip(words[4]!.id)).status).toBe(409);
+    expect((await skip(999)).status).toBe(404);
   });
 
   it("enter reviews after learning a group: tomorrow, or later today if missed", async () => {

@@ -2,8 +2,10 @@ import type { MixKind, QueueItem, ReviewMode } from "./types";
 
 /**
  * How each item of a mixed session is asked. Several ways can share a schedule (speech: say it, pick
- * it, type it; listening: recall the meaning, type what's heard), so each item takes one of the
- * picked ways at random. An item none of them can do here (nothing to record with, no look-alikes)
+ * it, type it; listening: recall the meaning, type what's heard), so each item takes the picked way
+ * used least so far (`already`: the tasks the session has anyway, such as new words written from
+ * their translation), at random between equals. Left to chance alone, a session could run as one
+ * way over and over. An item none of them can do here (nothing to record with, no look-alikes)
  * waits for a better day.
  */
 export function mixWays(
@@ -11,8 +13,11 @@ export function mixWays(
   kinds: ReadonlySet<MixKind>,
   can: { record: boolean; pick: (item: QueueItem) => boolean },
   random = Math.random,
+  already: readonly MixKind[] = [],
 ): Map<QueueItem, MixKind> {
   const ways = new Map<QueueItem, MixKind>();
+  const used = new Map<MixKind, number>();
+  for (const kind of already) used.set(kind, (used.get(kind) ?? 0) + 1);
   for (const item of items) {
     const options: MixKind[] =
       item.mode === "meaning"
@@ -24,7 +29,12 @@ export function mixWays(
               ...(kinds.has("write") ? (["write"] as const) : []),
             ]
           : [...(kinds.has("listening") ? (["listening"] as const) : []), ...(kinds.has("dictation") ? (["dictation"] as const) : [])];
-    if (options.length) ways.set(item, options[Math.floor(random() * options.length)]!);
+    if (!options.length) continue;
+    const least = Math.min(...options.map((o) => used.get(o) ?? 0));
+    const fewest = options.filter((o) => (used.get(o) ?? 0) === least);
+    const way = fewest[Math.floor(random() * fewest.length)]!;
+    ways.set(item, way);
+    used.set(way, least + 1);
   }
   return ways;
 }

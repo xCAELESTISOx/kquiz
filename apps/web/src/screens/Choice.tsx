@@ -234,9 +234,9 @@ export function ChoiceCard({
 
       <div aria-live="polite">
         {error && <p className="notice notice-error speech-notice">{error}</p>}
-        {answered && (
+        {answered && (!right || nudges.length > 0 || rating.current === "hard") && (
           <p className={`sounds-feedback tone-${right ? "ok" : "wrong"}`}>
-            {right ? (nudges.length ? "Correct, with a hint" : rating.current === "hard" ? "Correct, but slow" : "Correct") : <>Answer: <span lang="ko">{card.korean}</span></>}
+            {right ? (nudges.length ? "With a hint" : "A bit slow") : <>Answer: <span lang="ko">{card.korean}</span></>}
           </p>
         )}
       </div>

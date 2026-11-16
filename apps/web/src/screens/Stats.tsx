@@ -56,8 +56,9 @@ export function StatsScreen() {
       {stats && (
         <>
           <Streak stats={stats} />
-          <Section i={1} title="Forecast for learned words">
-            <Forecast stats={stats} modes={modes} />
+          <Pace stats={stats} />
+          <Section i={1} title="Words learned">
+            <LearnedChart stats={stats} />
           </Section>
           <Section i={2} title="Recall" aside="last 30 days">
             <Retention stats={stats} modes={modes} />
@@ -129,8 +130,12 @@ function savedRange(): 7 | 30 {
   }
 }
 
-function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
-  // A month by default: the owner plans lessons around it; the week stays one tap away and is remembered.
+/**
+ * Words learned in all, day by day: the last two weeks as they were, then the days ahead growing at
+ * the recent pace (see Pace), until the words added so far run out.
+ */
+function LearnedChart({ stats }: { stats: StatsOverview }) {
+  // A month by default; the week stays one tap away and is remembered.
   const [range, setRangeState] = useState<7 | 30>(savedRange);
   const setRange = (r: 7 | 30) => {
     setRangeState(r);
@@ -141,60 +146,47 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
     }
   };
   const [selected, select] = useState<number>();
-  // Half the chart is what was done, half what is coming: the past makes the forecast readable.
+  const learnedDays = stats.learnedDays ?? [];
+  const pace = stats.pace;
+  const rate = pace && pace.days >= MIN_PACE_DAYS ? pace.learned / pace.days : 0;
+  const learned = stats.learned ?? 0;
+  const toLearn = stats.toLearn ?? 0;
+
+  // Half the chart is what was learned (ending today), half what the pace brings.
   const back = Math.floor(range / 2);
-  const history = stats.history ?? [];
-  const past: Day[] = Array.from({ length: back }, (_, k) => {
+  const past: Day[] = Array.from({ length: back + 1 }, (_, k) => {
     const offset = k - back;
     const day = addDays(stats.today, offset);
-    return { day, offset, words: history.find((h) => h.day === day)?.words ?? 0 };
+    return { day, offset, words: learnedDays.find((d) => d.day === day)?.words ?? 0 };
   });
-  const ahead: Day[] = stats.forecast.slice(0, range - back).map((f, i) => ({
-    day: f.day,
-    offset: i,
-    // Words, not mode-reviews: a word due for meaning and pronunciation on one day is one word.
-    words: f.words ?? sum(modes.map((m) => f.due[m.mode] ?? 0)),
-    due: f.due,
-  }));
+  // Words known at the end of each past day: today's count less what was learned after it.
+  let known = learned;
+  const knownBy = new Map<number, number>();
+  for (let i = past.length - 1; i >= 0; i--) {
+    knownBy.set(past[i]!.offset, Math.max(known, 0));
+    known -= past[i]!.words;
+  }
+  const ahead: Day[] = Array.from({ length: range - back - 1 }, (_, k) => {
+    const offset = k + 1;
+    const before = Math.min(rate * k, toLearn);
+    const after = Math.min(rate * offset, toLearn);
+    knownBy.set(offset, learned + after);
+    return { day: addDays(stats.today, offset), offset, words: after - before };
+  });
   const items = [...past, ...ahead];
-  const totals = items.map((d) => d.words);
+  // Bars are the words known by the end of each day; `words` stays what that day added.
+  const totals = items.map((d) => knownBy.get(d.offset) ?? 0);
   const max = Math.max(...totals, 1);
   const pick = usePointerPick(items.length, select);
-  const learned = stats.learned ?? 0;
-  const learning = stats.learning ?? 0;
-
-  if (learned === 0) {
-    return (
-      <p className="stats-note forecast-empty">
-        No learned words yet. The forecast appears once your first words go through “Learn”.
-      </p>
-    );
-  }
-
-  const now = ahead[0]?.words ?? 0;
-  const future = ahead.slice(1).map((d) => d.words);
-  const coming = sum(future);
-  const peak = future.length ? back + future.indexOf(Math.max(...future)) + 1 : 0;
-  const shown = selected ?? back + 1;
+  const shown = selected ?? back;
   const day = items[shown];
+
+  if (learned === 0 && !learnedDays.some((d) => d.words)) {
+    return <p className="stats-note forecast-empty">No words learned yet. They show up here once your first words go through “Learn”.</p>;
+  }
 
   return (
     <>
-      <div className="forecast-summary">
-        <div className="forecast-tile" data-kind="now">
-          <span className="forecast-tile-value">{now}</span>
-          <span className="forecast-tile-label">
-            {wordsWord(now)} for today
-          </span>
-          <span className="forecast-tile-hint">including overdue</span>
-        </div>
-        <div className="forecast-tile" data-kind="ahead">
-          <span className="forecast-tile-value">{coming}</span>
-          <span className="forecast-tile-label">word {plural(coming, "review", "reviews")} ahead</span>
-          <span className="forecast-tile-hint">the next {future.length} days</span>
-        </div>
-      </div>
-
       <div className="segmented segmented-small" role="tablist" aria-label="Period" data-mode={range === 30 ? "single" : "bulk"}>
         {([30, 7] as const).map((r) => (
           <button key={r} role="tab" aria-selected={range === r} onClick={() => (setRange(r), select(undefined))}>
@@ -206,18 +198,16 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
       <div className="readout" aria-live="polite">
         {day && (
           <>
-            <span className="readout-value">{totals[shown]}</span>
-            <span className="readout-label">
-              {wordsWord(totals[shown]!)} {day.offset < 0 ? "gone over" : "due"} · {dayName(day.day, day.offset, true)}
+            <span className="readout-value">
+              {day.offset > 0 ? "~" : ""}
+              {Math.round(totals[shown]!)}
             </span>
-            {day.due && modes.length > 1 && totals[shown]! > 0 && (
-              <span className="readout-parts readout-modes">
-                {modes
-                  .filter((m) => day.due![m.mode])
-                  .map((m) => `${m.label.toLowerCase()} ${day.due![m.mode]}`)
-                  .join(" · ")}
-              </span>
-            )}
+            <span className="readout-label">
+              {wordsWord(Math.round(totals[shown]!))} in all{day.offset > 0 ? " at your pace" : ""} · {dayName(day.day, day.offset, true)}
+            </span>
+            <span className="readout-parts readout-modes">
+              {day.offset > 0 ? `about +${round1(day.words)} that day` : `+${day.words} that day`}
+            </span>
           </>
         )}
       </div>
@@ -227,7 +217,7 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
         data-range={range}
         data-picking={selected !== undefined}
         role="img"
-        aria-label={`Words gone over, then due, by day: ${items.map((f, i) => `${shortDate(f.day)} — ${totals[i]}`).join(", ")}`}
+        aria-label={`Words learned in all by day, then at your pace: ${items.map((f, i) => `${shortDate(f.day)} — ${Math.round(totals[i]!)}`).join(", ")}`}
         {...pick}
       >
         {items.map((f, i) => (
@@ -237,7 +227,7 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
             data-selected={i === selected}
             data-past={f.offset < 0}
             data-today={f.offset === 0}
-            data-empty={totals[i] === 0}
+            data-empty={totals[i]! < 0.05}
           >
             <div className="bar-stack" style={{ height: `${(totals[i]! / max) * 100}%` }} />
           </div>
@@ -260,7 +250,7 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
       <div className="legend forecast-legend">
         <span>
           <i data-kind="past" />
-          done
+          learned
         </span>
         <span>
           <i data-kind="now" />
@@ -268,17 +258,77 @@ function Forecast({ stats, modes }: { stats: StatsOverview; modes: Mode[] }) {
         </span>
         <span>
           <i data-kind="ahead" />
-          forecast
+          at your pace
         </span>
       </div>
       <p className="stats-note">
-        Counts the {learned} {wordsWord(learned)} you've learned; a word due in several modes counts once. Only each
-        word's next review is shown: once gone over, it comes back later.
-        {learning > 0 ? ` ${learning} more ${learning === 1 ? "is" : "are"} still in “Learn” and join once learned.` : ""}
-        {totals[peak]! > 0 ? ` Busiest day: ${dayName(items[peak]!.day, peak, true)}, ${totals[peak]} ${wordsWord(totals[peak]!)}.` : ""}
+        How many words you know in all at the end of each day. A word counts as learned once it has gone through
+        “Learn” and passed its check a few hours later.
+        {rate > 0
+          ? toLearn > 0 && rate * ahead.length > toLearn
+            ? ` The days ahead grow at your pace until the ${toLearn} ${wordsWord(toLearn)} you've added run out.`
+            : ` The days ahead grow at your pace of the last two weeks, about ${round1(rate)} a day.`
+          : ""}
       </p>
     </>
   );
+}
+
+/** A pace only from this many days of learning: one or two days say little. */
+const MIN_PACE_DAYS = 3;
+/** How far ahead "at this pace" looks. */
+const PACE_HORIZON = 30;
+
+/** "Keep this pace and in N days you'll know K words": from the words learned over the last two weeks. */
+function Pace({ stats }: { stats: StatsOverview }) {
+  const pace = stats.pace;
+  const learned = stats.learned ?? 0;
+  const toLearn = stats.toLearn ?? 0;
+  if (!pace) return null;
+  const rate = pace.learned / pace.days;
+  let headline: ReactNode;
+  let note: string;
+  if (pace.learned === 0) {
+    if (!toLearn) return null;
+    headline = <>No new words learned in the last {pace.days} days.</>;
+    note = `${toLearn} ${wordsWord(toLearn)} ${toLearn === 1 ? "is" : "are"} waiting in “Learn”.`;
+  } else if (pace.days < MIN_PACE_DAYS) {
+    headline = <>{pace.learned} {wordsWord(pace.learned)} learned so far.</>;
+    note = `Your pace shows up after ${MIN_PACE_DAYS} days of learning.`;
+  } else {
+    const finish = toLearn > 0 ? Math.ceil(toLearn / rate) : 0;
+    const total = learned + toLearn;
+    const lately = `You learned ${pace.learned} ${wordsWord(pace.learned)} in the last ${pace.days} days, about ${round1(rate)} a day.`;
+    if (toLearn === 0) {
+      headline = <>All {learned} of your words are learned.</>;
+      note = `${lately} Add more words to keep going.`;
+    } else if (finish <= PACE_HORIZON) {
+      headline = (
+        <>
+          Keep this pace and in <strong>{finish} {days(finish)}</strong> you'll know all <strong>{total} {wordsWord(total)}</strong> you've added.
+        </>
+      );
+      note = lately;
+    } else {
+      const k = learned + Math.round(rate * PACE_HORIZON);
+      headline = (
+        <>
+          Keep this pace and in <strong>{PACE_HORIZON} days</strong> you'll know about <strong>{k} {wordsWord(k)}</strong>.
+        </>
+      );
+      note = `${lately} All ${total} you've added would take ${finish} days.`;
+    }
+  }
+  return (
+    <section className="pace" aria-label="Pace">
+      <p className="pace-headline">{headline}</p>
+      <p className="stats-note">{note}</p>
+    </section>
+  );
+}
+
+function round1(n: number) {
+  return n >= 10 ? String(Math.round(n)) : String(Math.round(n * 10) / 10);
 }
 
 type Day = { day: string; offset: number; words: number; due?: Record<string, number> };

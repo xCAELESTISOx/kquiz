@@ -6,7 +6,8 @@ import { api, holdReview, isConnectionError, releaseHeldReview, takeBackReview }
 import { clozeFor } from "../lib/cloze";
 import { useLeechIds } from "../lib/leeches";
 import { everyKind, mixWays, serverModes } from "../lib/mix";
-import { afterFix, afterIntro, buildable, firstTasks, insertAfter, insertNext, interleave, introTask, learnTask, SESSION_MAX, SESSION_TASKS, onward, toFront, unfinished, withMistake, withoutMistake } from "../lib/session";
+import { learnKind, vary, type TaskKind } from "../lib/variety";
+import { afterFix, afterIntro, buildable, firstTasks, insertAfter, insertNext, interleave, introTask, LEARN_GAP, learnTask, SESSION_MAX, SESSION_TASKS, onward, toFront, unfinished, withMistake, withoutMistake } from "../lib/session";
 import { navigate } from "../lib/router";
 import { endLog, flushLog, logEvent, logOutcome, logServer, logShown, startLog } from "../lib/sessionLog";
 import { SessionId, useLongPress, type LongPress } from "../ui/SessionId";
@@ -113,6 +114,8 @@ export function ReviewScreen({
   const [fixes, setFixes] = useState<QueueItem[]>();
   // New words begun in this stretch: past its goal it runs on (up to SESSION_MAX) only for their steps.
   const [started, setStarted] = useState<ReadonlySet<number>>(() => new Set());
+  // Saying aloud turned off for this session ("Can't speak now" on a new word, or a review switched to options).
+  const [silent, setSilent] = useState(false);
   const extra = !!session && answered >= goal;
   const pending = extra && queue ? unfinished(queue, started) : 0;
   // The stretch is over: its goal is reached and its words have done their steps (or it hit
@@ -159,11 +162,16 @@ export function ReviewScreen({
           ? await api.choices(ids).catch(() => ({ options: {} as Record<number, ChoiceOption[]> }))
           : { options: {} };
         // A single-mode session asks every item its own way.
-        const ways = mixWays(all, kinds ?? new Set([mode as MixKind]), {
-          record: canRecord(),
-          pick: (i) => (options[i.card.id]?.length ?? 0) > 0,
-        });
-        const items = interleave(all.filter((i) => ways.has(i)), fresh);
+        // Each review is asked the way used least so far, counting the new words' typed steps, and
+        // the order keeps tasks of one kind apart (lib/variety.ts).
+        const ways = mixWays(
+          all,
+          kinds ?? new Set([mode as MixKind]),
+          { record: canRecord(), pick: (i) => (options[i.card.id]?.length ?? 0) > 0 },
+          Math.random,
+          fresh.flatMap((i) => { const k = learnKind(i); return k === "write" || k === "dictation" ? [k] : []; }),
+        );
+        const items = vary(interleave(all.filter((i) => ways.has(i)), fresh), (i) => learnKind(i) ?? ways.get(i));
         const phrases = items.filter((i) => i.learn ? i.card.kind === "phrase" : builds(i, ways.get(i) === "dictation"));
         const { tiles } = phrases.length
           ? await api.blocks(phrases.map((i) => i.card.id)).catch(() => ({ tiles: {} as Record<number, PhraseTiles> }))
@@ -192,6 +200,40 @@ export function ReviewScreen({
     );
     // A new group is a new screen (App keys it), so `group` never changes here.
   }, [mode, kinds, round]);
+
+  /** How a task in the queue is shown, so a step put back doesn't land next to one of its kind. */
+  const kindOf = useCallback(
+    (i: QueueItem): TaskKind | undefined =>
+      learnKind(i) ??
+      (quiet.has(i)
+        ? "choice"
+        : typed.get(i) === "meaning"
+          ? "write"
+          : typed.get(i) === "sound"
+            ? "dictation"
+            : i.mode === "speech"
+              ? "aloud"
+              : i.mode),
+    [quiet, typed],
+  );
+
+  /**
+   * Can't speak now (said so on a new word, or a review switched to options): the reviews still to be
+   * said aloud are picked or typed instead, by turns, rather than each asking to switch again.
+   */
+  const hush = useCallback(
+    (q: readonly QueueItem[]) => {
+      setSilent(true);
+      const aloud = q.filter((i) => !i.learn && i.mode === "speech" && !quiet.has(i) && !typed.has(i) && !builds(i, false));
+      let n = 0;
+      const pick: QueueItem[] = [];
+      const write: QueueItem[] = [];
+      for (const i of aloud) ((options[i.card.id]?.length ?? 0) > 0 && n++ % 2 === 0 ? pick : write).push(i);
+      if (pick.length) setQuiet((s) => new Set([...s, ...pick]));
+      if (write.length) setTyped((t) => new Map([...t, ...write.map((i): [QueueItem, TypeAsk] => [i, "meaning"])]));
+    },
+    [quiet, typed, options],
+  );
 
   // Past the goal the step still due is brought to the front first (below), so the queue's head stays the card on screen.
   const item = pause ? undefined : fixing ? fixes![0] : extra && pending !== 0 ? undefined : queue?.[0];
@@ -346,8 +388,6 @@ export function ReviewScreen({
    * goes to the server, which says where the word stands now: its next step comes back a few cards
    * on, or it has climbed its ladder (and the next word from the pool joins), or it is learned.
    */
-  // Saying aloud turned off for this session ("Can't speak now" on a new word).
-  const [silent, setSilent] = useState(false);
   const learned = useCallback(
     (ok: boolean, quiet = false) => {
       if (!queue || !item?.learn) return;
@@ -359,7 +399,7 @@ export function ReviewScreen({
       void releaseHeldReview();
       setExit(undefined);
       // "Can't speak now": no more saying aloud in this session.
-      if (quiet) setSilent(true);
+      if (quiet) hush(queue.slice(1));
       const rest = quiet ? queue.slice(1).filter((i) => i.learn?.kind !== "aloud") : queue.slice(1);
       const word = item.card;
       note("met", word.id);
@@ -373,7 +413,7 @@ export function ReviewScreen({
         kind === "intro"
           ? [...afterIntro(word, options[word.id] ?? [], { hear: canSpeak(), say: !silent && canSay(word) }), ...rest]
           : kind === "choose" && !ok
-            ? insertAfter([item, ...rest], item).slice(1)
+            ? insertAfter([item, ...rest], item, LEARN_GAP, kindOf).slice(1)
             : rest;
       const { queue: next, shown } = ahead(
         typeNext ? insertNext([item, ...after], learnTask(word, 1, canSpeak())).slice(1) : after,
@@ -398,7 +438,7 @@ export function ReviewScreen({
             logServer(logged, `${res.status}${"step" in res && res.step !== undefined ? ` step ${res.step}` : ""}`);
             // Typing it is already in the queue.
             if (res.status === "climbed" && res.step === 1 && typeNext) return;
-            if (res.status === "climbed" || res.status === "missed") setQueue((q) => insertAfter(q ?? [], learnTask(word, res.step, canSpeak())));
+            if (res.status === "climbed" || res.status === "missed") setQueue((q) => insertAfter(q ?? [], learnTask(word, res.step, canSpeak()), LEARN_GAP, kindOf));
             else if (res.status === "passed") {
               note("climbed", word.id);
               if (res.next) {
@@ -416,8 +456,40 @@ export function ReviewScreen({
         )
         .finally(() => setAnswering((n) => n - 1));
     },
-    [queue, item, prepare, count, options, note, silent, fixing, fixed, ahead, started],
+    [queue, item, prepare, count, options, note, silent, fixing, fixed, ahead, started, hush, kindOf],
   );
+
+  /**
+   * "Not now" on a word as it is met: the server sends it to the back of the pool and gives the next
+   * new word in its place, met right away. Not an answer, so the session's count stays where it is.
+   */
+  const [skipping, setSkipping] = useState(false);
+  const skipWord = useCallback(() => {
+    if (!item || item.learn?.kind !== "intro" || skipping || fixing) return;
+    const word = item.card;
+    const logged = logOutcome({ result: "skipped", note: "not now" });
+    logEvent("skip-new", { korean: word.korean });
+    setSkipping(true);
+    api
+      .skipLearning(word.id)
+      .then(
+        (res) => {
+          logServer(logged, res.next ? `skipped, next ${res.next.card.korean}` : "skipped");
+          if (res.next) prepare(res.next.card);
+          setQueue((q) => {
+            const rest = (q ?? []).filter((i) => i.card.id !== word.id);
+            return res.next ? [introTask(res.next.card), ...rest] : rest;
+          });
+          setStep((n) => n + 1);
+          shownAt.current = performance.now();
+        },
+        (e: Error) => {
+          logServer(logged, `not sent: ${e.message}`);
+          if (!isConnectionError(e)) setError(e.message);
+        },
+      )
+      .finally(() => setSkipping(false));
+  }, [item, skipping, fixing, prepare]);
 
   /** "Another round": as many answers again; the same queue goes on, or a fresh one if it ran out. */
   const more = useCallback(() => {
@@ -560,7 +632,7 @@ export function ReviewScreen({
       {session && queue && !card && !pause && <div className="review-stage" aria-busy="true" />}
 
       {queue && item?.learn && (
-        <LearnStep key={step} item={item} options={options[item.card.id] ?? []} tiles={tiles[item.card.id]} recorder={recorder} onDone={learned} />
+        <LearnStep key={step} item={item} options={options[item.card.id] ?? []} tiles={tiles[item.card.id]} recorder={recorder} onDone={learned} onSkip={skipWord} />
       )}
 
       {!learning && queue && item && building && (
@@ -586,6 +658,7 @@ export function ReviewScreen({
           aloud={canRecord() && (
             <button type="button" className="link-button inline" onClick={() => {
               logEvent("switched", { to: "say" });
+              setSilent(false);
               setQuiet((s) => toggled(s, item));
             }}>
               record your voice
@@ -603,6 +676,7 @@ export function ReviewScreen({
             <button type="button" className="link-button inline" onClick={() => {
               logEvent("switched", { to: "choice" });
               setQuiet((s) => toggled(s, item));
+              if (session && queue) hush(queue.slice(1));
             }}>
               Choose from options
             </button>
@@ -747,6 +821,7 @@ function LearnStep({
   tiles,
   recorder,
   onDone,
+  onSkip,
 }: {
   item: QueueItem;
   options: ChoiceOption[];
@@ -754,10 +829,12 @@ function LearnStep({
   recorder: RefObject<Recorder | undefined>;
   /** `quiet`: the word can't be said now, and nothing more is to be said this session. */
   onDone: (ok: boolean, quiet?: boolean) => void;
+  /** Leaves a word just met for later; another new word comes instead. */
+  onSkip?: () => void;
 }) {
   const kind = item.learn!.kind;
   const { card } = item;
-  if (kind === "intro") return <IntroCard card={card} onDone={() => onDone(true)} />;
+  if (kind === "intro") return <IntroCard card={card} onDone={() => onDone(true)} onSkip={onSkip} />;
   if (kind === "choose") return <ChoiceCard item={item} options={options} practice instant onDone={(r) => onDone(r !== "again")} />;
   if (kind === "aloud")
     return (

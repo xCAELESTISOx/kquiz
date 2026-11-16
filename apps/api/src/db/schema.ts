@@ -73,6 +73,9 @@ export const cards = sqliteTable(
     learningAt: timestamp("learning_at"),
     learnStep: integer("learn_step").notNull().default(0),
     learnPassedAt: timestamp("learn_passed_at"),
+    // Set when the owner skips the word as it is met: from then on it waits at the back of the pool,
+    // after every word added before that (newCards.ts poolOrder).
+    skippedAt: timestamp("skipped_at"),
     // The word's picture (pictures.ts): its own, the library's for this word, or switched off.
     // Null: none yet; looked up in the library again whenever the library or the word changes.
     picture: text("picture", { mode: "json" }).$type<CardPictureRef>(),

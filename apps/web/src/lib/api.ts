@@ -5,6 +5,7 @@ import type {
   PictureImportResult,
   LearningAnswer,
   LearningItem,
+  SkipAnswer,
   AccessInfo,
   AddCardResult,
   AddCardsResult,
@@ -351,6 +352,10 @@ export const api = {
   answerLearning: (id: number, ok: boolean) =>
     // Sent again if cut off on the way out of the app: at worst the word moves one step twice.
     request<LearningAnswer>("POST", `/cards/${id}/learning`, { body: { ok }, resend: true, fallback: (m) => m.answerLearning(id, ok) }),
+
+  /** "Not now" on a new word as it is met: it goes to the back of the pool, and the next one comes instead. */
+  skipLearning: (id: number) =>
+    request<SkipAnswer>("POST", `/cards/${id}/learning/skip`, { body: {}, fallback: (m) => m.skipLearning(id) }),
 
   /** Words just learned in a group (tomorrow, or later today the `missed` ones); returns those taken in. */
   learned: (cardIds: number[], missed: number[]) =>

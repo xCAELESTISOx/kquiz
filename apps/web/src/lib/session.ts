@@ -4,6 +4,7 @@
 // (afterIntro), so it is used while still fresh. A word up the ladder waits a few hours and is
 // then checked once more from its translation. Reviews due in any mode fill the rest.
 import type { Card, ChoiceOption, LearningItem, QueueItem } from "./types";
+import { placeAfter, type TaskKind } from "./variety";
 
 /**
  * How many answers a session runs to (about five minutes); "Another round" adds as many again. The tasks
@@ -124,9 +125,13 @@ export function insertNext(queue: QueueItem[], item: QueueItem): QueueItem[] {
   return [...queue.slice(0, at), item, ...queue.slice(at)];
 }
 
-/** `item` put back `gap` cards after the one on screen (queue[0]), or at the end of a shorter queue. */
-export function insertAfter(queue: QueueItem[], item: QueueItem, gap = LEARN_GAP): QueueItem[] {
-  const at = Math.min(gap + 1, queue.length);
+/**
+ * `item` put back `gap` cards after the one on screen (queue[0]), or at the end of a shorter queue.
+ * Knowing how the tasks are shown (`kindOf`), it moves a card nearer or further rather than land next
+ * to a task of its own kind.
+ */
+export function insertAfter(queue: QueueItem[], item: QueueItem, gap = LEARN_GAP, kindOf?: (item: QueueItem) => TaskKind | undefined): QueueItem[] {
+  const at = kindOf ? placeAfter(queue, item, kindOf, gap) : Math.min(gap + 1, queue.length);
   return [...queue.slice(0, at), item, ...queue.slice(at)];
 }
 

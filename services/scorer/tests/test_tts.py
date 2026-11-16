@@ -98,6 +98,7 @@ def test_idle_model_is_unloaded(client):
     used = state.synth_used_at
     assert not unload_idle_synth(state, used + TTS_IDLE_S - 1)
     assert state.synth is not None
-    assert unload_idle_synth(state, used + TTS_IDLE_S)
+    # A hair past the limit: `used + TTS_IDLE_S - used` can round to just under TTS_IDLE_S.
+    assert unload_idle_synth(state, used + TTS_IDLE_S + 0.01)
     assert state.synth is None
     app.state.synth = FakeSynth()  # the fixture's teardown expects one
