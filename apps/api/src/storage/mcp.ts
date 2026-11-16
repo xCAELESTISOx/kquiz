@@ -10,7 +10,8 @@ import { cards, oauthClients, oauthCodes, oauthGrants, phoneStats, reviewLog, us
 import { activeUser } from "../users.js";
 import type { OwnerAuth, UserStores } from "../mcp/app.js";
 import type { OAuthStore } from "../mcp/oauth-store.js";
-import type { CardQuery, CardStore, DrillStore, Member, NewDrill, SessionLogStore, SharingStore, ShareResult, SimilarPair, SimilarResult } from "../mcp/store.js";
+import type { CardQuery, CardStore, DrillStore, Member, NewDrill, PictureChange, PictureStore, SessionLogStore, SharingStore, ShareResult, SimilarPair, SimilarResult } from "../mcp/store.js";
+import { fetchPicture, PictureError, processPicture, setCardPicture, setPictureHasText } from "../pictures.js";
 import { linkSimilar, unlinkSimilar, withSimilar } from "../similar.js";
 import { findLeeches } from "../leeches.js";
 import { listSessionLogs, recentSessionLogs, sessionLog } from "../sessionLogs.js";
@@ -49,6 +50,7 @@ function toStoredCard(card: CardDto): StoredCard {
       : {}),
     speakable: card.speakable,
     queued: card.queued,
+    ...(card.picture ? { picture: { from: card.picture.from, hasText: card.picture.hasText } } : {}),
     source: card.source,
     createdAt: card.createdAt,
     updatedAt: card.updatedAt,
@@ -410,6 +412,41 @@ export class SqliteSharingStore implements SharingStore {
   }
 }
 
+// Downloads per person per hour: plenty for picking pictures with Claude, nothing to run up a bill with.
+const FETCHES_PER_HOUR = 120;
+const fetches = new Map<number, number[]>();
+
+export class SqlitePictureStore implements PictureStore {
+  constructor(
+    private db: Db,
+    private userId: number,
+    private now: () => Date = () => new Date(),
+    private download: (url: string) => Promise<Buffer> = fetchPicture,
+  ) {}
+
+  async set(id: string, change: PictureChange) {
+    const cardId = Number(id);
+    if (!Number.isInteger(cardId) || !getCard(this.db, this.userId, cardId)) return { ok: false as const, error: `No card ${id}; see find_cards` };
+    if (change.remove) setCardPicture(this.db, this.userId, cardId, "none", this.now());
+    else if (change.library) setCardPicture(this.db, this.userId, cardId, "library", this.now());
+    else if (change.url) {
+      const at = this.now().getTime();
+      const recent = (fetches.get(this.userId) ?? []).filter((t) => at - t < 3_600_000);
+      if (recent.length >= FETCHES_PER_HOUR) return { ok: false as const, error: `At most ${FETCHES_PER_HOUR} pictures an hour; try again later` };
+      fetches.set(this.userId, [...recent, at]);
+      try {
+        const own = await processPicture(await this.download(change.url));
+        setCardPicture(this.db, this.userId, cardId, { own, hasText: change.hasText ?? false }, this.now());
+      } catch (e) {
+        return { ok: false as const, error: e instanceof PictureError ? `Picture not set: ${e.message}` : "Picture not set: download failed" };
+      }
+    }
+    if (change.hasText !== undefined && !change.url) setPictureHasText(this.db, this.userId, cardId, change.hasText);
+    const card = getCard(this.db, this.userId, cardId)!;
+    return { ok: true as const, picture: card.picture ? { from: card.picture.from, hasText: card.picture.hasText } : null };
+  }
+}
+
 function sqliteSessionLogs(db: Db, userId: number): SessionLogStore {
   return {
     get: async (id) => sessionLog(db, userId, id) as Record<string, unknown> | undefined,
@@ -426,6 +463,7 @@ export function sqliteStores(db: Db, timeZone: string): UserStores {
       cards: new SqliteCardStore(db, userId, timeZone),
       drills: new SqliteDrillStore(db, userId),
       logs: sqliteSessionLogs(db, userId),
+      pictures: new SqlitePictureStore(db, userId),
       ...(user.role === "owner" ? { sharing: new SqliteSharingStore(db, userId) } : {}),
     };
   };

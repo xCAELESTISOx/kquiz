@@ -81,6 +81,20 @@ export interface CardPicture {
   height: number;
   /** The Korean is written on it (a sign, a label), so it can't show while the word is being recalled. */
   hasText: boolean;
+  /** The card's own picture, or the picture library's for the word. */
+  from?: "own" | "library";
+}
+
+/** What a batch of a picture pack did (POST /api/pictures/library). */
+export interface PictureImportResult {
+  added: number;
+  updated: number;
+  unchanged: number;
+  rejected: { korean: string; reason: string }[];
+  /** Cards whose picture changed. */
+  cardsUpdated: number;
+  /** Words in the library now. */
+  total: number;
 }
 
 export interface Card {

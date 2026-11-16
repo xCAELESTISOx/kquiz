@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import type { Example, PhrasePart, Root } from "../cards.js";
+import type { CardPictureRef } from "../pictures.js";
 import { blob, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 const timestamp = (name: string) => integer(name, { mode: "timestamp_ms" });
@@ -72,6 +73,9 @@ export const cards = sqliteTable(
     learningAt: timestamp("learning_at"),
     learnStep: integer("learn_step").notNull().default(0),
     learnPassedAt: timestamp("learn_passed_at"),
+    // The word's picture (pictures.ts): its own, the library's for this word, or switched off.
+    // Null: none yet; looked up in the library again whenever the library or the word changes.
+    picture: text("picture", { mode: "json" }).$type<CardPictureRef>(),
     createdAt: timestamp("created_at").notNull(),
     updatedAt: timestamp("updated_at").notNull(),
   },
@@ -337,3 +341,29 @@ export const sessionLogs = sqliteTable(
   },
   (t) => [index("session_logs_user").on(t.userId, t.startedAt)],
 );
+
+// Pictures of words, stored once by the hash of their processed bytes (pictures.ts): a changed
+// picture is a new row, so its URL changes too and caches can keep a picture forever.
+export const pictures = sqliteTable("pictures", {
+  hash: text("hash").primaryKey(),
+  mime: text("mime").notNull(),
+  width: integer("width").notNull(),
+  height: integer("height").notNull(),
+  // The Korean is written on it, so it can't show while the word is being recalled.
+  hasText: integer("has_text", { mode: "boolean" }).notNull().default(false),
+  data: blob("data", { mode: "buffer" }).notNull(),
+  createdAt: timestamp("created_at").notNull(),
+});
+
+// A picture for a word, whoever has it in their deck: a card with no picture of its own takes the
+// library's for its Korean. Filled by importing a picture pack (routes/pictures.ts).
+export const pictureLibrary = sqliteTable("picture_library", {
+  koreanKey: text("korean_key").primaryKey(),
+  korean: text("korean").notNull(),
+  meaning: text("meaning"),
+  topic: text("topic"),
+  pictureHash: text("picture_hash")
+    .notNull()
+    .references(() => pictures.hash, { onDelete: "cascade" }),
+  updatedAt: timestamp("updated_at").notNull(),
+});

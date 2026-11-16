@@ -20,6 +20,7 @@ export type Route =
   | "shadow"
   | "sounds"
   | "access"
+  | "pictures"
   | "invite"
   | "login";
 
@@ -79,6 +80,7 @@ export function parseHash(hash: string): Location {
     head === "shadow" ||
     head === "sounds" ||
     head === "access" ||
+    head === "pictures" ||
     head === "session"
   ) {
     return { route: head };

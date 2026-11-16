@@ -1,6 +1,8 @@
 import { MockApi } from "./mock";
 import { wasHiddenSince, whenVisible } from "./resume";
+import type { PackEntry } from "./picturePack";
 import type {
+  PictureImportResult,
   LearningAnswer,
   LearningItem,
   AccessInfo,
@@ -61,6 +63,12 @@ let csrfToken: string | undefined;
 /** Called right after a sign-in: nothing remembered from before may belong to this person. */
 export function setCsrfToken(token: string | undefined) {
   csrfToken = token;
+  lastAnswers.clear();
+  forgetToday();
+}
+
+/** Drops every remembered answer, so screens load cards afresh (after pictures changed, say). */
+export function forgetRemembered() {
   lastAnswers.clear();
   forgetToday();
 }
@@ -252,6 +260,12 @@ export const access = {
   disable: (id: number) => request<{ ok: true }>("POST", `/users/${id}/disable`, { body: {} }),
   enable: (id: number) => request<{ ok: true }>("POST", `/users/${id}/enable`, { body: {} }),
   remove: (id: number) => request<{ ok: true }>("DELETE", `/users/${id}`),
+};
+
+/** The picture library (apps/api routes/pictures.ts): the owner fills it from a picture pack. */
+export const pictureLibrary = {
+  get: () => request<{ total: number }>("GET", "/pictures/library"),
+  add: (entries: PackEntry[]) => request<PictureImportResult>("POST", "/pictures/library", { body: { entries } }),
 };
 
 const QUEUE_TTL = 60_000;

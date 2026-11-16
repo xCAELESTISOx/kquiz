@@ -3,7 +3,7 @@ import { z } from "zod";
 import { CARD_KINDS, EXAMPLES_PER_CARD, MAX_PARTS, MAX_ROOTS, newCardSchema, normalizeKorean, phrasePartSchema, REGISTERS, rootSchema, type NewCard, type Root } from "../cards.js";
 import { MAX_DRILLS_PER_CALL, newDrillSchema } from "../practice.js";
 import { MAX_SIMILAR, similarNoteSchema } from "../similar.js";
-import type { CardStore, DrillStore, NewDrill, SessionLogStore, SharingStore, SimilarPair } from "./store.js";
+import type { CardStore, DrillStore, NewDrill, PictureStore, SessionLogStore, SharingStore, SimilarPair } from "./store.js";
 
 export const MAX_CARDS_PER_CALL = 50;
 
@@ -28,6 +28,7 @@ Cards added here don't enter reviews at once: they wait in a pool of new words a
 Call find_cards before adding words the user may already have; add_cards also reports duplicates. To fix a card, use update_card instead of adding a new one: any field can be changed, and an empty string clears pronunciation, romanization or notes. Cards cannot be deleted from here.
 When the user asks to fix hard cards, call get_leeches and rework each with update_card: a clearer meaning, a mnemonic or the confusing neighbour in notes (and link it with link_similar when it is a similar word), ${EXAMPLES_PER_CARD} fresh examples. A card that mixes two senses can be split: narrow it with update_card and add the other sense with add_cards. If a card should go, tell the user; only they can delete it in the app.
 Older cards may have no roots yet: when the user asks to fill them in, page through find_cards with without_roots and send them with set_roots, 50 at a time, until none are left.
+Words can have a picture, shown when the word is met and in tasks asked by its translation; a picture helps the user remember more than words do. A word takes the picture library's picture for it on its own (find_cards shows picture.from "library"). When the user asks for a picture, or a word has none and they want one, find a clear, simple picture of the meaning on the web (an illustration or a photo of just that thing or action, no watermark) and set it with set_picture by its https address; any shape works. Say has_text when the Korean word is written on it (a sign, a label), so the app hides it while the word is recalled. set_picture with library goes back to the library's picture, with remove leaves the word without one.
 When the user asks for practice on sounds they confuse (ㄱ/ㅋ/ㄲ, ㅓ/ㅗ…), add listening drills with add_sound_drills.
 Set phrases learned whole (안녕히 가세요, 잘 먹겠습니다, 화장실이 어디예요?) go in with add_phrases, not add_cards. A phrase has no examples: instead parts breaks it into its pieces in order, exactly as written in the phrase, each with its dictionary form (base) when that differs and a short gloss, e.g. 어떻게 지내요? → [{"ko":"어떻게","meaning":"how"},{"ko":"지내요","base":"지내다","meaning":"to get along"}]. The app links each piece to the user's card for that word and builds the phrase from these pieces, mixed with wrong ones, in reviews (translation → Korean, and by ear). register is how polite it is: formal (합쇼체), polite (해요체) or casual (반말); notes say when it is said and the reply it usually gets. Keep the phrase in the form it is really said, not the dictionary form. When editing a phrase with update_card, send parts instead of examples.`;
 
@@ -154,7 +155,7 @@ async function addAll<T extends { korean: string; similar?: { korean: string; no
   });
 }
 
-export function createMcpServer(store: CardStore, drills?: DrillStore, sharing?: SharingStore, logs?: SessionLogStore): McpServer {
+export function createMcpServer(store: CardStore, drills?: DrillStore, sharing?: SharingStore, logs?: SessionLogStore, pictures?: PictureStore): McpServer {
   const server = new McpServer({ name: "kquiz", version: "0.1.0" }, { instructions });
 
   server.registerTool(
@@ -323,6 +324,7 @@ export function createMcpServer(store: CardStore, drills?: DrillStore, sharing?:
   if (drills) registerDrillTools(server, drills);
   if (sharing) registerSharingTools(server, sharing);
   if (logs) registerLogTools(server, logs);
+  if (pictures) registerPictureTools(server, pictures);
 
   return server;
 }
@@ -390,6 +392,32 @@ function registerSharingTools(server: McpServer, sharing: SharingStore) {
       } catch (e) {
         return error(e instanceof Error ? e.message : String(e));
       }
+    },
+  );
+}
+
+// A word's picture: downloaded by the server from a public https address and stored small.
+function registerPictureTools(server: McpServer, pictures: PictureStore) {
+  server.registerTool(
+    "set_picture",
+    {
+      title: "Set picture",
+      description:
+        "Sets the picture of one of the user's words (id from find_cards): url downloads a picture from a public https address (PNG, JPEG, WebP, GIF; up to 8 MB; any shape) and replaces the current one; library goes back to the picture library's picture for the word; remove leaves the word with no picture. has_text says the Korean word is written on the picture (alone, it marks the current one). Returns where the word's picture now comes from, or why it wasn't set.",
+      inputSchema: {
+        id: z.string().min(1),
+        url: z.string().url().max(2000).optional(),
+        library: z.boolean().optional(),
+        remove: z.boolean().optional(),
+        has_text: z.boolean().optional(),
+      },
+      annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async ({ id, url, library, remove, has_text }) => {
+      if ([url, library, remove].filter(Boolean).length > 1) return error("Give one of url, library or remove");
+      if (!url && !library && !remove && has_text === undefined) return error("Give url, library, remove or has_text");
+      const result = await pictures.set(id, { url, library, remove, hasText: has_text });
+      return result.ok ? json({ id, picture: result.picture }) : error(result.error);
     },
   );
 }

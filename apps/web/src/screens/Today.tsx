@@ -276,6 +276,14 @@ const PeopleIcon = () => (
   </svg>
 );
 
+const PictureIcon = () => (
+  <svg {...glyph}>
+    <rect x="3" y="4.5" width="18" height="15" rx="3" />
+    <circle cx="9" cy="10" r="1.8" />
+    <path d="m3.5 17.5 5-4.5 4 3.5 3-2.5 5 4" />
+  </svg>
+);
+
 /** Everything besides "Learn": each kind of review on its own, practice, and the settings. */
 function MoreSheet({
   onClose,
@@ -316,6 +324,7 @@ function MoreSheet({
           {leeches > 0 && <SheetLink href="#/leeches" icon={<LeechIcon />} label="Hard cards" count={leeches} />}
           <SheetLink href="#/cards/queued" icon={<LearnIcon />} label="New words" />
           <SheetLink href="#/add" icon={<PlusIcon />} label="Add words" />
+          {owner && <SheetLink href="#/pictures" icon={<PictureIcon />} label="Pictures" />}
           {owner && <SheetLink href="#/access" icon={<PeopleIcon />} label="Friends' access" />}
         </nav>
         <PracticeLinks />

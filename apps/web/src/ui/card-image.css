@@ -77,3 +77,20 @@
     animation: none;
   }
 }
+
+/* ---------- Picture pack import (screens/Pictures.tsx) ---------- */
+
+.import-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-raised);
+  overflow: hidden;
+}
+
+.import-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width var(--dur-2) var(--ease-out);
+}

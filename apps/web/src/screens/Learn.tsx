@@ -300,7 +300,8 @@ export function IntroCard({ card, onDone }: { card: Card; onDone: () => void }) 
     <>
       <div className="review-stage">
         <div className="review-card intro-card">
-          <CardImage card={card} />
+          {/* A word with a lot to read about it gets a shorter picture, so the word stays in view with it. */}
+          <CardImage card={card} size={[card.notes, card.similar?.length, card.roots?.length].filter(Boolean).length >= 2 ? "prompt" : "hero"} />
           <p className="intro-word" lang="ko">
             {card.korean}
           </p>
