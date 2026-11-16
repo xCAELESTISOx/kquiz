@@ -4,6 +4,8 @@
   position: relative;
   flex: none;
   align-self: stretch;
+  width: 100%;
+  box-sizing: border-box;
   aspect-ratio: var(--frame);
   margin: 0;
   overflow: hidden;
@@ -15,13 +17,15 @@
   isolation: isolate;
 }
 
-/* The same picture, blurred and dimmed, fills whatever the picture itself leaves empty. */
-.card-image-backdrop {
+/* A picture on a plain background (a drawing on white) continues into the frame in that colour, dimmed
+   like the picture, so the two read as one print. Other pictures sit on the frame's own dark surface. */
+.card-image[data-edge]::before {
+  content: "";
   position: absolute;
-  inset: -24px;
+  inset: 0;
   z-index: -1;
-  background: var(--src) center / cover no-repeat;
-  filter: blur(22px) saturate(1.25) brightness(0.42);
+  background: var(--edge);
+  filter: brightness(0.93);
 }
 
 .card-image img {
@@ -40,8 +44,6 @@
 
 .card-image[data-fit="contain"] img {
   --fit: contain;
-  /* A drawing floating on its blurred self reads better with a soft edge of its own. */
-  filter: brightness(0.93) drop-shadow(0 6px 18px rgb(2 4 12 / 0.55));
 }
 
 .card-image[data-loaded] img {
@@ -56,11 +58,14 @@
 }
 
 .review-card > .card-image {
+  width: calc(100% + 16px);
   margin: 0 -8px 4px;
 }
 
+/* A task's strip: always the full width, and never so tall that the answers drop below the fold. */
 .card-image.is-prompt {
-  max-height: 172px;
+  aspect-ratio: auto;
+  height: min(172px, calc((100vw - 32px) / var(--frame)));
 }
 
 /* Shown after the answer: the picture slides in under the word, sealing the image to it. */
