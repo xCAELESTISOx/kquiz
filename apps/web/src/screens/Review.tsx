@@ -7,7 +7,7 @@ import { clozeFor } from "../lib/cloze";
 import { useLeechIds } from "../lib/leeches";
 import { everyKind, mixWays, serverModes } from "../lib/mix";
 import { learnKind, vary, type TaskKind } from "../lib/variety";
-import { afterFix, afterIntro, buildable, firstTasks, insertAfter, insertNext, interleave, introTask, LEARN_GAP, learnTask, SESSION_MAX, SESSION_TASKS, onward, toFront, unfinished, withMistake, withoutMistake } from "../lib/session";
+import { afterFix, afterIntro, buildable, firstTasks, insertAfter, taskKey, unseen, insertNext, interleave, introTask, LEARN_GAP, learnTask, SESSION_MAX, SESSION_TASKS, onward, toFront, unfinished, withMistake, withoutMistake } from "../lib/session";
 import { prefetchPictures } from "../lib/pictureCache";
 import { navigate } from "../lib/router";
 import { endLog, flushLog, logEvent, logOutcome, logServer, logShown, startLog } from "../lib/sessionLog";
@@ -117,6 +117,8 @@ export function ReviewScreen({
   const [started, setStarted] = useState<ReadonlySet<number>>(() => new Set());
   // The card answered last: past the goal, a word's next step doesn't come straight after it.
   const [just, setJust] = useState<number>();
+  // The tasks answered in this session (session.ts taskKey): none is asked twice, but for the mistakes.
+  const seen = useRef(new Set<string>());
   // Saying aloud turned off for this session ("Can't speak now" on a new word, or a review switched to options).
   const [silent, setSilent] = useState(false);
   const extra = !!session && answered >= goal;
@@ -277,14 +279,20 @@ export function ReviewScreen({
 
   /** The queue after an answer and the card it shows next (session.ts onward). */
   const ahead = useCallback(
-    (q: QueueItem[], begun: ReadonlySet<number> = started) => (session ? onward(q, answered + 1, goal, begun, queue?.[0]?.card.id) : { queue: q, shown: q[0] }),
+    (q: QueueItem[], begun: ReadonlySet<number> = started) => {
+      if (!session) return { queue: q, shown: q[0] };
+      // The task just answered counts as seen already.
+      if (queue?.[0]) seen.current.add(taskKey(queue[0]));
+      return onward(unseen(q, seen.current), answered + 1, goal, begun, queue?.[0]?.card.id);
+    },
     [session, answered, goal, started, queue],
   );
 
   /** One more answer in a session; past its goal the stretch runs on only to finish its words. */
-  const count = useCallback((id: number) => {
+  const count = useCallback((done: QueueItem) => {
     if (!session) return;
-    setJust(id);
+    setJust(done.card.id);
+    seen.current.add(taskKey(done));
     const n = answered + 1;
     setAnswered(n);
     if (n >= goal + SESSION_MAX - SESSION_TASKS) setOver(true);
@@ -356,7 +364,7 @@ export function ReviewScreen({
       setRevealed(false);
       setStep((n) => n + 1);
       shownAt.current = performance.now();
-      count(card.id);
+      count(item);
     },
     [item, card, revealed, step, queue, done, speaking, count, note, fixing, fixed, mistakes, session, ahead],
   );
@@ -382,7 +390,7 @@ export function ReviewScreen({
       setRevealed(false);
       setStep((n) => n + 1);
       shownAt.current = performance.now();
-      count(queue[0]!.card.id);
+      count(queue[0]!);
     },
     [queue, count, note, fixing, fixed, session, ahead],
   );
@@ -436,7 +444,7 @@ export function ReviewScreen({
       setStep((n) => n + 1);
       shownAt.current = performance.now();
       // Meeting a word is a screen of the session too, so the count moves from the first tap.
-      count(word.id);
+      count(item);
       // Picking and saying are practice on the spot; the ladder on the server starts with building.
       if (kind === "choose" || kind === "aloud") return;
       // A word of one syllable has nothing to build: meeting it climbs that step.
@@ -449,7 +457,11 @@ export function ReviewScreen({
             logServer(logged, `${res.status}${"step" in res && res.step !== undefined ? ` step ${res.step}` : ""}`);
             // Typing it is already in the queue.
             if (res.status === "climbed" && res.step === 1 && typeNext) return;
-            if (res.status === "climbed" || res.status === "missed") setQueue((q) => insertAfter(q ?? [], learnTask(word, res.step, canSpeak()), LEARN_GAP, kindOf));
+            if (res.status === "climbed" || res.status === "missed") {
+              // A step already answered in this session waits for the next one.
+              const nextStep = learnTask(word, res.step, canSpeak());
+              if (!seen.current.has(taskKey(nextStep))) setQueue((q) => insertAfter(q ?? [], nextStep, LEARN_GAP, kindOf));
+            }
             else if (res.status === "passed") {
               note("climbed", word.id);
               if (res.next) {

@@ -144,8 +144,21 @@ export function insertAfter(queue: QueueItem[], item: QueueItem, gap = LEARN_GAP
   return [...queue.slice(0, at), item, ...queue.slice(at)];
 }
 
-/** One task as asked: a word's step of learning, or its review in one mode. */
-const taskKey = (item: QueueItem): string => `${item.card.id}:${item.learn ? item.learn.kind : item.mode}`;
+/**
+ * One task as asked: a word's step of learning, or its review in one mode. A new word's check and
+ * its last step are both "write it from the translation", so they are one task.
+ */
+export const taskKey = (item: QueueItem): string => `${item.card.id}:${item.learn ? item.learn.kind : item.mode}`;
+
+/**
+ * The queue without the tasks already answered in this session (`seen`, by taskKey): a task comes
+ * once a session, and a missed one is gone over only with the mistakes at the end. A word missed on
+ * its ladder so goes on next session rather than round its steps again (session N4F9NC typed 책장
+ * by ear and from the translation over and over).
+ */
+export function unseen(queue: readonly QueueItem[], seen: ReadonlySet<string>): QueueItem[] {
+  return queue.filter((i) => !seen.has(taskKey(i)));
+}
 
 /**
  * A task answered wrong joins the mistakes gone over at the end of the stretch, once: missing the
