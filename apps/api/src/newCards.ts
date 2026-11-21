@@ -19,6 +19,11 @@ export const reviewModes: ReviewMode[] = ["meaning", "speech", "listening"];
 
 /** How many new words are learned at once, on the ladder. */
 export const ACTIVE_WORDS = 3;
+/**
+ * At most this many words are met for the first time in one session, "Another round" included (the app
+ * keeps to it, apps/web lib/session.ts): Today says so. A word taken onto the ladder but not met yet waits for the next session.
+ */
+export const NEW_PER_SESSION = 2;
 /** Tasks in a row a word climbs in a session before it waits for its check. */
 export const LADDER_STEPS = 3;
 /** How long a word up the ladder waits before it is checked, so the check is from memory. */
@@ -96,7 +101,7 @@ export function newCards(db: Db, userId: number, now = new Date()): NewCards {
       .where(and(waiting(userId), taken))
       .get()?.n ?? 0;
   const c = counts(db, userId, now);
-  const fresh = room(c);
+  const fresh = Math.min(room(c), NEW_PER_SESSION);
   const started = c.active + c.checks;
   // What "Learn" comes to: the words started (ladder, then checks), then the new ones it will take.
   const next = db
@@ -150,8 +155,11 @@ export function room(c: Counts): number {
   return Math.max(0, Math.min(ACTIVE_WORDS - c.active, c.pool));
 }
 
-/** A word being learned: the ladder step it is on (0 to LADDER_STEPS - 1), or "check" once it waited. */
-export type LearningItem = { card: CardDto; step: number | "check" };
+/**
+ * A word being learned: the ladder step it is on (0 to LADDER_STEPS - 1), or "check" once it waited.
+ * `met`: it has been answered on its ladder before, so on step 0 again it is built, not met as new.
+ */
+export type LearningItem = { card: CardDto; step: number | "check"; met?: boolean };
 
 /** How many words ahead in the pool a session looks for pictures to fetch early: more than a long session meets. */
 const UPCOMING = 12;
@@ -187,7 +195,11 @@ export function learningWords(db: Db, userId: number, now: Date): { items: Learn
         .get()?.n ?? 0;
     const items = [
       ...checks.map((row): LearningItem => ({ card: toCardDto(row), step: "check" })),
-      ...active.map((row): LearningItem => ({ card: toCardDto(row), step: Math.min(row.learnStep, LADDER_STEPS - 1) })),
+      ...active.map((row): LearningItem => ({
+        card: toCardDto(row),
+        step: Math.min(row.learnStep, LADDER_STEPS - 1),
+        ...(row.learnMetAt ? { met: true } : {}),
+      })),
     ];
     withSimilar(tx as unknown as Db, userId, items.map((i) => i.card));
     // Pictures of the words that join next from the pool, so the app can fetch them before they are met.
@@ -242,7 +254,7 @@ export function answerLearning(db: Db, userId: number, id: number, ok: boolean, 
     if (!ok) {
       // One step down, never back to the bottom: a missed check goes back to the ladder's last step.
       const step = row.learnPassedAt ? LADDER_STEPS - 1 : Math.max(row.learnStep - 1, 0);
-      tx.update(cards).set({ learnStep: step, learnPassedAt: null, learningAt: row.learningAt ?? now }).where(where).run();
+      tx.update(cards).set({ learnStep: step, learnPassedAt: null, learningAt: row.learningAt ?? now, learnMetAt: row.learnMetAt ?? now }).where(where).run();
       return { status: "missed", step };
     }
     if (row.learnPassedAt) {
@@ -253,10 +265,10 @@ export function answerLearning(db: Db, userId: number, id: number, ok: boolean, 
     }
     const step = row.learnStep + 1;
     if (step < LADDER_STEPS) {
-      tx.update(cards).set({ learnStep: step, learningAt: row.learningAt ?? now }).where(where).run();
+      tx.update(cards).set({ learnStep: step, learningAt: row.learningAt ?? now, learnMetAt: row.learnMetAt ?? now }).where(where).run();
       return { status: "climbed", step };
     }
-    tx.update(cards).set({ learnStep: step, learnPassedAt: now, learningAt: null }).where(where).run();
+    tx.update(cards).set({ learnStep: step, learnPassedAt: now, learningAt: null, learnMetAt: row.learnMetAt ?? now }).where(where).run();
     // Its place on the ladder goes to the next new word.
     const [next] = room(counts(tx, userId, now)) > 0 ? pick(tx as unknown as Db, userId, 1, now) : [];
     return { status: "passed", next: next ? { card: withSimilar(tx as unknown as Db, userId, [toCardDto(next)])[0]!, step: 0 } : null };
@@ -274,7 +286,7 @@ export function skipLearning(db: Db, userId: number, id: number, now: Date): Ski
   return db.transaction((tx) => {
     const row = tx.select().from(cards).where(and(eq(cards.id, id), eq(cards.userId, userId))).get();
     if (!row) return { status: "not_found" };
-    if (row.introducedAt || row.learnPassedAt || row.learnStep > 0) return { status: "not_new" };
+    if (row.introducedAt || row.learnPassedAt || row.learnStep > 0 || row.learnMetAt) return { status: "not_new" };
     tx.update(cards).set({ learningAt: null, learnStep: 0, skippedAt: now }).where(eq(cards.id, id)).run();
     const [next] = room(counts(tx, userId, now)) > 0 ? pick(tx as unknown as Db, userId, 1, now, id) : [];
     return { status: "skipped", next: next ? { card: withSimilar(tx as unknown as Db, userId, [toCardDto(next)])[0]!, step: 0 } : null };

@@ -39,9 +39,9 @@ describe("new words", () => {
 
     const stats = (await t.request("/reviews/stats")).json;
     expect(stats.due).toEqual({ meaning: 0, speech: 0, listening: 0 });
-    expect(stats.newCards).toMatchObject({ queued: 7, learning: 0, started: 0, fresh: 3, pool: 7 });
-    // Today previews what "Учить" comes to: the first session takes three.
-    expect(stats.newCards.next).toEqual(claude.slice(0, 3).map((c) => c.korean));
+    expect(stats.newCards).toMatchObject({ queued: 7, learning: 0, started: 0, fresh: 2, pool: 7 });
+    // Today previews what "Учить" comes to: the first session meets two.
+    expect(stats.newCards.next).toEqual(claude.slice(0, 2).map((c) => c.korean));
     expect((await t.request("/reviews/queue?mode=meaning")).json.items).toHaveLength(0);
 
     const learning = (await t.request("/cards/learning")).json;
@@ -66,6 +66,10 @@ describe("new words", () => {
 
     expect(await answer(true)).toEqual({ status: "climbed", step: 1 });
     expect(await answer(false)).toEqual({ status: "missed", step: 0 });
+    // Back on step 0 it has been met already: it is built again next time, not met as a new word.
+    let items = (await t.request("/cards/learning")).json.items;
+    expect(items.find((i: any) => i.card.id === id)).toMatchObject({ step: 0, met: true });
+    expect(items.find((i: any) => i.card.id === words[1]!.id).met).toBeUndefined();
     expect(await answer(false)).toEqual({ status: "missed", step: 0 });
     expect(await answer(true)).toEqual({ status: "climbed", step: 1 });
     expect(await answer(true)).toEqual({ status: "climbed", step: 2 });
@@ -151,7 +155,9 @@ describe("new words", () => {
     expect((await skip(words[3]!.id)).json.next.card.id).toBe(later!.id);
     // Skipped words come round again, the one skipped first first.
     expect((await skip(later!.id)).json.next.card.id).toBe(words[1]!.id);
-    // A word started up the ladder can't be skipped.
+    // A word started up the ladder can't be skipped, nor one missed back to its bottom step.
+    await t.request(`/cards/${words[0]!.id}/learning`, { body: { ok: false } });
+    expect((await skip(words[0]!.id)).status).toBe(409);
     await t.request(`/cards/${words[4]!.id}/learning`, { body: { ok: true } });
     expect((await skip(words[4]!.id)).status).toBe(409);
     expect((await skip(999)).status).toBe(404);

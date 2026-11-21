@@ -141,6 +141,13 @@
       "when": 1794810000000,
       "tag": "0019_pictures",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1795000000000,
+      "tag": "0020_new_word_met",
+      "breakpoints": true
     }
   ]
 }

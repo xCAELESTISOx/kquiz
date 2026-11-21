@@ -7,7 +7,7 @@ import { clozeFor } from "../lib/cloze";
 import { useLeechIds } from "../lib/leeches";
 import { everyKind, mixWays, serverModes } from "../lib/mix";
 import { learnKind, vary, type TaskKind } from "../lib/variety";
-import { afterFix, afterIntro, buildable, firstTasks, insertAfter, taskKey, unseen, insertNext, interleave, introTask, LEARN_GAP, learnTask, SESSION_MAX, SESSION_TASKS, onward, toFront, unfinished, withMistake, withoutMistake } from "../lib/session";
+import { afterFix, afterIntro, buildable, firstTasks, NEW_PER_SESSION, insertAfter, taskKey, unseen, insertNext, interleave, introTask, LEARN_GAP, learnTask, SESSION_MAX, SESSION_TASKS, onward, toFront, unfinished, withMistake, withoutMistake } from "../lib/session";
 import { prefetchPictures } from "../lib/pictureCache";
 import { navigate } from "../lib/router";
 import { endLog, flushLog, logEvent, logOutcome, logServer, logShown, startLog } from "../lib/sessionLog";
@@ -119,6 +119,8 @@ export function ReviewScreen({
   const [just, setJust] = useState<number>();
   // The tasks answered in this session (session.ts taskKey): none is asked twice, but for the mistakes.
   const seen = useRef(new Set<string>());
+  // Words met for the first time in this session: no more than NEW_PER_SESSION, "Another round" included.
+  const metNew = useRef(0);
   // Saying aloud turned off for this session ("Can't speak now" on a new word, or a review switched to options).
   const [silent, setSilent] = useState(false);
   const extra = !!session && answered >= goal;
@@ -162,7 +164,8 @@ export function ReviewScreen({
           ...all.map((i) => i.card.picture?.url),
           ...(("upcoming" in learning && learning.upcoming) || []),
         ]);
-        const fresh = firstTasks(learning.items, canSpeak());
+        const fresh = firstTasks(learning.items, canSpeak(), NEW_PER_SESSION - metNew.current);
+        metNew.current += fresh.filter((i) => i.learn?.kind === "intro").length;
         // Look-alikes give the wrong options for picking a word.
         const ids = [
           ...new Set([
@@ -464,7 +467,9 @@ export function ReviewScreen({
             }
             else if (res.status === "passed") {
               note("climbed", word.id);
-              if (res.next) {
+              // The next word joins only while the session has room for another new one; else it waits for the next session.
+              if (res.next && metNew.current < NEW_PER_SESSION) {
+                metNew.current++;
                 prepare(res.next.card);
                 setQueue((q) => insertAfter(q ?? [], introTask(res.next!.card)));
               }

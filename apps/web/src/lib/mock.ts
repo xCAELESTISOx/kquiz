@@ -44,7 +44,7 @@ interface MockState {
   reviewedToday: { day: string; count: number };
   newPerDay: number;
   /** New words being learned (apps/api newCards.ts): since when, the ladder step, when it was climbed. */
-  learn?: Record<number, { at: string | null; step: number; passedAt: string | null }>;
+  learn?: Record<number, { at: string | null; step: number; passedAt: string | null; met?: boolean }>;
   /** When a new word was skipped as met: it waits at the back of the pool from then on. */
   skipped?: Record<number, string>;
 }
@@ -348,7 +348,7 @@ export class MockApi {
     }
     this.save();
     return {
-      items: [...checks.map((card) => ({ card, step: "check" as const })), ...active.map((card) => ({ card, step: learn[card.id]!.step }))],
+      items: [...checks.map((card) => ({ card, step: "check" as const })), ...active.map((card) => ({ card, step: learn[card.id]!.step, ...(learn[card.id]!.met ? { met: true } : {}) }))],
       pool: waiting.filter((c) => !learn[c.id]).length,
       upcoming: waiting.filter((c) => !learn[c.id]).slice(0, 12).flatMap((c) => c.picture?.url ?? []),
     };
@@ -363,7 +363,7 @@ export class MockApi {
   skipLearning(id: number): SkipAnswer {
     const learn = (this.state.learn ??= {});
     const at = this.now().toISOString();
-    if (learn[id] && (learn[id]!.step > 0 || learn[id]!.passedAt)) throw new Error("not_new");
+    if (learn[id] && (learn[id]!.step > 0 || learn[id]!.passedAt || learn[id]!.met)) throw new Error("not_new");
     delete learn[id];
     (this.state.skipped ??= {})[id] = at;
     const next = this.room() > 0
@@ -378,6 +378,7 @@ export class MockApi {
     const learn = (this.state.learn ??= {});
     const at = this.now().toISOString();
     const word = (learn[id] ??= { at, step: 0, passedAt: null });
+    word.met = true;
     let answer: LearningAnswer;
     if (!ok) {
       word.step = word.passedAt ? LADDER_STEPS - 1 : Math.max(word.step - 1, 0);

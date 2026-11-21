@@ -25,6 +25,24 @@ describe("session", () => {
     expect(learnTask(card(1), 1, false).learn?.kind).toBe("write");
   });
 
+  it("meets two new words a session at most, and builds a met word missed back to step 0", () => {
+    const tasks = firstTasks(
+      [
+        { card: card(1), step: "check" },
+        { card: card(2), step: 0, met: true },
+        { card: card(3), step: 0 },
+        { card: card(4), step: 0 },
+        { card: card(5), step: 0 },
+        { card: card(6), step: 1 },
+      ],
+      true,
+    );
+    expect(tasks.map((i) => `${i.card.id}:${i.learn?.kind}`)).toEqual(["1:write", "2:build", "3:intro", "4:intro", "6:dictation"]);
+    // One met already this session ("Another round"): one more.
+    expect(firstTasks([{ card: card(3), step: 0 }, { card: card(4), step: 0 }], true, 1).map((i) => i.card.id)).toEqual([3]);
+    expect(firstTasks([{ card: card(3), step: 0 }], true, 0)).toEqual([]);
+  });
+
   it("spreads new words through the reviews and puts a step back a few cards later", () => {
     const learning = [introTaskOf(10), introTaskOf(11)];
     const mixed = interleave([review(1), review(2), review(3)], learning);
