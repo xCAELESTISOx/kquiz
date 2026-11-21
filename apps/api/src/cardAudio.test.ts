@@ -141,8 +141,8 @@ describe("httpSpeaker", () => {
     expect(new TextDecoder().decode(await speaker.speak("물"))).toBe("mp3:물");
     expect(fetchImpl.mock.calls[0]![0]).toBe("http://scorer/tts?text=%EB%AC%BC");
     await expect(speaker.speak("x")).rejects.toBeInstanceOf(BadTextError);
-    await speaker.speak("물", "M3");
-    expect(fetchImpl.mock.calls[2]![0]).toBe("http://scorer/tts?text=%EB%AC%BC&voice=M3");
+    await speaker.speak("물", "M1");
+    expect(fetchImpl.mock.calls[2]![0]).toBe("http://scorer/tts?text=%EB%AC%BC&voice=M1");
     // An older scorer that answers in its default voice is not taken for another one.
     const old = httpSpeaker("http://scorer", (async () => new Response(mp3("물"))) as typeof fetch);
     await expect(old.speak("물", "M1")).rejects.not.toBeInstanceOf(BadTextError);

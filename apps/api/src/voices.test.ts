@@ -56,7 +56,8 @@ describe("other voices", () => {
     expect((await t.request(url, { headers: { "if-none-match": res.headers.get("etag")! } })).status).toBe(304);
     expect((await t.request(`/cards/${t.id}/audio`)).text).toBe("mp3:물");
     expect((await t.request(`/cards/${t.id}/audio?voice=F1`)).status).toBe(404);
-    expect((await t.request(`/practice/audio?text=${encodeURIComponent("풀")}&voice=F3`)).text).toBe("mp3:F3:풀");
+    expect((await t.request(`/practice/audio?text=${encodeURIComponent("풀")}&voice=M1`)).text).toBe("mp3:M1:풀");
+    expect((await t.request(`/practice/audio?text=${encodeURIComponent("풀")}&voice=F3`)).status).toBe(404);
 
     const friend = t.db.insert(users).values({ name: "Миша", role: "member", webauthnId: "friend", createdAt: t.clock.now }).returning().get();
     const [theirs] = createCards(t.db, friend.id, [{ korean: "물", meaning: "вода", tags: [] }], "app").created;
