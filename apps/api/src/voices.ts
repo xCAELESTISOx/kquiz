@@ -7,8 +7,13 @@ import type { Db } from "./db/client.js";
 import { cards, soundDrills, voiceAudio } from "./db/schema.js";
 import { OWNER_ID } from "./users.js";
 
-/** Voices besides the scorer's default (F1): two male and one more female. */
-export const EXTRA_VOICES = ["M1", "F3", "M3"] as const;
+/**
+ * Voices besides the scorer's default (F1). Supertonic's Korean is uneven across its voice styles:
+ * F3 softens tense consonants (빼다 heard as 배다) and M3 drops or swaps sounds (모으다 → 뭐다,
+ * 변하다 → 편하다, 붐비다 → 풉니다), so only M1, which reads as cleanly as F1, is kept. Recordings
+ * of dropped voices stay in voice_audio but are no longer served or made.
+ */
+export const EXTRA_VOICES = ["M1"] as const;
 export type ExtraVoice = (typeof EXTRA_VOICES)[number];
 
 export const isExtraVoice = (voice: string | undefined): voice is ExtraVoice => EXTRA_VOICES.includes(voice as ExtraVoice);
