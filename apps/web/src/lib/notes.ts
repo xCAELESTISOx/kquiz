@@ -21,6 +21,8 @@ export interface NoteItem {
   text: string;
   /** For a similar word linked to this card: its id and meaning. */
   linked?: SimilarWord;
+  /** For a linked word: what it means, shown next to it. The pair note's part about it when there is one. */
+  gloss?: string;
 }
 
 export interface NoteGroup {
@@ -93,21 +95,52 @@ export function parseNotes(notes: string | null | undefined): ParsedNotes {
 }
 
 /**
+ * What a pair's note says about one of its words. Pair notes read "배우다 — learn from someone;
+ * 공부하다 — study on your own", the same for both cards, so each card takes the other word's part
+ * and leaves its own, which only says again what the card is.
+ */
+export function noteAbout(note: string | null | undefined, korean: string): string | undefined {
+  const parts = (note ?? "").split(/\s*;\s*/).map((p) => p.trim());
+  // A sentence after the last word's part is about the pair ("They sound the same!"): both cards keep it.
+  const last = parts.length - 1;
+  const [own, tail] = (parts[last] ?? "").split(/(?<=[.)!])\s+(?=\p{Lu})/u, 2) as [string, string | undefined];
+  parts[last] = own;
+  for (const part of parts) {
+    const head = HEAD.exec(part);
+    if (head && head[1] === korean) {
+      const text = part.slice(head[0].length).trim().replace(/[.;]$/, "");
+      if (text) return tail ? `${text}. ${tail}` : text;
+    }
+  }
+  return undefined;
+}
+
+// Kinds of lines that name a word: one linked as similar is shown under "Don't confuse" and not again here.
+const WORD_KINDS: NoteKind[] = ["similar", "opposite", "near"];
+
+/**
  * Notes with the card's linked similar words folded into "Don't confuse": a ≠ line about a linked word
- * becomes that word's entry, so the pair is shown once: its meaning, then the line's words or, without
- * a line, the pair's note.
+ * becomes that word's entry, so the pair is shown once: the word, its gloss (the pair note's part about
+ * it, else its meaning), then the line's words or, when the note can't be split, the whole note.
+ * A ↔ or ≈ line about a linked word is dropped: the word is already there.
  */
 export function cardNotes(notes: string | null | undefined, similar: SimilarWord[] | undefined): ParsedNotes {
   const parsed = parseNotes(notes);
   if (!similar?.length) return parsed;
+  const isLinked = (item: NoteItem) => similar.some((w) => w.korean === item.head);
   const written = parsed.groups.find((g) => g.kind === "similar")?.items ?? [];
   const linked: NoteItem[] = similar.map((word) => {
     // The card's own line says it for this card; the pair's note is the fallback.
-    const line = written.find((i) => i.head === word.korean);
-    return { head: word.korean, text: line?.text || word.note || "", linked: word };
+    const line = written.find((i) => i.head === word.korean)?.text;
+    const about = noteAbout(word.note, word.korean);
+    if (about) return { head: word.korean, text: line ?? "", linked: word, gloss: about };
+    return { head: word.korean, text: line || word.note || "", linked: word, gloss: word.meaning };
   });
-  const rest = written.filter((i) => !similar.some((w) => w.korean === i.head));
-  const groups = parsed.groups.filter((g) => g.kind !== "similar");
+  const rest = written.filter((i) => !isLinked(i));
+  const groups = parsed.groups
+    .filter((g) => g.kind !== "similar")
+    .map((g) => (WORD_KINDS.includes(g.kind) ? { ...g, items: g.items.filter((i) => !isLinked(i)) } : g))
+    .filter((g) => g.items.length > 0);
   return { remarks: parsed.remarks, groups: [{ kind: "similar", items: [...linked, ...rest] }, ...groups] };
 }
 
