@@ -63,7 +63,7 @@ export function CardNotes({ card }: { card: Pick<Card, "notes" | "similar"> }) {
                     {item.head}
                   </span>
                 )}
-                {item.linked && <span className="notes-meaning">{item.linked.meaning}</span>}
+                {item.gloss && <span className="notes-meaning">{item.gloss}</span>}
                 {item.text && (
                   <span className={item.linked || !item.head ? "notes-text notes-text-block" : "notes-text"}>
                     <RichText text={item.text} />
