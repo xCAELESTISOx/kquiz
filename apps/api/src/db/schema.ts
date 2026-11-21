@@ -73,6 +73,9 @@ export const cards = sqliteTable(
     learningAt: timestamp("learning_at"),
     learnStep: integer("learn_step").notNull().default(0),
     learnPassedAt: timestamp("learn_passed_at"),
+    // When the word first got an answer on its ladder: met already, so back on step 0 after a miss it
+    // is built again, not met again as a new word.
+    learnMetAt: timestamp("learn_met_at"),
     // Set when the owner skips the word as it is met: from then on it waits at the back of the pool,
     // after every word added before that (newCards.ts poolOrder).
     skippedAt: timestamp("skipped_at"),

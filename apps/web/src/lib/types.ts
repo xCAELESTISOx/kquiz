@@ -179,6 +179,8 @@ export interface ReviewInput {
 export interface LearningItem {
   card: Card;
   step: number | "check";
+  /** Answered on its ladder before: back on step 0 after a miss, it is built again, not met as new. */
+  met?: boolean;
 }
 
 export type LearningAnswer =

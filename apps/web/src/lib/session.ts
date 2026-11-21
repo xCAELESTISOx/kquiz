@@ -106,9 +106,22 @@ export function learnTask(card: Card, step: number | "check", hear: boolean): Qu
   return task(card, "write");
 }
 
-/** Where a session starts each new word: met first if it hasn't climbed yet, else on its step. */
-export function firstTasks(items: LearningItem[], hear: boolean): QueueItem[] {
-  return items.map(({ card, step }) => (step === 0 ? introTask(card) : learnTask(card, step, hear)));
+/** At most this many words are met for the first time in one session, "Another round" included. */
+export const NEW_PER_SESSION = 2;
+
+/**
+ * Where a session starts each new word: met first if it was never answered on its ladder, else on
+ * its step (a word missed back to step 0 is built again, not met again as a new word). Only `newLeft`
+ * words are met for the first time; the others wait for the next session.
+ */
+export function firstTasks(items: LearningItem[], hear: boolean, newLeft = NEW_PER_SESSION): QueueItem[] {
+  let left = newLeft;
+  return items.flatMap(({ card, step, met }) => {
+    if (step !== 0 || met) return [learnTask(card, step, hear)];
+    if (left <= 0) return [];
+    left--;
+    return [introTask(card)];
+  });
 }
 
 /** New words spread through the reviews: one, then two reviews, then the next. */
