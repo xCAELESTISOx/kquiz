@@ -25,7 +25,17 @@
   inset: 0;
   z-index: -1;
   background: var(--edge);
-  filter: brightness(0.93);
+}
+
+/* Most pictures are drawings on white: a 7% shade takes the glare off in the dark interface (the same as
+   brightness(0.93)). A plain overlay, not a CSS filter: iOS drops the drawing of a filtered picture that
+   is off screen while the app is in the background and never draws it again when it is scrolled back. */
+.card-image::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 0.07);
+  pointer-events: none;
 }
 
 .card-image img {
@@ -33,13 +43,8 @@
   width: 100%;
   height: 100%;
   object-fit: var(--fit, cover);
-  /* Most pictures are drawings on white: take the glare off in the dark interface. */
-  filter: brightness(0.93);
   opacity: 0;
-  transform: scale(1.015);
-  transition:
-    opacity var(--dur-2) var(--ease-out),
-    transform var(--dur-3) var(--ease-out);
+  transition: opacity var(--dur-2) var(--ease-out);
 }
 
 .card-image[data-fit="contain"] img {
@@ -48,7 +53,6 @@
 
 .card-image[data-loaded] img {
   opacity: 1;
-  transform: none;
 }
 
 /* A card with a picture starts at the top: the frame leads, the word follows. */
@@ -76,7 +80,6 @@
 @media (prefers-reduced-motion: reduce) {
   .card-image img {
     transition: none;
-    transform: none;
   }
   .card-image.is-answer {
     animation: none;

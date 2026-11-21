@@ -74,6 +74,32 @@ export function plainEdge(px: readonly Rgb[]): string | null {
   return near / px.length >= 0.9 ? `rgb(${median.join(" ")})` : null;
 }
 
+/**
+ * After the app comes back from the background, iOS may have dropped the drawing of a picture that was
+ * scrolled out of view and leave its place empty when it is scrolled back. Each picture on the page is
+ * drawn anew then: its image is decoded again and its frame repainted.
+ */
+export function redrawPictures(root: ParentNode = document) {
+  for (const img of root.querySelectorAll<HTMLImageElement>(".card-image img")) {
+    if (!img.complete || !img.naturalWidth) continue;
+    img.decode?.().catch(() => {});
+    img.style.visibility = "hidden";
+    void img.offsetWidth;
+    requestAnimationFrame(() => {
+      img.style.visibility = "";
+    });
+  }
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") redrawPictures();
+  });
+  window.addEventListener("pageshow", (e) => {
+    if (e.persisted) redrawPictures();
+  });
+}
+
 export function CardImage({
   card,
   size = "hero",
