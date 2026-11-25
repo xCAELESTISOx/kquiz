@@ -145,7 +145,7 @@ describe("migrations 0012 and 0013 (audio library; 0013 retired)", () => {
       insert into attempts (card_id, created_at, score, target_phones, heard_phones, syllables, errors_json) values (7, 1, 90, '[]', '[]', '[]', '[]');
       insert into card_audio values (7, '물', 'audio/mpeg', x'01', 1), (8, '불', 'audio/mpeg', x'02', 1);
       insert into speech_audio values ('물을 마셔요.', 'audio/mpeg', x'03', 1);
-      insert into voice_audio values ('물', 'M1', 'audio/mpeg', x'04', 1);
+      insert into voice_audio values ('물을 마셔요', 'M1', 'audio/mpeg', x'04', 1);
       insert into settings (user_id, key, value) values (1, 'newPerDay', '5');
       insert into fsrs_settings (user_id, mode, desired_retention) values (1, 'meaning', 0.85), (2, 'meaning', 0.9);
       insert into phone_stats (user_id, phone, attempts, errors, last_seen) values (1, 'm', 3, 1, 1), (2, 'm', 1, 1, 1);
@@ -168,6 +168,29 @@ describe("migrations 0012 and 0013 (audio library; 0013 retired)", () => {
       { text: "불", data: "02" },
     ]);
     expect(n("voice_audio")).toBe(1);
+    db.$client.close();
+    rmSync(dir, { recursive: true });
+  });
+});
+
+describe("migration 0022 (single words in M1 made again)", () => {
+  it("drops M1 recordings of single words only", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kquiz-0022-"));
+    const file = join(dir, "kquiz.db");
+    const sqlite = new Database(file);
+    migrateUpTo(sqlite, dir, 21);
+    sqlite.exec(`
+      insert into voice_audio values ('옷', 'M1', 'audio/mpeg', x'01', 1), ('옷을 샀어요', 'M1', 'audio/mpeg', x'02', 1),
+        ('옷', 'F3', 'audio/mpeg', x'03', 1);
+    `);
+    sqlite.close();
+
+    const db = openDb(file);
+    const rows = db.$client.prepare("select text, voice from voice_audio order by text, voice").all();
+    expect(rows).toEqual([
+      { text: "옷", voice: "F3" },
+      { text: "옷을 샀어요", voice: "M1" },
+    ]);
     db.$client.close();
     rmSync(dir, { recursive: true });
   });
