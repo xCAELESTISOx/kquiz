@@ -2,6 +2,7 @@ import { and, desc, eq, notInArray } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "./db/client.js";
 import { sessionLogs } from "./db/schema.js";
+import { indexSessionTasks } from "./taskStats.js";
 
 /** How many sessions are kept per user; older ones are dropped as new ones come in. */
 export const KEEP_LOGS = 50;
@@ -42,6 +43,8 @@ export function saveSessionLog(db: Db, userId: number, id: string, log: SessionL
       .values({ id, userId, ...row })
       .onConflictDoUpdate({ target: sessionLogs.id, set: row })
       .run();
+    // Kept on after the log itself is dropped below, for the stats.
+    indexSessionTasks(tx, userId, id, log.tasks);
     const keep = tx
       .select({ id: sessionLogs.id })
       .from(sessionLogs)

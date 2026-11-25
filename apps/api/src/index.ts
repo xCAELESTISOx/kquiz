@@ -9,10 +9,14 @@ import { openDb } from "./db/client.js";
 import { optimizerWorker } from "./fsrsOptimizer.js";
 import { authCredentials } from "./db/schema.js";
 import { createServer } from "./server.js";
+import { backfillTaskAnswers } from "./taskStats.js";
 
 const config = loadConfig();
 if (config.databasePath !== ":memory:") mkdirSync(dirname(config.databasePath), { recursive: true });
 const db = openDb(config.databasePath);
+// Sessions logged before the stats kept their answers (migration 0021) count too.
+const backfilled = backfillTaskAnswers(db);
+if (backfilled) console.log(`task answers filled in from ${backfilled} session logs`);
 
 // Until the first passkey is bound, anyone holding this code can bind one. It is printed
 // only to the server log, which only the owner can read.

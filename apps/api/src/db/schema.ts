@@ -373,3 +373,22 @@ export const pictureLibrary = sqliteTable("picture_library", {
     .references(() => pictures.hash, { onDelete: "cascade" }),
   updatedAt: timestamp("updated_at").notNull(),
 });
+
+// Every task answered in a session (taken from its session log, taskStats.ts), kept after the log
+// itself is dropped: which words go wrong most often, and which kinds of task go well or badly.
+// `missed` is a wrong first try, even when a second try got it right.
+export const taskAnswers = sqliteTable(
+  "task_answers",
+  {
+    logId: text("log_id").notNull(),
+    n: integer("n").notNull(),
+    userId: userId(),
+    cardId: integer("card_id")
+      .notNull()
+      .references(() => cards.id, { onDelete: "cascade" }),
+    task: text("task").notNull(),
+    missed: integer("missed", { mode: "boolean" }).notNull(),
+    answeredAt: timestamp("answered_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.logId, t.n] }), index("task_answers_user").on(t.userId, t.answeredAt)],
+);
