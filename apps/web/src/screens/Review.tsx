@@ -15,7 +15,7 @@ import { SessionId, useLongPress, type LongPress } from "../ui/SessionId";
 import { canRecord, type Recorder } from "../lib/recorder";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
 import { forgetVoice, heard } from "../lib/voices";
-import type { Card, ChoiceOption, GroupFilter, MixKind, PhraseTiles, QueueItem, QueueMode, RatingName } from "../lib/types";
+import type { Card, ChoiceOption, GroupFilter, MixKind, PhraseTiles, QueueItem, QueueMode, RatingName, WordSkills } from "../lib/types";
 import { CloseIcon, SpeakerIcon, UndoIcon } from "../ui/icons";
 import { LeechBadge } from "../ui/LeechBadge";
 import { useGlide } from "../ui/motion";
@@ -173,9 +173,12 @@ export function ReviewScreen({
             ...fresh.map((i) => i.card.id),
           ]),
         ];
-        const { options } = ids.length
-          ? await api.choices(ids).catch(() => ({ options: {} as Record<number, ChoiceOption[]> }))
-          : { options: {} };
+        // How each word has gone each way: more often asked the way it goes worst (lib/mix.ts).
+        const askable = [...new Set(all.filter((i) => i.mode !== "meaning").map((i) => i.card.id))];
+        const [{ options }, { skills }] = await Promise.all([
+          ids.length ? api.choices(ids).catch(() => ({ options: {} as Record<number, ChoiceOption[]> })) : { options: {} as Record<number, ChoiceOption[]> },
+          askable.length ? api.wordSkills(askable).catch(() => ({ skills: {} as Record<number, WordSkills> })) : { skills: {} as Record<number, WordSkills> },
+        ]);
         // A single-mode session asks every item its own way.
         // Each review is asked the way used least so far, counting the new words' typed steps, and
         // the order keeps tasks of one kind apart (lib/variety.ts).
@@ -185,6 +188,7 @@ export function ReviewScreen({
           { record: canRecord(), pick: (i) => (options[i.card.id]?.length ?? 0) > 0 },
           Math.random,
           fresh.flatMap((i) => { const k = learnKind(i); return k === "write" || k === "dictation" ? [k] : []; }),
+          (i) => skills[i.card.id],
         );
         const items = vary(interleave(all.filter((i) => ways.has(i)), fresh), (i) => learnKind(i) ?? ways.get(i));
         const phrases = items.filter((i) => i.learn ? i.card.kind === "phrase" : builds(i, ways.get(i) === "dictation"));

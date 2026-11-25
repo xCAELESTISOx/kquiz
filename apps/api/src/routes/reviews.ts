@@ -10,6 +10,7 @@ import { RETENTION_RANGE, setDesiredRetention } from "../fsrs.js";
 import { fsrsStatus } from "../fsrsOptimizer.js";
 import { ratings } from "../review.js";
 import { applyReviews, dueQueue, getStats, groupQueue } from "../reviewStore.js";
+import { wordSkills } from "../taskStats.js";
 
 export const MAX_REVIEWS_PER_REQUEST = 200;
 
@@ -63,6 +64,14 @@ export function reviewRoutes(db: Db, now: () => Date, timeZone: string) {
     const query = cardIdsQuery.safeParse(c.req.query());
     if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
     return c.json({ options: distractors(db, c.get("user").id, query.data.cardIds) });
+  });
+
+  // How each word of a queue has gone in each kind of task, so a session asks it more often the
+  // way it goes worst (taskStats.ts wordSkills).
+  app.get("/word-skills", (c) => {
+    const query = cardIdsQuery.safeParse(c.req.query());
+    if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
+    return c.json({ skills: wordSkills(db, c.get("user").id, query.data.cardIds, now()) });
   });
 
   // Blocks to build each phrase of a queue from, with the wrong ones mixed in (phrases.ts).

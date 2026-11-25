@@ -32,6 +32,7 @@ import type {
   Settings,
   Stats,
   StatsOverview,
+  WordSkills,
   UpdateCardResult,
 } from "./types";
 
@@ -392,6 +393,11 @@ export const api = {
   },
 
   /** Wrong options for the "pick the Korean word" screen, by card id. */
+  /** How each word has gone in each kind of task (fresh answers weigh more), for asking it the way it goes worst. */
+  wordSkills: (cardIds: number[]) =>
+    request<{ skills: Record<number, WordSkills> }>("GET", `/reviews/word-skills?cardIds=${cardIds.join(",")}`, {
+      fallback: () => ({ skills: {} }),
+    }),
   choices: (cardIds: number[]) =>
     request<{ options: Record<number, ChoiceOption[]> }>("GET", `/reviews/choices?cardIds=${cardIds.join(",")}`, {
       fallback: (m) => ({ options: m.choices(cardIds) }),

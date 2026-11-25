@@ -294,6 +294,9 @@ export interface StatsOverview {
 /** What a kind of task trains (apps/api taskStats.ts). */
 export type Skill = "recall" | "choose" | "build" | "write" | "dictation" | "speak" | "listen";
 
+/** One word's answers per skill, each weighted by how fresh it is (GET /api/reviews/word-skills). */
+export type WordSkills = Partial<Record<Skill, { answers: number; missed: number }>>;
+
 export interface FsrsModeStatus {
   mode: ReviewMode;
   desiredRetention: number;

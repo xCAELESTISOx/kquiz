@@ -163,3 +163,38 @@ export function taskStats(db: Db, userId: number, now: Date): TaskStats {
   });
   return { skills, trouble };
 }
+
+/** An answer this many days old counts half as much as one today, when choosing how to ask a word. */
+export const WORD_HALF_LIFE_DAYS = 21;
+
+export type WordSkills = Partial<Record<Skill, Tally>>;
+
+/**
+ * How each of these words has gone in each skill, fresh answers weighing more (halving every
+ * WORD_HALF_LIFE_DAYS), so a session can ask a word more often the way it goes worst (lib/mix.ts).
+ * Words never answered are left out.
+ */
+export function wordSkills(db: Db, userId: number, cardIds: number[], now: Date): Record<number, WordSkills> {
+  const out: Record<number, WordSkills> = {};
+  if (!cardIds.length) return out;
+  const rows = db
+    .select({ cardId: taskAnswers.cardId, task: taskAnswers.task, missed: taskAnswers.missed, at: taskAnswers.answeredAt })
+    .from(taskAnswers)
+    .where(and(eq(taskAnswers.userId, userId), inArray(taskAnswers.cardId, [...new Set(cardIds)])))
+    .all();
+  for (const row of rows) {
+    const skill = SKILL_OF[row.task];
+    if (!skill) continue;
+    const age = Math.max(0, now.getTime() - row.at.getTime()) / DAY;
+    const weight = 0.5 ** (age / WORD_HALF_LIFE_DAYS);
+    const tally = ((out[row.cardId] ??= {})[skill] ??= { answers: 0, missed: 0 });
+    tally.answers += weight;
+    if (row.missed) tally.missed += weight;
+  }
+  for (const skills of Object.values(out))
+    for (const tally of Object.values(skills)) {
+      tally.answers = Math.round(tally.answers * 100) / 100;
+      tally.missed = Math.round(tally.missed * 100) / 100;
+    }
+  return out;
+}
