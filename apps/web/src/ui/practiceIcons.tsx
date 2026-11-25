@@ -56,3 +56,20 @@ export const PenIcon = () => (
     <path d="M13.5 6.5l3 3" />
   </svg>
 );
+
+/** Syllable blocks put in order: building the word. */
+export const BlocksIcon = () => (
+  <svg {...props}>
+    <rect x="3" y="13" width="8" height="7" rx="2" />
+    <rect x="13" y="13" width="8" height="7" rx="2" />
+    <rect x="8" y="4" width="8" height="7" rx="2" />
+  </svg>
+);
+
+/** A light bulb: recalling what a Korean word means. */
+export const BulbIcon = () => (
+  <svg {...props}>
+    <path d="M9 17.5h6M10 21h4" />
+    <path d="M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V17h5.2v-1.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z" />
+  </svg>
+);

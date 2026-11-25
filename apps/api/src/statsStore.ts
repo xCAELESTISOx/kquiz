@@ -5,6 +5,7 @@ import { getFsrsSetup, schedulerFor } from "./fsrs.js";
 import { newCards } from "./newCards.js";
 import { fromStateRow, ratings, type ReviewMode } from "./review.js";
 import { reviewable } from "./reviewStore.js";
+import { taskStats, type TaskStats } from "./taskStats.js";
 
 const DAY = 86_400_000;
 export const ACTIVITY_DAYS = 7 * 17;
@@ -72,6 +73,9 @@ export type StatsOverview = {
       previous: { attempts: number; errors: number };
     }[];
   };
+  /** First-try results per kind of task, and the words missed most often (taskStats.ts). */
+  skills: TaskStats["skills"];
+  trouble: TaskStats["trouble"];
 };
 
 /** Minutes east of UTC of an IANA time zone at `at` (540 for Asia/Seoul). */
@@ -212,6 +216,7 @@ export function statsOverview(db: Db, userId: number, now = new Date(), tzOffset
     targetRetention: Object.fromEntries([...modes].map((mode) => [mode, getFsrsSetup(db, userId, mode as ReviewMode).desiredRetention])),
     cards: { total: db.select({ n: sql<number>`count(*)` }).from(cards).where(mine).get()?.n ?? 0, byMode },
     speech: speechStats(db, userId, today, startOf, dateOf, dayOf),
+    ...taskStats(db, userId, now),
   };
 }
 
