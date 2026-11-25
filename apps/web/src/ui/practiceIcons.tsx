@@ -66,7 +66,7 @@ export const BlocksIcon = () => (
   </svg>
 );
 
-/** A light bulb: recalling the word from memory. */
+/** A light bulb: recalling what a Korean word means. */
 export const BulbIcon = () => (
   <svg {...props}>
     <path d="M9 17.5h6M10 21h4" />

@@ -9,7 +9,7 @@ import { BlocksIcon, BulbIcon, ChoiceIcon, EarIcon, HeadphonesIcon, PenIcon } fr
  * answers the sessions log (apps/api taskStats.ts).
  */
 export const SKILL: Record<Skill, { label: string; icon: () => ReactNode }> = {
-  recall: { label: "From memory", icon: BulbIcon },
+  recall: { label: "Translate", icon: BulbIcon },
   choose: { label: "Pick", icon: ChoiceIcon },
   build: { label: "Build", icon: BlocksIcon },
   write: { label: "Write", icon: PenIcon },
