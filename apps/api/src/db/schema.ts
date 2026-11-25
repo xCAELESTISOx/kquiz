@@ -388,6 +388,12 @@ export const taskAnswers = sqliteTable(
       .references(() => cards.id, { onDelete: "cascade" }),
     task: text("task").notNull(),
     missed: integer("missed", { mode: "boolean" }).notNull(),
+    /** main, fix (going over mistakes) or extra (practice off the schedule); null only before 0023's backfill. */
+    phase: text("phase", { enum: ["main", "fix", "extra"] }),
+    /** Right with a hint, slow, or with a slip. */
+    soft: integer("soft", { mode: "boolean" }).notNull().default(false),
+    /** Missed at first, right in the end ("After a try"). */
+    recovered: integer("recovered", { mode: "boolean" }).notNull().default(false),
     answeredAt: timestamp("answered_at").notNull(),
   },
   (t) => [primaryKey({ columns: [t.logId, t.n] }), index("task_answers_user").on(t.userId, t.answeredAt)],

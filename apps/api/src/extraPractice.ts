@@ -6,6 +6,7 @@ import type { ReviewMode } from "./review.js";
 import { reviewable, shuffle, toQueueItem, withVoices, type QueueItem } from "./reviewStore.js";
 import { withSimilar } from "./similar.js";
 import { wordSkills, type Skill, type WordSkills } from "./taskStats.js";
+import { wordScores } from "./wordScore.js";
 
 /**
  * Extra practice: a "Learn" session that runs out of reviews and new words before its goal goes on
@@ -15,7 +16,7 @@ import { wordSkills, type Skill, type WordSkills } from "./taskStats.js";
  * usual review next session and that review gives the rating (applyReviews, `extra`). Its answers
  * go into the task statistics like any other task's (taskStats.ts).
  *
- * Which words: about half the ones missed most (fresh misses weigh more), a third the ones learned
+ * Which words: about half the ones whose last answer some way was a miss, lowest score first, a third the ones learned
  * over the last EXTRA_RECENT_DAYS, the rest any learned word, the longest unseen first. A word due in
  * any mode is in the session's queue already, and one reviewed or learned today was just practised,
  * so neither comes. Each word comes once, in one mode, the one it goes worse in.
@@ -97,11 +98,13 @@ export function extraPractice(
 
   const ids = [...byCard.keys()];
   const skills = wordSkills(db, userId, ids, now);
-  const missed = (id: number) => Object.values(skills[id] ?? {}).reduce((sum, t) => sum + t.missed, 0);
+  const scores = wordScores(db, userId, now, ids);
+  // Still to be put right: the last answer in some way of asking it was a miss (wordScore.ts).
+  const shaky = (id: number) => Object.values(scores[id]?.last ?? {}).includes("missed");
   const lastSeen = (id: number) => Math.max(0, ...byCard.get(id)!.map((r) => r.state.lastReview?.getTime() ?? 0));
   const recentFrom = now.getTime() - EXTRA_RECENT_DAYS * DAY;
 
-  const trouble = shuffle(ids.filter((id) => missed(id) > 0), random).sort((a, b) => missed(b) - missed(a));
+  const trouble = shuffle(ids.filter(shaky), random).sort((a, b) => scores[a]!.score - scores[b]!.score);
   const recent = shuffle(ids.filter((id) => (byCard.get(id)![0]!.card.introducedAt?.getTime() ?? 0) >= recentFrom), random);
   // The longest unseen first, shuffled a little so the same few don't always come.
   const oldest = [...ids].sort((a, b) => lastSeen(a) - lastSeen(b));

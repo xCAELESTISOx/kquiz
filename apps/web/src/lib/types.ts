@@ -296,6 +296,21 @@ export interface StatsOverview {
   skills?: { skill: Skill; answers: number; missed: number; recent: { answers: number; missed: number } }[];
   /** The words missed most often over 60 days, worst first, with the skills they were missed in. */
   trouble?: { card: { id: number; korean: string; meaning: string }; answers: number; missed: number; skills: Skill[] }[];
+  /** How many words stand at each level of their score. */
+  levels?: Record<Level, number>;
+}
+
+/** How well a word is known (apps/api wordScore.ts): points 0–20 and the level they make. */
+export type Level = "new" | "learning" | "familiar" | "known" | "solid";
+/** The ways a word is asked: its meaning (ko→ru), giving the Korean, by ear. */
+export type Direction = "meaning" | "say" | "ear";
+export interface WordScore {
+  score: number;
+  level: Level;
+  last: Partial<Record<Direction, "right" | "missed">>;
+  answers: number;
+  /** FSRS would rather have it checked now. */
+  fading?: true;
 }
 
 /** What a kind of task trains (apps/api taskStats.ts). */

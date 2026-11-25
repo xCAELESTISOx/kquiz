@@ -6,6 +6,7 @@ import { newCards } from "./newCards.js";
 import { fromStateRow, ratings, type ReviewMode } from "./review.js";
 import { reviewable } from "./reviewStore.js";
 import { taskStats, type TaskStats } from "./taskStats.js";
+import { levelCounts, type Level } from "./wordScore.js";
 
 const DAY = 86_400_000;
 export const ACTIVITY_DAYS = 7 * 17;
@@ -76,6 +77,8 @@ export type StatsOverview = {
   /** First-try results per kind of task, and the words missed most often (taskStats.ts). */
   skills: TaskStats["skills"];
   trouble: TaskStats["trouble"];
+  /** How many words stand at each level of their score (wordScore.ts). */
+  levels: Record<Level, number>;
 };
 
 /** Minutes east of UTC of an IANA time zone at `at` (540 for Asia/Seoul). */
@@ -217,6 +220,7 @@ export function statsOverview(db: Db, userId: number, now = new Date(), tzOffset
     cards: { total: db.select({ n: sql<number>`count(*)` }).from(cards).where(mine).get()?.n ?? 0, byMode },
     speech: speechStats(db, userId, today, startOf, dateOf, dayOf),
     ...taskStats(db, userId, now),
+    levels: levelCounts(db, userId, now),
   };
 }
 

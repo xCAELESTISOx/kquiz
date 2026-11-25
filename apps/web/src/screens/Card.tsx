@@ -5,13 +5,14 @@ import { api, remembered } from "../lib/api";
 import { isKoreanOnly } from "../lib/korean";
 import { canSpeak, speak } from "../lib/speech";
 import { REGISTER_LABELS } from "../lib/phrase";
-import type { Card, CardPatch, Example, Register } from "../lib/types";
+import type { Card, CardPatch, Example, Register, WordScore } from "../lib/types";
 import { BackIcon, LearnIcon, SpeakerIcon } from "../ui/icons";
 import { Menu, MenuItem } from "../ui/Menu";
 import { Spinner } from "../ui/Spinner";
 import { PhraseParts } from "../ui/PhraseParts";
 import { SimilarEditor } from "../ui/Similar";
 import { useFamily, WordFamily } from "../ui/WordFamily";
+import { LevelPanel } from "../ui/WordLevel";
 import { lastCardsHash } from "./Cards";
 
 const EXAMPLES = 3;
@@ -78,6 +79,10 @@ export function CardScreen({ id }: { id: number }) {
   const [error, setError] = useState<string>();
   const [saved, setSaved] = useState(false);
   const families = useFamily(card);
+  const [score, setScore] = useState<WordScore>();
+  useEffect(() => {
+    api.wordScores([id]).then(({ scores }) => setScore(scores[id]), () => undefined);
+  }, [id]);
 
   useEffect(() => {
     api.card(id).then(
@@ -193,6 +198,7 @@ export function CardScreen({ id }: { id: number }) {
       {card && draft && (
         <form className="form" onSubmit={save}>
           <CardImage card={card} size="prompt" />
+          {score && score.level !== "new" && <LevelPanel score={score} />}
           {card.queued && (
             <div className="queue-note">
               <p>

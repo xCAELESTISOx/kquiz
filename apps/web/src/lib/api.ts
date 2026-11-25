@@ -32,6 +32,7 @@ import type {
   Settings,
   Stats,
   StatsOverview,
+  WordScore,
   WordSkills,
   UpdateCardResult,
 } from "./types";
@@ -401,6 +402,11 @@ export const api = {
       fallback: (m) => ({ items: m.extra(limit) }),
     }),
 
+  /** How well each word is known, by card id: these cards, or all of them. */
+  wordScores: (cardIds?: number[]) =>
+    request<{ scores: Record<number, WordScore> }>("GET", `/reviews/word-scores${cardIds ? `?cardIds=${cardIds.join(",")}` : ""}`, {
+      fallback: (m) => ({ scores: m.wordScores(cardIds) }),
+    }),
   /** Wrong options for the "pick the Korean word" screen, by card id. */
   /** How each word has gone in each kind of task (fresh answers weigh more), for asking it the way it goes worst. */
   wordSkills: (cardIds: number[]) =>

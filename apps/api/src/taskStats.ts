@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { Db } from "./db/client.js";
 import { cards, sessionLogs, taskAnswers } from "./db/schema.js";
 
@@ -46,6 +46,7 @@ type LoggedTask = {
   card?: { id?: unknown };
   task?: unknown;
   result?: unknown;
+  rating?: unknown;
   answers?: unknown;
 };
 
@@ -54,17 +55,36 @@ type LoggedTask = {
  * is practice on what was just shown, so it doesn't count; neither does a task left unanswered.
  * A task is missed when it ended wrong or its first try was wrong ("After a try" still counts).
  */
-export function answeredTasks(tasks: unknown[]): { n: number; cardId: number; task: string; missed: boolean; answeredAt: Date }[] {
+export type TaskPhase = "main" | "fix" | "extra";
+const PHASES: readonly unknown[] = ["main", "fix", "extra"];
+
+export function answeredTasks(tasks: unknown[]): {
+  n: number;
+  cardId: number;
+  task: string;
+  phase: TaskPhase;
+  missed: boolean;
+  soft: boolean;
+  recovered: boolean;
+  answeredAt: Date;
+}[] {
   return tasks.flatMap((raw) => {
     const t = raw as LoggedTask;
-    if (t.phase !== "main" || (t.result !== "right" && t.result !== "wrong")) return [];
+    if (!PHASES.includes(t.phase) || (t.result !== "right" && t.result !== "wrong")) return [];
     if (typeof t.task !== "string" || !(t.task in SKILL_OF)) return [];
     const n = t.n, cardId = t.card?.id, at = typeof t.at === "string" ? new Date(t.at) : undefined;
     if (!Number.isInteger(n) || !Number.isInteger(cardId) || !at || Number.isNaN(at.getTime())) return [];
-    const answers = Array.isArray(t.answers) ? (t.answers as { ok?: unknown }[]) : [];
+    const answers = Array.isArray(t.answers) ? (t.answers as { ok?: unknown; note?: unknown }[]) : [];
     const firstTry = answers.find((a) => typeof a?.ok === "boolean");
     const missed = t.result === "wrong" || firstTry?.ok === false;
-    return [{ n: n as number, cardId: cardId as number, task: t.task, missed, answeredAt: at }];
+    // Right in the end after a wrong first try ("After a try").
+    const recovered = missed && t.result === "right";
+    // Right, but not cleanly: "Hard" (a hint, or slow), a look-alike word first, or a slip in typing.
+    const soft =
+      !missed &&
+      (t.rating === "hard" ||
+        answers.some((a) => typeof a?.note === "string" && (a.note.startsWith("similar word") || a.note.startsWith("almost"))));
+    return [{ n: n as number, cardId: cardId as number, task: t.task, phase: t.phase as TaskPhase, missed, soft, recovered, answeredAt: at }];
   });
 }
 
@@ -86,15 +106,25 @@ export function indexSessionTasks(db: Pick<Db, "select" | "insert" | "delete">, 
   for (let i = 0; i < values.length; i += 200) db.insert(taskAnswers).values(values.slice(i, i + 200)).run();
 }
 
-/** Once, when `task_answers` is new: the sessions logged before it fill it in. */
+/**
+ * Once, when `task_answers` is new or older than its phase column (migration 0023): the sessions
+ * logged so far fill it in again. Rows of logs gone since keep their answers, as first tries of the
+ * main part (all that was kept before 0023).
+ */
 export function backfillTaskAnswers(db: Db): number {
-  if (db.select({ n: sql<number>`count(*)` }).from(taskAnswers).get()!.n > 0) return 0;
+  const rows = db.select({ n: sql<number>`count(*)` }).from(taskAnswers).get()!.n;
+  const stale = db.select({ n: sql<number>`count(*)` }).from(taskAnswers).where(isNull(taskAnswers.phase)).get()!.n;
+  if (rows > 0 && stale === 0) return 0;
   const logs = db.select().from(sessionLogs).all();
   db.transaction((tx) => {
     for (const log of logs) indexSessionTasks(tx, log.userId, log.id, (log.data as { tasks?: unknown[] }).tasks ?? []);
+    tx.update(taskAnswers).set({ phase: "main" }).where(isNull(taskAnswers.phase)).run();
   });
   return logs.length;
 }
+
+/** Going over mistakes repeats what was just shown: it is no first try, so skills and misses leave it out. */
+const firstTries = ne(taskAnswers.phase, "fix");
 
 export function taskStats(db: Db, userId: number, now: Date): TaskStats {
   const since = new Date(now.getTime() - SKILL_DAYS * DAY);
@@ -108,7 +138,7 @@ export function taskStats(db: Db, userId: number, now: Date): TaskStats {
       missed: missedCount,
     })
     .from(taskAnswers)
-    .where(and(eq(taskAnswers.userId, userId), gte(taskAnswers.answeredAt, since)))
+    .where(and(eq(taskAnswers.userId, userId), firstTries, gte(taskAnswers.answeredAt, since)))
     .groupBy(taskAnswers.task, sql`2`)
     .all();
   const bySkill = new Map<Skill, { answers: number; missed: number; recent: Tally }>();
@@ -143,6 +173,7 @@ export function taskStats(db: Db, userId: number, now: Date): TaskStats {
     .where(
       and(
         eq(taskAnswers.userId, userId),
+        firstTries,
         eq(cards.suspended, false),
         gte(taskAnswers.answeredAt, new Date(now.getTime() - TROUBLE_DAYS * DAY)),
       ),
@@ -180,7 +211,7 @@ export function wordSkills(db: Db, userId: number, cardIds: number[], now: Date)
   const rows = db
     .select({ cardId: taskAnswers.cardId, task: taskAnswers.task, missed: taskAnswers.missed, at: taskAnswers.answeredAt })
     .from(taskAnswers)
-    .where(and(eq(taskAnswers.userId, userId), inArray(taskAnswers.cardId, [...new Set(cardIds)])))
+    .where(and(eq(taskAnswers.userId, userId), firstTries, inArray(taskAnswers.cardId, [...new Set(cardIds)])))
     .all();
   for (const row of rows) {
     const skill = SKILL_OF[row.task];

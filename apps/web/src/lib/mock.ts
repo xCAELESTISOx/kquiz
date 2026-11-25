@@ -30,6 +30,8 @@ import type {
   Settings,
   Stats,
   StatsOverview,
+  Level,
+  WordScore,
 } from "./types";
 
 // Stand-in for apps/api when it isn't running. Dev builds only (see api.ts).
@@ -657,7 +659,21 @@ export class MockApi {
           ["교실", "класс (комната), аудитория", 1, 8, ["recall"]],
         ] as const
       ).map(([korean, meaning, missed, answers, skills], i) => ({ card: { id: 9000 + i, korean, meaning }, answers, missed, skills: [...skills] })),
+      levels: { solid: 41, known: 63, familiar: 38, learning: 17, new: 214 },
     };
+  }
+
+  /** Scores spread over the levels, deterministic per card, for designing the screens. */
+  wordScores(cardIds?: number[]): Record<number, WordScore> {
+    const ids = cardIds ?? this.state.cards.map((c) => c.id);
+    const levels: [Level, number][] = [["solid", 19], ["known", 14], ["familiar", 8], ["learning", 3], ["known", 13.5]];
+    return Object.fromEntries(
+      ids.map((id) => {
+        const [level, score] = levels[id % levels.length]!;
+        const missed = level === "learning" || level === "familiar";
+        return [id, { score, level, answers: 9, last: { meaning: "right", say: "right", ear: missed ? "missed" : "right" }, ...(id % 7 === 0 ? { fading: true } : {}) }];
+      }),
+    );
   }
 
   /**

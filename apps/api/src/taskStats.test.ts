@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { sessionLogs, taskAnswers } from "./db/schema.js";
 import { answeredTasks, backfillTaskAnswers } from "./taskStats.js";
@@ -12,7 +13,7 @@ function task(n: number, cardId: number, kind: string, result: "right" | "wrong"
 const log = (tasks: Record<string, unknown>[]) => ({ startedAt: at(0), screen: "learn", tasks, events: [] });
 
 describe("answeredTasks", () => {
-  it("counts a wrong first try as missed and leaves out mistakes gone over, meetings and unanswered tasks", () => {
+  it("counts a wrong first try as missed, keeps the phase and leaves out meetings and unanswered tasks", () => {
     const rows = answeredTasks([
       task(1, 5, "write", "right", { answers: [{ ok: false }, { ok: true }] }),
       task(2, 5, "write", "right", { answers: [{ note: "similar word" }, { ok: true }] }),
@@ -22,10 +23,11 @@ describe("answeredTasks", () => {
       { ...task(6, 5, "recall", "right"), result: "skipped" },
       { n: 7, task: "write", result: "right", phase: "main" },
     ]);
-    expect(rows.map((r) => [r.n, r.task, r.missed])).toEqual([
-      [1, "write", true],
-      [2, "write", false],
-      [3, "say", true],
+    expect(rows.map((r) => [r.n, r.task, r.phase, r.missed, r.soft, r.recovered])).toEqual([
+      [1, "write", "main", true, false, true],
+      [2, "write", "main", false, true, false],
+      [3, "say", "main", true, false, false],
+      [5, "write", "fix", true, false, false],
     ]);
   });
 });
@@ -79,6 +81,24 @@ describe("skills and trouble words in GET /stats", () => {
     expect(backfillTaskAnswers(t.db)).toBe(1);
     expect(backfillTaskAnswers(t.db)).toBe(0);
     expect(t.db.select().from(taskAnswers).all()).toEqual([expect.objectContaining({ logId: "ABC234", cardId: id, missed: true })]);
+  });
+
+  it("fills them in again once rows are older than their phase, keeping those whose log is gone", async () => {
+    const t = testApp();
+    await t.signIn();
+    const id = (await t.request("/cards", { body: { korean: "물", meaning: "вода" } })).json.card.id;
+    await t.request("/session-logs/ABC234", { method: "PUT", body: log([task(1, id, "write", "right"), task(2, id, "write", "wrong", { phase: "fix" })]) });
+    t.db.update(taskAnswers).set({ phase: null }).run();
+    t.db.delete(taskAnswers).where(eq(taskAnswers.n, 2)).run();
+    t.db.insert(taskAnswers).values({ logId: "GONE22", n: 1, userId: t.db.select().from(taskAnswers).get()!.userId, cardId: id, task: "say", missed: false, answeredAt: new Date() }).run();
+    expect(backfillTaskAnswers(t.db)).toBe(1);
+    expect(backfillTaskAnswers(t.db)).toBe(0);
+    const rows = t.db.select().from(taskAnswers).all().map((r) => [r.logId, r.n, r.phase]);
+    expect(rows.sort()).toEqual([
+      ["ABC234", 1, "main"],
+      ["ABC234", 2, "fix"],
+      ["GONE22", 1, "main"],
+    ]);
   });
 });
 

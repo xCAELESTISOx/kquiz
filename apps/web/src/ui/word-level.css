@@ -1,0 +1,145 @@
+/* How well a word is known (ui/WordLevel.tsx): red while learning, amber when familiar, the accent
+   when known, green when solid. A word FSRS would rather check now is shown faint. */
+[data-level="new"] {
+  --level: var(--text-faint);
+}
+[data-level="learning"] {
+  --level: var(--wrong);
+}
+[data-level="familiar"] {
+  --level: var(--weak);
+}
+[data-level="known"] {
+  --level: var(--accent);
+}
+[data-level="solid"] {
+  --level: var(--ok);
+}
+
+.level-dot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--level);
+}
+
+.level-dot[data-fading] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--level);
+}
+
+/* ---------- On a card ---------- */
+
+.level-panel {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.level-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-sm);
+}
+
+.level-points {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.level-points small {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+.level-meter {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-raised);
+  overflow: hidden;
+}
+
+.level-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--level);
+  transition: width var(--dur-3) var(--ease-out);
+}
+
+.level-panel[data-fading] .level-meter > span {
+  opacity: 0.5;
+}
+
+.level-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+.level-way[data-last="right"] {
+  color: var(--ok);
+}
+
+.level-way[data-last="missed"] {
+  color: var(--wrong);
+}
+
+/* ---------- All words, in the stats ---------- */
+
+.level-bar-wrap {
+  display: grid;
+  gap: 12px;
+}
+
+.level-bar {
+  display: flex;
+  gap: 3px;
+  height: 12px;
+}
+
+.level-bar > span {
+  min-width: 6px;
+  border-radius: 4px;
+  background: var(--level);
+}
+
+.level-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+.level-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.level-legend strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* A word's dot in the card list, before its Korean. */
+.card-row-korean .level-dot {
+  margin-right: 8px;
+  vertical-align: 0.15em;
+}

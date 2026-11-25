@@ -43,7 +43,7 @@ describe("extra practice", () => {
     void ids;
   });
 
-  it("puts the words missed most first", async () => {
+  it("puts the words still missed first", async () => {
     const { t, ids } = await learned();
     const at = new Date(t.clock.now.getTime() - DAY).toISOString();
     const tasks = [1, 2].map((n) => ({ n, at, phase: "main", card: { id: ids["불"] }, mode: "speech", task: "write", answers: [], result: "wrong" }));
