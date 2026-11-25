@@ -3,6 +3,7 @@ import { api, remembered } from "../lib/api";
 import { wordsWord } from "../lib/plural";
 import type { StatsOverview } from "../lib/types";
 import { Skills, Trouble } from "./StatsSkills";
+import { LevelBar } from "../ui/WordLevel";
 import "./Stats.css";
 
 // Modes in a fixed order with fixed colors (checked for color blindness against --bg); a mode the
@@ -61,22 +62,25 @@ export function StatsScreen() {
           <Section i={1} title="Words learned">
             <LearnedChart stats={stats} />
           </Section>
-          <Section i={2} title="Skills" aside="first try · 30 days">
+          <Section i={2} title="Words by level">
+            <LevelBar levels={stats.levels} />
+          </Section>
+          <Section i={3} title="Skills" aside="first try · 30 days">
             <Skills stats={stats} />
           </Section>
-          <Section i={3} title="Most missed" aside="60 days">
+          <Section i={4} title="Most missed" aside="60 days">
             <Trouble stats={stats} />
           </Section>
-          <Section i={4} title="Recall" aside="last 30 days">
+          <Section i={5} title="Recall" aside="last 30 days">
             <Retention stats={stats} modes={modes} />
           </Section>
-          <Section i={5} title="Activity" aside={`${sum(stats.activity.map((a) => a.reviews))} in 17 weeks`}>
+          <Section i={6} title="Activity" aside={`${sum(stats.activity.map((a) => a.reviews))} in 17 weeks`}>
             <Activity stats={stats} />
           </Section>
-          <Section i={6} title="Cards" aside={`${stats.cards.total} total`}>
+          <Section i={7} title="Cards" aside={`${stats.cards.total} total`}>
             <CardStates stats={stats} modes={modes} />
           </Section>
-          <Section i={7} title="Pronunciation">
+          <Section i={8} title="Pronunciation">
             <SpeechTrend stats={stats} />
             <WeakSounds stats={stats} />
           </Section>

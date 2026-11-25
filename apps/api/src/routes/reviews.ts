@@ -10,6 +10,7 @@ import { RETENTION_RANGE, setDesiredRetention } from "../fsrs.js";
 import { fsrsStatus } from "../fsrsOptimizer.js";
 import { ratings } from "../review.js";
 import { applyReviews, dueQueue, getStats, groupQueue } from "../reviewStore.js";
+import { wordScores } from "../wordScore.js";
 import { wordSkills } from "../taskStats.js";
 import { EXTRA_LIMIT, extraPractice } from "../extraPractice.js";
 
@@ -74,6 +75,13 @@ export function reviewRoutes(db: Db, now: () => Date, timeZone: string) {
     const query = cardIdsQuery.safeParse(c.req.query());
     if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
     return c.json({ skills: wordSkills(db, c.get("user").id, query.data.cardIds, now()) });
+  });
+
+  // How well each word is known: points, level and how each way of asking it last went (wordScore.ts).
+  app.get("/word-scores", (c) => {
+    const query = z.object({ cardIds: cardIdsQuery.shape.cardIds.optional() }).safeParse(c.req.query());
+    if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
+    return c.json({ scores: wordScores(db, c.get("user").id, now(), query.data.cardIds) });
   });
 
   // Learned words to go on with when a "Learn" session runs out before its goal (extraPractice.ts).

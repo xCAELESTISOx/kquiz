@@ -3,10 +3,11 @@ import { api, remembered } from "../lib/api";
 import { GROUP_SIZE } from "../lib/learn";
 import { cardsCount, cardsWord, phrasesWord } from "../lib/plural";
 import { groupHash } from "../lib/router";
-import type { Card, CardFilter, CardSummary, GroupFilter, Stats } from "../lib/types";
+import type { Card, CardFilter, CardSummary, GroupFilter, Stats, WordScore } from "../lib/types";
 import { CloseIcon, DownloadIcon, LearnIcon, SearchIcon, ShuffleIcon } from "../ui/icons";
 import { EmptyState } from "../ui/EmptyState";
 import { Spinner } from "../ui/Spinner";
+import { LevelDot } from "../ui/WordLevel";
 import "../ui/family.css";
 
 const PAGE = 50;
@@ -34,6 +35,11 @@ export function CardsScreen({ filter, root }: { filter?: CardFilter; root?: stri
   const [summary, setSummary] = useState<CardSummary | undefined>(remembered.cardSummary);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string>();
+  // How well each word is known: a dot by it (ui/WordLevel.tsx). All at once, it's a small object.
+  const [scores, setScores] = useState<Record<number, WordScore>>({});
+  useEffect(() => {
+    api.wordScores().then(({ scores }) => setScores(scores), () => undefined);
+  }, []);
   // Answers can arrive out of order while typing; only the latest one is shown.
   const requestId = useRef(0);
 
@@ -195,6 +201,7 @@ export function CardsScreen({ filter, root }: { filter?: CardFilter; root?: stri
             <li key={card.id} className="card-row" style={{ "--i": Math.min(i, 12) } as CSSProperties}>
               <a className={`card-row-link${isLong(card) ? " card-row-link-long" : ""}`} href={`#/cards/${card.id}`}>
                 <span className="card-row-korean" lang="ko">
+                  <LevelDot score={scores[card.id]} />
                   {card.korean}
                 </span>
                 <span className="card-row-meaning">{card.meaning}</span>
