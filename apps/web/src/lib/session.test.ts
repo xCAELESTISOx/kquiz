@@ -97,13 +97,12 @@ describe("right after meeting a word", () => {
   });
 
   it("drops a word's missed step once it is passed later in the stretch", () => {
-    // 세탁소: check written wrong, then by ear wrong, then both right on the way back up the ladder.
+    // 세탁소: check written wrong, then typing it again is the same task: one mistake, fixed by a right typing.
     const check = learnTask(card(74), "check", true);
     const ear = learnTask(card(74), 1, true);
     const other = learnTask(card(73), "check", true);
     let mistakes = withMistake(withMistake(withMistake([], check), other), ear);
-    expect(mistakes).toHaveLength(3);
-    mistakes = withoutMistake(mistakes, ear);
+    expect(mistakes).toEqual([check, other]);
     mistakes = withoutMistake(mistakes, learnTask(card(74), 2, true));
     expect(mistakes).toEqual([other]);
     // A review answered right elsewhere doesn't touch a word's other tasks.
@@ -170,12 +169,23 @@ describe("the card shown after an answer", () => {
 });
 
 describe("a task once a session", () => {
-  it("drops the tasks already answered, a word's check and last step being one", () => {
+  it("drops the tasks already answered, a word's check, last step and dictation being one", () => {
     const w = card(2);
     const check = learnTask(w, "check", true);
     const step = learnTask(w, 2, true);
     const ear = learnTask(w, 1, true);
     const seen = new Set([taskKey(check)]);
-    expect(unseen([step, ear, review(5)], seen)).toEqual([ear, review(5)]);
+    expect(unseen([step, ear, review(5)], seen)).toEqual([review(5)]);
+  });
+
+  it("types a new word once a session: by ear, then from the translation next time", () => {
+    const w = card(2);
+    const ear = learnTask(w, 1, true);
+    const step = learnTask(w, 2, true);
+    expect(ear.learn?.kind).toBe("dictation");
+    expect(taskKey(ear)).toBe(taskKey(step));
+    expect(unseen([step, learnTask(w, 0, true), review(5)], new Set([taskKey(ear)]))).toEqual([learnTask(w, 0, true), review(5)]);
+    // A review of the word in speech is another task.
+    expect(taskKey(ear)).not.toBe(taskKey(review(2)));
   });
 });
