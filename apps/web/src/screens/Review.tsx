@@ -10,7 +10,7 @@ import { learnKind, vary, type TaskKind } from "../lib/variety";
 import { afterFix, afterIntro, buildable, firstTasks, NEW_PER_SESSION, insertAfter, taskKey, unseen, insertNext, interleave, introTask, LEARN_GAP, learnTask, SESSION_MAX, SESSION_TASKS, onward, toFront, topUp, unfinished, usableSpare, withMistake, withoutMistake } from "../lib/session";
 import { prefetchPictures } from "../lib/pictureCache";
 import { navigate } from "../lib/router";
-import { endLog, flushLog, logEvent, logOutcome, logServer, logShown, startLog } from "../lib/sessionLog";
+import { currentLogId, endLog, flushLog, logEvent, logOutcome, logServer, logShown, startLog } from "../lib/sessionLog";
 import { SessionId, useLongPress, type LongPress } from "../ui/SessionId";
 import { canRecord, type Recorder } from "../lib/recorder";
 import { canSpeak, preloadSpeech, speak } from "../lib/speech";
@@ -123,8 +123,10 @@ export function ReviewScreen({
   const seen = useRef(new Set<string>());
   // Learned words for extra practice, joining when the session runs short (session.ts topUp).
   const spare = useRef<QueueItem[]>([]);
-  // Words met for the first time in this session: no more than NEW_PER_SESSION, "Another round" included.
+  // Words met for the first time in this session, and how many may be (NEW_PER_SESSION less what the
+  // session before met, as the server says on the first fetch), "Another round" included.
   const metNew = useRef(0);
+  const newCap = useRef<number | undefined>(undefined);
   // Saying aloud turned off for this session ("Can't speak now" on a new word, or a review switched to options).
   const [silent, setSilent] = useState(false);
   const extra = !!session && answered >= goal;
@@ -158,7 +160,7 @@ export function ReviewScreen({
     const modes = kinds && serverModes(kinds);
     Promise.all([
       group ? api.group(mode, group, modes) : api.queue(mode, mode === "mixed" ? 200 : undefined, modes),
-      session ? api.learning() : { items: [], pool: 0 },
+      session ? api.learning(currentLogId()) : { items: [], pool: 0 },
       session ? api.extra(SESSION_TASKS).catch(() => ({ items: [] as QueueItem[] })) : { items: [] as QueueItem[] },
     ]).then(
       async ([{ items: got }, learning, { items: extras }]) => {
@@ -172,7 +174,8 @@ export function ReviewScreen({
           ...all.map((i) => i.card.picture?.url),
           ...(("upcoming" in learning && learning.upcoming) || []),
         ]);
-        const fresh = firstTasks(learning.items, canSpeak(), NEW_PER_SESSION - metNew.current);
+        newCap.current ??= Math.min(NEW_PER_SESSION, "newLeft" in learning && learning.newLeft !== undefined ? learning.newLeft : NEW_PER_SESSION);
+        const fresh = firstTasks(learning.items, canSpeak(), newCap.current - metNew.current);
         metNew.current += fresh.filter((i) => i.learn?.kind === "intro").length;
         // Look-alikes give the wrong options for picking a word.
         const ids = [
@@ -501,7 +504,7 @@ export function ReviewScreen({
             else if (res.status === "passed") {
               note("climbed", word.id);
               // The next word joins only while the session has room for another new one; else it waits for the next session.
-              if (res.next && metNew.current < NEW_PER_SESSION) {
+              if (res.next && metNew.current < (newCap.current ?? NEW_PER_SESSION)) {
                 metNew.current++;
                 prepare(res.next.card);
                 setQueue((q) => insertAfter(q ?? [], introTask(res.next!.card)));

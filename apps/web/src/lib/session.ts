@@ -106,7 +106,7 @@ export function learnTask(card: Card, step: number | "check", hear: boolean): Qu
   return task(card, "write");
 }
 
-/** At most this many words are met for the first time in one session, "Another round" included. */
+/** At most this many words are met for the first time in any two sessions in a row, "Another round" included (the server says what is left after the last one). */
 export const NEW_PER_SESSION = 2;
 
 /**

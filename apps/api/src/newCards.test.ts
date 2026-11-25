@@ -48,9 +48,9 @@ describe("new words", () => {
     expect(learning.items.map((i: any) => i.card.id)).toEqual(claude.slice(0, 3).map((c) => c.id));
     expect(learning.items.every((i: any) => i.step === 0)).toBe(true);
     expect(learning.pool).toBe(4);
-    // Today shows how many are in learning and which come first: those, then the pool.
+    // Today shows how many are in learning and which come first: those, then the pool. Not met yet, they are new to the next session.
     const after = (await t.request("/reviews/stats")).json.newCards;
-    expect(after).toMatchObject({ learning: 3, started: 3, fresh: 0 });
+    expect(after).toMatchObject({ learning: 3, started: 0, fresh: 2 });
     expect(after.next).toEqual(claude.slice(0, 3).map((c) => c.korean));
     // Asking again gives the same words.
     expect((await t.request("/cards/learning")).json.items.map((i: any) => i.card.id)).toEqual(learning.items.map((i: any) => i.card.id));
@@ -124,12 +124,59 @@ describe("new words", () => {
     for (let i = 0; i < 6; i++) expect((await climb(words[i]!.id)).next.card.id).toBe(words[i + 3]!.id);
     let session = (await t.request("/cards/learning")).json;
     expect(session.items.map((i: any) => i.card.id)).toEqual([words[6]!.id, words[7]!.id, words[8]!.id]);
-    expect((await t.request("/reviews/stats")).json.newCards).toMatchObject({ started: 3, fresh: 0, pool: 1 });
+    expect((await t.request("/reviews/stats")).json.newCards).toMatchObject({ started: 0, fresh: 2, pool: 1 });
     // Three on, the last one comes too; three hours later, the checks come first.
     expect((await climb(words[6]!.id)).next.card.id).toBe(words[9]!.id);
     t.clock.now = new Date(t.clock.now.getTime() + 3 * HOUR);
     session = (await t.request("/cards/learning")).json;
     expect(session.items.slice(0, 7).map((i: any) => i.step)).toEqual(Array(7).fill("check"));
+  });
+
+  it("meet no more than two new words in any two sessions in a row", async () => {
+    const t = testApp({}, { learnNewWords: false });
+    await t.signIn();
+    const words = fromClaude(t, 8);
+    const intro = (id: number, extra: Record<string, unknown> = {}) => ({ card: { id }, learn: "intro", result: "right", answers: [], ...extra });
+    const save = (id: string, minutes: number, tasks: unknown[], screen = "learn") =>
+      t.request(`/session-logs/${id}`, {
+        method: "PUT",
+        body: { startedAt: new Date(t.clock.now.getTime() + minutes * 60_000).toISOString(), screen, tasks, events: [] },
+      });
+    const left = async (session?: string) => (await t.request(`/cards/learning${session ? `?session=${session}` : ""}`)).json.newLeft;
+    const fresh = async () => (await t.request("/reviews/stats")).json.newCards.fresh;
+
+    // No session before: two (Today says so before the words are taken onto the ladder).
+    expect(await fresh()).toBe(2);
+    expect(await left()).toBe(2);
+    // The last session met one: one is left for the next, and the asking session itself doesn't count.
+    await save("AAAAA2", 1, [intro(words[0]!.id), intro(words[0]!.id)]);
+    expect(await left("BBBBB2")).toBe(1);
+    await save("BBBBB2", 2, [intro(words[1]!.id)]);
+    expect(await left("BBBBB2")).toBe(1);
+    // The next session sees only BBBBB2: one met, one left.
+    expect(await left("CCCCC2")).toBe(1);
+    // A word put off with "Not now" isn't met; a session left before its first task, or a review, is no session.
+    await save("CCCCC2", 3, [intro(words[2]!.id, { result: "skipped", answers: [{ note: "not now" }] })]);
+    expect(await left("DDDDD2")).toBe(2);
+    await save("DDDDD2", 4, []);
+    await save("EEEEE2", 5, [{ card: { id: 99 }, result: "right", answers: [] }], "meaning");
+    expect(await left("FFFFF2")).toBe(2);
+    // Words first answered on their ladder since the last session began count even if its log missed them.
+    await save("FFFFF2", 6, [intro(words[3]!.id)]);
+    t.clock.now = new Date(t.clock.now.getTime() + 7 * 60_000);
+    await t.request(`/cards/${words[4]!.id}/learning`, { body: { ok: true } });
+    expect(await left("GGGGG2")).toBe(0);
+  });
+
+  it("tell Today how many new words the next session meets, after the last one", async () => {
+    const t = testApp({}, { learnNewWords: false });
+    await t.signIn();
+    const words = fromClaude(t, 5);
+    await t.request("/session-logs/AAAAA2", {
+      method: "PUT",
+      body: { startedAt: t.clock.now.toISOString(), screen: "learn", tasks: [{ card: { id: words[0]!.id }, learn: "intro", result: "right", answers: [] }], events: [] },
+    });
+    expect((await t.request("/reviews/stats")).json.newCards.fresh).toBe(1);
   });
 
   it("can be skipped as met: to the back of the pool, the next word in its place", async () => {

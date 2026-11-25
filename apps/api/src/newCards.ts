@@ -8,9 +8,9 @@
 // from its translation. Right, and it is learned: it enters reviews (FSRS), first due the next day.
 // Wrong, and it goes one step down too: back among the words being learned on the ladder's last
 // step, to be passed in that session and checked again later. The owner can also pull a card in by hand, unlearned.
-import { and, asc, eq, inArray, isNotNull, isNull, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, or, sql } from "drizzle-orm";
 import type { Db } from "./db/client.js";
-import { cards, reviewStates } from "./db/schema.js";
+import { cards, reviewStates, sessionLogs } from "./db/schema.js";
 import { toCardDto, type CardDto } from "./cardStore.js";
 import { withSimilar } from "./similar.js";
 import { newReviewState, toStateRow, type ReviewMode } from "./review.js";
@@ -20,8 +20,9 @@ export const reviewModes: ReviewMode[] = ["meaning", "speech", "listening"];
 /** How many new words are learned at once, on the ladder. */
 export const ACTIVE_WORDS = 3;
 /**
- * At most this many words are met for the first time in one session, "Another round" included (the app
- * keeps to it, apps/web lib/session.ts): Today says so. A word taken onto the ladder but not met yet waits for the next session.
+ * At most this many words are met for the first time in any two sessions in a row, "Another round"
+ * included (the app keeps to it, apps/web lib/session.ts): a session meets only what the one before it
+ * left of these (metLastSession), and Today says so. A word taken onto the ladder but not met yet waits.
  */
 export const NEW_PER_SESSION = 2;
 /** Tasks in a row a word climbs in a session before it waits for its check. */
@@ -101,8 +102,16 @@ export function newCards(db: Db, userId: number, now = new Date()): NewCards {
       .where(and(waiting(userId), taken))
       .get()?.n ?? 0;
   const c = counts(db, userId, now);
-  const fresh = Math.min(room(c), NEW_PER_SESSION);
-  const started = c.active + c.checks;
+  // Words on the ladder not met yet are new to the next session as much as the pool is; it meets
+  // only what the session before it left of NEW_PER_SESSION.
+  const unmet =
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(cards)
+      .where(and(waiting(userId), isNotNull(cards.learningAt), isNull(cards.learnPassedAt), isNull(cards.learnMetAt), eq(cards.learnStep, 0)))
+      .get()?.n ?? 0;
+  const fresh = Math.min(unmet + room(c), Math.max(0, NEW_PER_SESSION - metLastSession(db, userId)));
+  const started = c.active - unmet + c.checks;
   // What "Learn" comes to: the words started (ladder, then checks), then the new ones it will take.
   const next = db
     .select({ korean: cards.korean })
@@ -117,12 +126,50 @@ export function newCards(db: Db, userId: number, now = new Date()): NewCards {
         .from(cards)
         .where(and(waiting(userId), isNull(cards.learningAt), isNull(cards.learnPassedAt)))
         .orderBy(...poolOrder)
-        .limit(fresh)
+        .limit(Math.max(0, fresh - unmet))
         .all(),
     )
     .slice(0, NEXT_PREVIEW)
     .map((row) => row.korean);
   return { queued, learning, next, started, fresh, pool: c.pool };
+}
+
+/** How many of the latest "Learn" sessions are looked through for the last one that did anything. */
+const LOOK_BACK = 20;
+
+/**
+ * How many new words the last "Learn" session met (not `current`, the one asking): the words it
+ * showed as new (its log, sessionLogs.ts), less the ones put off with "Not now", and the words first
+ * answered on their ladder since it began (cards.learnMetAt), in case the end of its log was lost.
+ * A session left before its first task doesn't count as one. 0 when there was none.
+ */
+export function metLastSession(db: Pick<Db, "select">, userId: number, current?: string): number {
+  const last = db
+    .select()
+    .from(sessionLogs)
+    .where(and(eq(sessionLogs.userId, userId), current ? ne(sessionLogs.id, current) : undefined))
+    .orderBy(desc(sessionLogs.startedAt))
+    .limit(LOOK_BACK)
+    .all()
+    .find((row) => {
+      const data = row.data as { screen?: unknown; tasks?: unknown };
+      return data.screen === "learn" && Array.isArray(data.tasks) && data.tasks.length > 0;
+    });
+  if (!last) return 0;
+  const met = new Set<number>();
+  for (const task of (last.data as { tasks: Record<string, unknown>[] }).tasks) {
+    const id = (task.card as { id?: unknown } | undefined)?.id;
+    if (task.learn !== "intro" || typeof id !== "number") continue;
+    const putOff = task.result === "skipped" && Array.isArray(task.answers) && task.answers.some((a) => (a as { note?: unknown }).note === "not now");
+    if (!putOff) met.add(id);
+  }
+  for (const row of db
+    .select({ id: cards.id })
+    .from(cards)
+    .where(and(eq(cards.userId, userId), gte(cards.learnMetAt, last.startedAt)))
+    .all())
+    met.add(row.id);
+  return met.size;
 }
 
 /**
@@ -171,7 +218,12 @@ const waiting = (userId: number) =>
  * The new words for a session: the ones due for their check, then the ones being learned, and new
  * ones from the pool (oldest added first) only where there is room for them. `pool` is how many more wait after them.
  */
-export function learningWords(db: Db, userId: number, now: Date): { items: LearningItem[]; pool: number; upcoming: string[] } {
+export function learningWords(
+  db: Db,
+  userId: number,
+  now: Date,
+  session?: string,
+): { items: LearningItem[]; pool: number; upcoming: string[]; newLeft: number } {
   return db.transaction((tx) => {
     const checks = tx
       .select()
@@ -211,7 +263,9 @@ export function learningWords(db: Db, userId: number, now: Date): { items: Learn
       .limit(UPCOMING)
       .all()
       .flatMap((row) => toCardDto(row).picture?.url ?? []);
-    return { items, pool, upcoming };
+    // What this session may still meet as new, after the session before it.
+    const newLeft = Math.max(0, NEW_PER_SESSION - metLastSession(tx, userId, session));
+    return { items, pool, upcoming, newLeft };
   });
 }
 
