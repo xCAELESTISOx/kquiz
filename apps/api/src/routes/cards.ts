@@ -5,6 +5,7 @@ import { getCardAudio } from "../cardAudio.js";
 import { cardCounts, cardFamily, createCards, deleteCard, getCard, listCards, listTags, updateCard } from "../cardStore.js";
 import { CARD_KINDS, newCardSchema, parseBulk } from "../cards.js";
 import type { Db } from "../db/client.js";
+import { LOG_ID } from "../sessionLogs.js";
 import { answerLearning, introduceEarly, introduceLearned, learningWords, skipLearning } from "../newCards.js";
 import { linkParts } from "../phrases.js";
 import { linkSimilar, similarNoteSchema, unlinkSimilar } from "../similar.js";
@@ -54,7 +55,11 @@ export function cardRoutes(db: Db, now: () => Date, timeZone: string) {
   });
 
   // The new words for a session: due for their check, then being learned, filled up from the pool.
-  app.get("/learning", (c) => c.json(learningWords(db, c.get("user").id, now())));
+  // `session`: the asking session's log id, so the one before it is the last other one.
+  app.get("/learning", (c) => {
+    const session = c.req.query("session")?.toUpperCase();
+    return c.json(learningWords(db, c.get("user").id, now(), session && LOG_ID.test(session) ? session : undefined));
+  });
 
   // For the filter chips of the cards screen.
   app.get("/summary", (c) => {
