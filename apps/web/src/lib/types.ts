@@ -285,7 +285,14 @@ export interface StatsOverview {
       previous: { attempts: number; errors: number };
     }[];
   };
+  /** First tries per kind of task over 30 days, and over the last 7 of them. */
+  skills?: { skill: Skill; answers: number; missed: number; recent: { answers: number; missed: number } }[];
+  /** The words missed most often over 60 days, worst first, with the skills they were missed in. */
+  trouble?: { card: { id: number; korean: string; meaning: string }; answers: number; missed: number; skills: Skill[] }[];
 }
+
+/** What a kind of task trains (apps/api taskStats.ts). */
+export type Skill = "recall" | "choose" | "build" | "write" | "dictation" | "speak" | "listen";
 
 export interface FsrsModeStatus {
   mode: ReviewMode;

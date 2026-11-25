@@ -697,3 +697,197 @@
   animation: answer-in var(--dur-3) var(--ease-out) backwards;
   animation-delay: calc(60ms + var(--i, 0) * 50ms);
 }
+
+/* ---------- Skills ---------- */
+
+.skills,
+.trouble {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.skills {
+  gap: 14px;
+}
+
+.skills li {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  align-items: center;
+  gap: 12px;
+  animation: answer-in var(--dur-3) var(--ease-out) backwards;
+  animation-delay: calc(200ms + var(--i, 0) * 40ms);
+}
+
+.skill-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.skill-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.skill-body {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.skill-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.skill-head strong {
+  margin-left: auto;
+  font-size: var(--fs-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.skill-trend {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+}
+
+.skill-trend[data-trend="better"] {
+  color: var(--ok);
+}
+
+.skill-trend[data-trend="worse"] {
+  color: var(--wrong);
+}
+
+.meter-skill {
+  height: 6px;
+}
+
+.meter-skill::after {
+  content: none;
+}
+
+.meter-skill[data-tone="good"] > span {
+  background: var(--ok);
+}
+
+.meter-skill[data-tone="fair"] > span {
+  background: var(--accent);
+}
+
+.meter-skill[data-tone="weak"] > span {
+  background: var(--weak);
+}
+
+.meter-skill[data-tone="poor"] > span {
+  background: var(--wrong);
+}
+
+.skills li[data-faint] .skill-head,
+.skills li[data-faint] .meter > span {
+  opacity: 0.45;
+}
+
+/* ---------- Words missed most ---------- */
+
+.trouble {
+  gap: 2px;
+  margin: 0 -8px;
+}
+
+.trouble li {
+  animation: answer-in var(--dur-3) var(--ease-out) backwards;
+  animation-delay: calc(200ms + var(--i, 0) * 35ms);
+}
+
+.trouble a {
+  display: grid;
+  grid-template-columns: 18px 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--tap);
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  text-decoration: none;
+  transition: background var(--dur-1) var(--ease);
+}
+
+.trouble a:active {
+  background: var(--surface-raised);
+}
+
+@media (hover: hover) {
+  .trouble a:hover {
+    background: var(--surface-raised);
+  }
+}
+
+.trouble-rank {
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.trouble-word {
+  display: grid;
+  min-width: 0;
+}
+
+.trouble-word [lang="ko"] {
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+
+.trouble-meaning {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.trouble-skills {
+  display: flex;
+  gap: 4px;
+  color: var(--text-faint);
+}
+
+.trouble-skills svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+}
+
+.trouble-count {
+  min-width: 46px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgb(248 113 113 / calc(var(--heat) * 0.18));
+  color: color-mix(in srgb, var(--wrong) calc(var(--heat) * 100%), var(--text-muted));
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.trouble-count small {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 500;
+}

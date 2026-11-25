@@ -173,12 +173,12 @@ describe("migrations 0012 and 0013 (audio library; 0013 retired)", () => {
   });
 });
 
-describe("migration 0021 (single words in M1 made again)", () => {
+describe("migration 0022 (single words in M1 made again)", () => {
   it("drops M1 recordings of single words only", () => {
-    const dir = mkdtempSync(join(tmpdir(), "kquiz-0021-"));
+    const dir = mkdtempSync(join(tmpdir(), "kquiz-0022-"));
     const file = join(dir, "kquiz.db");
     const sqlite = new Database(file);
-    migrateUpTo(sqlite, dir, 20);
+    migrateUpTo(sqlite, dir, 21);
     sqlite.exec(`
       insert into voice_audio values ('옷', 'M1', 'audio/mpeg', x'01', 1), ('옷을 샀어요', 'M1', 'audio/mpeg', x'02', 1),
         ('옷', 'F3', 'audio/mpeg', x'03', 1);

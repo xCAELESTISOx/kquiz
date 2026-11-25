@@ -619,6 +619,29 @@ export class MockApi {
           { phone: "s͈", attempts: 37, errors: 8, recent: { attempts: 11, errors: 1 }, previous: { attempts: 9, errors: 3 } },
         ],
       },
+      skills: [
+        { skill: "recall", answers: 142, missed: 9, recent: { answers: 38, missed: 2 } },
+        { skill: "choose", answers: 120, missed: 6, recent: { answers: 30, missed: 1 } },
+        { skill: "build", answers: 64, missed: 5, recent: { answers: 18, missed: 1 } },
+        { skill: "write", answers: 96, missed: 21, recent: { answers: 26, missed: 3 } },
+        { skill: "dictation", answers: 88, missed: 17, recent: { answers: 24, missed: 7 } },
+        { skill: "speak", answers: 70, missed: 11, recent: { answers: 20, missed: 3 } },
+        { skill: "listen", answers: 6, missed: 1, recent: { answers: 2, missed: 0 } },
+      ],
+      trouble: (
+        [
+          ["거울", "зеркало", 5, 9, ["build", "dictation", "write"]],
+          ["선반", "полка (на стене)", 4, 8, ["write"]],
+          ["학원", "частная школа, курсы", 4, 11, ["choose", "write"]],
+          ["냉장고", "холодильник", 3, 7, ["dictation"]],
+          ["앞", "перед; впереди", 3, 10, ["speak"]],
+          ["책장", "книжный шкаф", 2, 6, ["write", "dictation"]],
+          ["옆", "бок; рядом, сбоку", 2, 9, ["write"]],
+          ["화장실", "туалет", 2, 12, ["speak", "listen"]],
+          ["모으다", "собирать", 1, 4, ["listen"]],
+          ["교실", "класс (комната), аудитория", 1, 8, ["recall"]],
+        ] as const
+      ).map(([korean, meaning, missed, answers, skills], i) => ({ card: { id: 9000 + i, korean, meaning }, answers, missed, skills: [...skills] })),
     };
   }
 
