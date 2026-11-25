@@ -27,7 +27,7 @@ export interface LoggedAnswer {
 interface Task {
   n: number;
   at: string;
-  phase: "main" | "fix";
+  phase: "main" | "fix" | "extra";
   card: { id: number; korean: string; meaning: string };
   mode: string;
   task: string;
@@ -88,7 +88,7 @@ export const currentLogId = (): string | undefined => log?.id;
  * A task is on screen: how it is asked (`task`), from which item. `key` tells one showing from the
  * next (the screen's step), so the same showing told twice is one task.
  */
-export function logShown(key: number, item: QueueItem, task: string, phase: "main" | "fix", prompt?: string): void {
+export function logShown(key: number, item: QueueItem, task: string, phase: "main" | "fix" | "extra", prompt?: string): void {
   if (!log || current?.key === key) return;
   if (current && !current.task.result) logOutcome({ result: "skipped", note: "left without an answer" });
   const entry: Task = {

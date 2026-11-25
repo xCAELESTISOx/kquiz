@@ -463,6 +463,17 @@ export class MockApi {
       .slice(0, limit);
   }
 
+  /** Extra practice: words not due, given the Korean, in random order (the server picks them better). */
+  extra(limit = 15): QueueItem[] {
+    const now = this.now().getTime();
+    const due = new Set(this.queue("mixed", Infinity).map((i) => i.card.id));
+    return this.queue("speech", Infinity, true)
+      .filter((i) => i.reps > 0 && Date.parse(i.due) > now && !due.has(i.card.id))
+      .sort(() => Math.random() - 0.5)
+      .slice(0, limit)
+      .map((i) => ({ ...i, extra: true as const }));
+  }
+
   /** A similar word, if any, then any other cards; the server picks look-alike ones. */
   choices(cardIds: number[]): Record<number, ChoiceOption[]> {
     const pool = this.state.cards.filter((c) => !c.queued);
@@ -495,6 +506,10 @@ export class MockApi {
         const key = `${input.cardId}:${input.mode}`;
         if (this.state.reviewIds.includes(input.id)) return { id: input.id, status: "duplicate" };
         if (!this.state.cards.some((c) => c.id === input.cardId)) return { id: input.id, status: "card_not_found" };
+        if (input.extra) {
+          if (input.rating === "again") this.state.due[key] = input.reviewedAt;
+          return { id: input.id, status: "applied", due: this.state.due[key] ?? input.reviewedAt };
+        }
         const reps = input.rating === "again" ? 0 : (this.state.reps[key] ?? 0) + 1;
         this.state.reps[key] = reps;
         this.state.due[key] = new Date(this.now().getTime() + interval(input.rating, reps)).toISOString();

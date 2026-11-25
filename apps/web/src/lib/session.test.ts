@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { afterFix, afterIntro, buildable, firstTasks, taskKey, unseen, insertAfter, insertNext, interleave, learnTask, onward, toFront, unfinished, withMistake, withoutMistake } from "./session";
+import { afterFix, afterIntro, buildable, firstTasks, taskKey, unseen, insertAfter, insertNext, interleave, learnTask, onward, toFront, unfinished, withMistake, withoutMistake, topUp, usableSpare, EXTRA_AT_ONCE } from "./session";
 import type { Card, QueueItem } from "./types";
 
 const card = (id: number) => ({ id, korean: `단어${id}`, meaning: `слово ${id}` }) as Card;
@@ -187,5 +187,27 @@ describe("a task once a session", () => {
     expect(unseen([step, learnTask(w, 0, true), review(5)], new Set([taskKey(ear)]))).toEqual([learnTask(w, 0, true), review(5)]);
     // A review of the word in speech is another task.
     expect(taskKey(ear)).not.toBe(taskKey(review(2)));
+  });
+});
+
+describe("extra practice when a session runs short", () => {
+  const review = (id: number, mode: QueueItem["mode"] = "speech"): QueueItem => ({ card: card(id), mode, due: "", state: 2, reps: 3, lapses: 0 });
+  const extra = (id: number): QueueItem => ({ ...review(id), extra: true });
+  const spare = [extra(1), extra(2), extra(3), extra(4), extra(5)];
+
+  it("joins once the queue is down to its last card, a few at a time, up to the goal", () => {
+    const two = [review(10), review(11)];
+    expect(topUp(two, spare, 0, 15, new Set()).queue).toEqual(two);
+    const last = topUp([review(10)], spare, 5, 15, new Set());
+    expect(last.queue.map((i) => i.card.id)).toEqual([10, 1, 2, 3].slice(0, 1 + EXTRA_AT_ONCE));
+    expect(last.spare.map((i) => i.card.id)).toEqual([4, 5]);
+    expect(topUp([], spare, 13, 15, new Set()).queue.map((i) => i.card.id)).toEqual([1, 2]);
+    expect(topUp([], spare, 15, 15, new Set()).queue).toEqual([]);
+  });
+
+  it("never brings a word already asked in the session, or one in the queue", () => {
+    const seen = new Set([taskKey(review(1, "meaning")), taskKey(review(3))]);
+    expect(usableSpare([review(2)], spare, seen).map((i) => i.card.id)).toEqual([4, 5]);
+    expect(topUp([review(2)], spare, 0, 15, seen).queue.map((i) => i.card.id)).toEqual([2, 4, 5]);
   });
 });

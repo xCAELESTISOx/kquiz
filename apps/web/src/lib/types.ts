@@ -137,6 +137,11 @@ export interface QueueItem {
   lapses: number;
   /** Listening only: other voices the word can be heard in besides the default one (lib/voices.ts). */
   voices?: string[];
+  /**
+   * Extra practice (apps/api extraPractice.ts): a learned word, not due, that fills a "Learn" session
+   * run short. Its rating doesn't go to FSRS; a miss only brings that review forward to now.
+   */
+  extra?: true;
   /** In a session only: a step of learning a new word, not a review (lib/session.ts). */
   learn?: { kind: "intro" | "choose" | "build" | "aloud" | "dictation" | "write"; check?: boolean };
 }
@@ -173,6 +178,8 @@ export interface ReviewInput {
   rating: RatingName;
   reviewedAt: string;
   elapsedMs?: number;
+  /** Extra practice (QueueItem.extra): the server leaves the schedule alone, but for a miss. */
+  extra?: boolean;
 }
 
 /** A new word being learned: its ladder step (0–2), or "check" once it has waited (apps/api newCards.ts). */
