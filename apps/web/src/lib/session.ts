@@ -1,6 +1,6 @@
 // "Learn" on Today: a short session of new words and reviews together. New words come from the pool
 // a few at a time (apps/api newCards.ts): met first, then a ladder of tasks, built from syllables,
-// picked out by ear, written from the translation. Right after meeting a word come quick tasks on it
+// picked out by ear, written from the translation (typed once a session: see taskKey). Right after meeting a word come quick tasks on it
 // (afterIntro), so it is used while still fresh. A word up the ladder waits a few hours and is
 // then checked once more from its translation. Reviews due in any mode fill the rest.
 import type { Card, ChoiceOption, LearningItem, QueueItem } from "./types";
@@ -158,10 +158,15 @@ export function insertAfter(queue: QueueItem[], item: QueueItem, gap = LEARN_GAP
 }
 
 /**
- * One task as asked: a word's step of learning, or its review in one mode. A new word's check and
- * its last step are both "write it from the translation", so they are one task.
+ * One task as asked: a word's step of learning, or its review in one mode. Typing a new word is one
+ * task however it is asked: by ear (dictation), from the translation (its last step) or as its later
+ * check. So a word written by ear writes from the translation next session, not again in this one
+ * (session 5DA3MX typed 우유 by ear and then from the translation).
  */
-export const taskKey = (item: QueueItem): string => `${item.card.id}:${item.learn ? item.learn.kind : item.mode}`;
+export const taskKey = (item: QueueItem): string => {
+  const kind = item.learn?.kind;
+  return `${item.card.id}:${kind === "dictation" || kind === "write" ? "type" : kind ?? item.mode}`;
+};
 
 /**
  * The queue without the tasks already answered in this session (`seen`, by taskKey): a task comes
