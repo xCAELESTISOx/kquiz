@@ -56,6 +56,53 @@ def test_speak_returns_mp3():
     assert synth.calls == [("국물", "M1")]
 
 
+class RepeatingSynth:
+    """Says the word twice, with a 0.5 s pause, for the first `repeats` calls, then once."""
+
+    sample_rate = RATE
+
+    def __init__(self, repeats: int):
+        self.repeats = repeats
+        self.calls = 0
+
+    def synthesize(self, text: str, voice: str) -> np.ndarray:
+        self.calls += 1
+        t = np.arange(RATE // 4) / RATE
+        word = (0.3 * np.sin(2 * np.pi * 220 * t)).astype(np.float32)
+        pause = np.zeros(RATE // 2, dtype=np.float32)
+        parts = [pause, word, pause, word, pause] if self.calls <= self.repeats else [pause, word, pause]
+        return np.concatenate(parts)
+
+
+def duration(mp3: bytes) -> float:
+    audio, rate = sf.read(io.BytesIO(mp3))
+    return len(audio) / rate
+
+
+def test_speak_makes_a_doubled_word_again():
+    synth = RepeatingSynth(repeats=1)
+    assert duration(tts.speak(synth, "옷", "M1")) < 0.5
+    assert synth.calls == 2
+
+
+def test_speak_keeps_the_first_take_when_every_attempt_repeats():
+    synth = RepeatingSynth(repeats=99)
+    assert duration(tts.speak(synth, "옷", "M1")) < 0.5
+    assert synth.calls == tts.ATTEMPTS
+
+
+def test_speak_leaves_pauses_in_sentences():
+    synth = RepeatingSynth(repeats=99)
+    assert duration(tts.speak(synth, "옷을 샀습니다.", "M1")) > 0.9
+    assert synth.calls == 1
+
+
+def test_takes_splits_on_long_pauses_only():
+    word = RepeatingSynth(repeats=0).synthesize("", "F1")
+    assert len(tts.takes(tts.trim(word, RATE), RATE)) == 1
+    assert len(tts.takes(tts.trim(RepeatingSynth(repeats=1).synthesize("", "F1"), RATE), RATE)) == 2
+
+
 def test_speak_rejects_silence():
     with pytest.raises(ValueError):
         tts.speak(FakeSynth(silent=True), "국물")
