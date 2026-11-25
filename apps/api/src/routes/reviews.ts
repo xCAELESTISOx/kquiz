@@ -11,6 +11,7 @@ import { fsrsStatus } from "../fsrsOptimizer.js";
 import { ratings } from "../review.js";
 import { applyReviews, dueQueue, getStats, groupQueue } from "../reviewStore.js";
 import { wordSkills } from "../taskStats.js";
+import { EXTRA_LIMIT, extraPractice } from "../extraPractice.js";
 
 export const MAX_REVIEWS_PER_REQUEST = 200;
 
@@ -37,6 +38,7 @@ const reviewSchema = z.object({
   rating: z.enum(Object.keys(ratings) as [keyof typeof ratings, ...(keyof typeof ratings)[]]),
   reviewedAt: z.iso.datetime({ offset: true }).transform((s) => new Date(s)),
   elapsedMs: z.number().int().min(0).max(3_600_000).optional(),
+  extra: z.boolean().optional(),
 });
 
 export function reviewRoutes(db: Db, now: () => Date, timeZone: string) {
@@ -72,6 +74,22 @@ export function reviewRoutes(db: Db, now: () => Date, timeZone: string) {
     const query = cardIdsQuery.safeParse(c.req.query());
     if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
     return c.json({ skills: wordSkills(db, c.get("user").id, query.data.cardIds, now()) });
+  });
+
+  // Learned words to go on with when a "Learn" session runs out before its goal (extraPractice.ts).
+  app.get("/extra", (c) => {
+    const query = z
+      .object({
+        limit: z.coerce.number().int().min(1).max(EXTRA_LIMIT).optional(),
+        exclude: z
+          .string()
+          .regex(/^(\d+(,\d+){0,199})?$/)
+          .transform((s) => (s ? s.split(",").map(Number) : []))
+          .optional(),
+      })
+      .safeParse(c.req.query());
+    if (!query.success) return c.json({ error: "invalid_request", issues: query.error.issues }, 400);
+    return c.json({ items: extraPractice(db, c.get("user").id, query.data, now(), timeZone) });
   });
 
   // Blocks to build each phrase of a queue from, with the wrong ones mixed in (phrases.ts).

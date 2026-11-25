@@ -206,3 +206,31 @@ export function afterFix(fixes: readonly QueueItem[], ok: boolean): QueueItem[] 
   if (!first) return [];
   return ok ? rest : [...rest, first];
 }
+
+/**
+ * A session run short goes on with extra practice (apps/api extraPractice.ts) rather than end before
+ * its goal: when the queue is down to its last card, a few words from `spare` join at its end, so new
+ * words' steps the server sends back still find room among them. A word already asked in this
+ * session in any way (`seen`, by taskKey) or still in the queue doesn't come. Returns the queue and
+ * the spare words left.
+ */
+export const EXTRA_AT_ONCE = 3;
+export function topUp(
+  queue: readonly QueueItem[],
+  spare: readonly QueueItem[],
+  answered: number,
+  goal: number,
+  seen: ReadonlySet<string>,
+): { queue: QueueItem[]; spare: QueueItem[] } {
+  const left = usableSpare(queue, spare, seen);
+  const room = Math.min(goal - answered - queue.length, EXTRA_AT_ONCE);
+  if (queue.length > 1 || room <= 0 || !left.length) return { queue: [...queue], spare: left };
+  return { queue: [...queue, ...left.slice(0, room)], spare: left.slice(room) };
+}
+
+/** The spare words that can still join: none asked in this session yet or in the queue. */
+export function usableSpare(queue: readonly QueueItem[], spare: readonly QueueItem[], seen: ReadonlySet<string>): QueueItem[] {
+  const asked = new Set([...seen].map((key) => key.split(":")[0]));
+  for (const item of queue) asked.add(String(item.card.id));
+  return spare.filter((item) => !asked.has(String(item.card.id)));
+}

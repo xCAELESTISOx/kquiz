@@ -2,12 +2,12 @@ import { shownPronunciation } from "../lib/korean";
 import { CardImage, pictureHelps } from "../ui/CardImage";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject, type PointerEvent, type ReactNode } from "react";
 import { wordsWord } from "../lib/plural";
-import { api, holdReview, isConnectionError, releaseHeldReview, takeBackReview } from "../lib/api";
+import { api, holdReview, isConnectionError, markExtra, releaseHeldReview, takeBackReview } from "../lib/api";
 import { clozeFor } from "../lib/cloze";
 import { useLeechIds } from "../lib/leeches";
 import { everyKind, mixWays, serverModes } from "../lib/mix";
 import { learnKind, vary, type TaskKind } from "../lib/variety";
-import { afterFix, afterIntro, buildable, firstTasks, NEW_PER_SESSION, insertAfter, taskKey, unseen, insertNext, interleave, introTask, LEARN_GAP, learnTask, SESSION_MAX, SESSION_TASKS, onward, toFront, unfinished, withMistake, withoutMistake } from "../lib/session";
+import { afterFix, afterIntro, buildable, firstTasks, NEW_PER_SESSION, insertAfter, taskKey, unseen, insertNext, interleave, introTask, LEARN_GAP, learnTask, SESSION_MAX, SESSION_TASKS, onward, toFront, topUp, unfinished, usableSpare, withMistake, withoutMistake } from "../lib/session";
 import { prefetchPictures } from "../lib/pictureCache";
 import { navigate } from "../lib/router";
 import { endLog, flushLog, logEvent, logOutcome, logServer, logShown, startLog } from "../lib/sessionLog";
@@ -53,7 +53,8 @@ type Swipe = RatingName | "back";
  * brings new words from the pool in among the reviews, each step of learning them answered to the
  * server. The tasks missed in the stretch are then gone over again, after a screen that says so,
  * until each is right: practice only, since the miss already went to the schedule. Then a summary
- * offers as many more.
+ * offers as many more. A session that runs short of reviews and new words goes on with extra
+ * practice on words already learned (session.ts topUp), off the schedule.
  */
 export function ReviewScreen({
   mode,
@@ -98,14 +99,15 @@ export function ReviewScreen({
   const [round, setRound] = useState(0);
   // New words of this session by where they got to, and the known words reviewed: ids, so a word
   // answered in two ways or on two steps counts once.
-  const [learnt, setLearnt] = useState<Record<"met" | "climbed" | "learned" | "reviewed", ReadonlySet<number>>>(() => ({
+  const [learnt, setLearnt] = useState<Record<Learnt, ReadonlySet<number>>>(() => ({
     met: new Set(),
     climbed: new Set(),
     learned: new Set(),
     reviewed: new Set(),
+    practiced: new Set(),
   }));
   const note = useCallback(
-    (kind: "met" | "climbed" | "learned" | "reviewed", id: number) =>
+    (kind: Learnt, id: number) =>
       setLearnt((l) => (l[kind].has(id) ? l : { ...l, [kind]: new Set(l[kind]).add(id) })),
     [],
   );
@@ -119,6 +121,8 @@ export function ReviewScreen({
   const [just, setJust] = useState<number>();
   // The tasks answered in this session (session.ts taskKey): none is asked twice, but for the mistakes.
   const seen = useRef(new Set<string>());
+  // Learned words for extra practice, joining when the session runs short (session.ts topUp).
+  const spare = useRef<QueueItem[]>([]);
   // Words met for the first time in this session: no more than NEW_PER_SESSION, "Another round" included.
   const metNew = useRef(0);
   // Saying aloud turned off for this session ("Can't speak now" on a new word, or a review switched to options).
@@ -155,8 +159,12 @@ export function ReviewScreen({
     Promise.all([
       group ? api.group(mode, group, modes) : api.queue(mode, mode === "mixed" ? 200 : undefined, modes),
       session ? api.learning() : { items: [], pool: 0 },
+      session ? api.extra(SESSION_TASKS).catch(() => ({ items: [] as QueueItem[] })) : { items: [] as QueueItem[] },
     ]).then(
-      async ([{ items: all }, learning]) => {
+      async ([{ items: got }, learning, { items: extras }]) => {
+        // Another round: a task already asked in this session doesn't come again (a miss in extra
+        // practice makes its review due now, for the next session).
+        const all = session ? unseen(got, seen.current) : got;
         // Every picture the session may show, fetched now so none waits on the network later:
         // the words in the queue, then the ones that join from the pool as words are learned.
         void prefetchPictures([
@@ -169,12 +177,12 @@ export function ReviewScreen({
         // Look-alikes give the wrong options for picking a word.
         const ids = [
           ...new Set([
-            ...all.filter((i) => i.mode === "speech").map((i) => i.card.id),
+            ...[...all, ...extras].filter((i) => i.mode === "speech").map((i) => i.card.id),
             ...fresh.map((i) => i.card.id),
           ]),
         ];
         // How each word has gone each way: more often asked the way it goes worst (lib/mix.ts).
-        const askable = [...new Set(all.filter((i) => i.mode !== "meaning").map((i) => i.card.id))];
+        const askable = [...new Set([...all, ...extras].filter((i) => i.mode !== "meaning").map((i) => i.card.id))];
         const [{ options }, { skills }] = await Promise.all([
           ids.length ? api.choices(ids).catch(() => ({ options: {} as Record<number, ChoiceOption[]> })) : { options: {} as Record<number, ChoiceOption[]> },
           askable.length ? api.wordSkills(askable).catch(() => ({ skills: {} as Record<number, WordSkills> })) : { skills: {} as Record<number, WordSkills> },
@@ -183,28 +191,36 @@ export function ReviewScreen({
         // Each review is asked the way used least so far, counting the new words' typed steps, and
         // the order keeps tasks of one kind apart (lib/variety.ts).
         const ways = mixWays(
-          all,
+          [...all, ...extras],
           kinds ?? new Set([mode as MixKind]),
           { record: canRecord(), pick: (i) => (options[i.card.id]?.length ?? 0) > 0 },
           Math.random,
           fresh.flatMap((i) => { const k = learnKind(i); return k === "write" || k === "dictation" ? [k] : []; }),
           (i) => skills[i.card.id],
         );
-        const items = vary(interleave(all.filter((i) => ways.has(i)), fresh), (i) => learnKind(i) ?? ways.get(i));
-        const phrases = items.filter((i) => i.learn ? i.card.kind === "phrase" : builds(i, ways.get(i) === "dictation"));
+        const planned = vary(interleave(all.filter((i) => ways.has(i)), fresh), (i) => learnKind(i) ?? ways.get(i));
+        // Run short, the session takes in learned words as it goes (extra practice, off the schedule).
+        const { queue: items, spare: left } = session
+          ? topUp(planned, extras.filter((i) => ways.has(i)), answered, goal, seen.current)
+          : { queue: planned, spare: [] };
+        spare.current = left;
+        markExtra([...items, ...left]);
+        const asked = [...items, ...left];
+        const phrases = asked.filter((i) => i.learn ? i.card.kind === "phrase" : builds(i, ways.get(i) === "dictation"));
         const { tiles } = phrases.length
           ? await api.blocks(phrases.map((i) => i.card.id)).catch(() => ({ tiles: {} as Record<number, PhraseTiles> }))
           : { tiles: {} };
         setTiles(tiles);
         setOptions(options);
-        setQuiet(new Set(items.filter((i) => ways.get(i) === "choice")));
+        setQuiet(new Set(asked.filter((i) => ways.get(i) === "choice")));
         setTyped(
-          new Map(items.flatMap((i): [QueueItem, TypeAsk][] => (ways.get(i) === "write" ? [[i, "meaning"]] : ways.get(i) === "dictation" ? [[i, "sound"]] : []))),
+          new Map(asked.flatMap((i): [QueueItem, TypeAsk][] => (ways.get(i) === "write" ? [[i, "meaning"]] : ways.get(i) === "dictation" ? [[i, "sound"]] : []))),
         );
         logEvent("queue", {
           round,
           kinds: kinds ? [...kinds] : [mode],
-          items: items.slice(0, 80).map((i) => `${i.card.korean} ${i.learn ? `learn:${i.learn.check ? "check" : i.learn.kind}` : `${i.mode}:${ways.get(i) ?? "recall"}`}`),
+          items: items.slice(0, 80).map((i) => `${i.card.korean} ${i.learn ? `learn:${i.learn.check ? "check" : i.learn.kind}` : `${i.extra ? "extra " : ""}${i.mode}:${ways.get(i) ?? "recall"}`}`),
+          ...(session ? { spare: left.map((i) => `${i.card.korean} ${i.mode}:${ways.get(i) ?? "recall"}`) } : {}),
         });
         setQueue(items);
         setTotal(items.length);
@@ -279,6 +295,14 @@ export function ReviewScreen({
     preloadSpeech(...queue.slice(0, 3).map(heard));
   }, [queue]);
 
+  // Run dry before the goal some other way (a word skipped, a step that didn't come): extra practice joins.
+  useLayoutEffect(() => {
+    if (!session || !queue || queue.length || answering > 0 || answered >= goal || fixes) return;
+    const filled = topUp(queue, spare.current, answered, goal, seen.current);
+    spare.current = filled.spare;
+    if (filled.queue.length) setQueue(filled.queue);
+  }, [session, queue, answering, answered, goal, fixes]);
+
   // Past the goal, the next step of a word begun in this stretch comes before anything else.
   useLayoutEffect(() => {
     if (extra && !fixes && pending > 0) setQueue((q) => (q ? toFront(q, unfinished(q, started, just)) : q));
@@ -290,7 +314,12 @@ export function ReviewScreen({
       if (!session) return { queue: q, shown: q[0] };
       // The task just answered counts as seen already.
       if (queue?.[0]) seen.current.add(taskKey(queue[0]));
-      return onward(unseen(q, seen.current), answered + 1, goal, begun, queue?.[0]?.card.id);
+      const next = onward(unseen(q, seen.current), answered + 1, goal, begun, queue?.[0]?.card.id);
+      if (answered + 1 >= goal) return next;
+      // Run short before the goal: extra practice joins, inside the tap (audio plays from it).
+      const filled = topUp(next.queue, spare.current, answered + 1, goal, seen.current);
+      spare.current = filled.spare;
+      return { queue: filled.queue, shown: filled.queue[0] };
     },
     [session, answered, goal, started, queue],
   );
@@ -367,7 +396,7 @@ export function ReviewScreen({
       // Inside the tap, where iOS still lets audio play.
       if (shown?.mode === "listening") speak(heard(shown));
       if (rating !== "again") setDone((n) => n + 1);
-      note("reviewed", card.id);
+      note(item.extra ? "practiced" : "reviewed", card.id);
       setRevealed(false);
       setStep((n) => n + 1);
       shownAt.current = performance.now();
@@ -393,7 +422,7 @@ export function ReviewScreen({
       setQueue(next);
       if (shown?.mode === "listening") speak(heard(shown));
       if (rating !== "again") setDone((n) => n + 1);
-      note("reviewed", queue[0]!.card.id);
+      note(queue[0]!.extra ? "practiced" : "reviewed", queue[0]!.card.id);
       setRevealed(false);
       setStep((n) => n + 1);
       shownAt.current = performance.now();
@@ -573,7 +602,7 @@ export function ReviewScreen({
               : cloze
                 ? "cloze"
                 : "recall";
-    logShown(step, item, way, fixing ? "fix" : "main", cloze ? `${cloze.before}[${cloze.word}]${cloze.after}` : undefined);
+    logShown(step, item, way, fixing ? "fix" : item.extra ? "extra" : "main", cloze ? `${cloze.before}[${cloze.word}]${cloze.after}` : undefined);
   }, [step, item]);
   useEffect(() => {
     if (fixIntro) logEvent("fix-intro", { mistakes: mistakes.length });
@@ -630,6 +659,11 @@ export function ReviewScreen({
           <div className={`progress${fixing ? " is-fix" : ""}`} role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
             <div className="progress-fill" style={{ transform: `scaleX(${progress})` }} />
           </div>
+          {item?.extra && !fixing && (
+            <span className="review-extra" title="A learned word, practised off the schedule">
+              Extra practice
+            </span>
+          )}
         </div>
         <span className="review-count">
           {session ? (pause ? "" : fixing ? `${right} / ${mistakes.length}` : counted) : mode !== "mixed" || kinds ? `${Math.min(done, total)} / ${total}` : ""}
@@ -655,7 +689,7 @@ export function ReviewScreen({
 
       {fixIntro && <FixIntro mistakes={mistakes} onStart={startFixes} />}
 
-      {summary && <SessionDone {...learnt} onMore={more} empty={!queue[0]} press={longPress} />}
+      {summary && <SessionDone {...learnt} onMore={more} empty={!queue[0] && !usableSpare([], spare.current, seen.current).length} press={longPress} />}
 
       {!session && queue && !card && <Finished count={done} press={longPress} />}
 
@@ -917,16 +951,20 @@ function FixIntro({ mistakes, onStart }: { mistakes: readonly QueueItem[]; onSta
   );
 }
 
+/** What the summary counts: new words by where they got to, reviews, and extra practice. */
+type Learnt = "met" | "climbed" | "learned" | "reviewed" | "practiced";
+
 /** The end of a session's stretch: where its words got to, in words, and "Another round" for another. */
 function SessionDone({
   met,
   climbed,
   learned,
   reviewed,
+  practiced,
   empty,
   onMore,
   press,
-}: Record<"met" | "climbed" | "learned" | "reviewed", ReadonlySet<number>> & { empty: boolean; onMore: () => void; press: LongPress }) {
+}: Record<Learnt, ReadonlySet<number>> & { empty: boolean; onMore: () => void; press: LongPress }) {
   // A word checked and learned climbed its ladder in an earlier session; one that climbed now waits.
   const waiting = [...climbed].filter((id) => !learned.has(id)).length;
   const learning = [...met].filter((id) => !climbed.has(id) && !learned.has(id)).length;
@@ -945,6 +983,7 @@ function SessionDone({
       ],
       ["learning", learning, "in progress", "the next round picks up from the same step"],
       ["reviewed", reviewed.size, "reviewed", "already learned, now fresh again"],
+      ["practiced", practiced.size, "practiced", "extra practice, the schedule stays as it was"],
     ] as const
   ).filter(([, n]) => n > 0);
   return (

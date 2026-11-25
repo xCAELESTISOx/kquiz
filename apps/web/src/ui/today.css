@@ -433,7 +433,22 @@
   background: linear-gradient(to right, #f59e0b, var(--weak));
 }
 
+/* Extra practice on a learned word (session.ts topUp): a quiet word under the bar, nothing more. */
+.review-extra {
+  position: absolute;
+  top: calc(50% + 8px);
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  pointer-events: none;
+  animation: answer-in var(--dur-3) var(--ease-out) backwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .review-extra,
   .fix-intro-mark,
   .fix-intro-title,
   .fix-intro-words li {
@@ -443,6 +458,7 @@
 
 /* Held for the session's id (SessionId.tsx): no text selection or iOS callout under the finger. */
 .progress-hold {
+  position: relative;
   flex: 1;
   display: flex;
   align-items: center;

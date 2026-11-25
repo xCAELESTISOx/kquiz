@@ -7,6 +7,7 @@ import { introduce, newCards, startOfDay, type NewCards } from "./newCards.js";
 import { getFsrsSetup, schedulerFor } from "./fsrs.js";
 import { applyRating, fromStateRow, toStateRow, type RatingName, type ReviewMode } from "./review.js";
 import { withSimilar } from "./similar.js";
+import { extraMiss } from "./extraPractice.js";
 import { voicesFor, type ExtraVoice } from "./voices.js";
 
 export type QueueItem = {
@@ -18,6 +19,8 @@ export type QueueItem = {
   lapses: number;
   /** Listening only: other voices the word can be heard in besides the default one (voices.ts). */
   voices?: ExtraVoice[];
+  /** Extra practice off schedule (extraPractice.ts): its rating doesn't go to FSRS. */
+  extra?: true;
 };
 
 // Listening needs the card's own recording (cardAudio.ts), made from its current Korean: the phone's
@@ -42,7 +45,7 @@ const modeCondition = (mode: QueueMode) =>
       : and(inArray(reviewStates.mode, [...mode]), reviewable);
 const isMixed = (mode: QueueMode) => typeof mode !== "string" || mode === "mixed";
 
-function toQueueItem({ card, state }: { card: typeof cards.$inferSelect; state: typeof reviewStates.$inferSelect }): QueueItem {
+export function toQueueItem({ card, state }: { card: typeof cards.$inferSelect; state: typeof reviewStates.$inferSelect }): QueueItem {
   return {
     card: toCardDto(card),
     mode: state.mode,
@@ -54,7 +57,7 @@ function toQueueItem({ card, state }: { card: typeof cards.$inferSelect; state: 
 }
 
 /** Tells each listening item which other voices its word already has. */
-function withVoices(db: Db, items: QueueItem[]) {
+export function withVoices(db: Db, items: QueueItem[]) {
   const listening = items.filter((item) => item.mode === "listening");
   if (!listening.length) return;
   const voices = voicesFor(db, listening.map((item) => item.card.korean));
@@ -168,6 +171,8 @@ export type ReviewInput = {
   rating: RatingName;
   reviewedAt: Date;
   elapsedMs?: number;
+  /** Extra practice (extraPractice.ts): a miss only brings the review forward, nothing else changes. */
+  extra?: boolean;
 };
 
 export type ReviewOutcome =
@@ -211,6 +216,14 @@ function applyOne(
     .where(and(where, eq(cards.userId, userId)))
     .get()?.state;
   if (!row) return { id: review.id, status: "card_not_found" };
+  if (review.extra) {
+    const at = review.reviewedAt > now ? now : review.reviewedAt;
+    if (review.rating === "again" && row.due > at) {
+      extraMiss(tx, review.cardId, review.mode, at);
+      return { id: review.id, status: "applied", due: at.toISOString() };
+    }
+    return { id: review.id, status: "applied", due: row.due.toISOString() };
+  }
   // A clock from the future can't be trusted, and FSRS can't go back before the last review.
   let at = review.reviewedAt > now ? now : review.reviewedAt;
   if (row.lastReview && at < row.lastReview) at = row.lastReview;

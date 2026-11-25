@@ -392,6 +392,15 @@ export const api = {
     return promise;
   },
 
+  /**
+   * Learned words, not due, to go on with when a "Learn" session runs short (apps/api extraPractice.ts):
+   * the ones missed most, learned lately, or long unseen, each once in the mode it goes worse in.
+   */
+  extra: (limit = 15) =>
+    request<{ items: QueueItem[] }>("GET", `/reviews/extra?limit=${limit}`, {
+      fallback: (m) => ({ items: m.extra(limit) }),
+    }),
+
   /** Wrong options for the "pick the Korean word" screen, by card id. */
   /** How each word has gone in each kind of task (fresh answers weigh more), for asking it the way it goes worst. */
   wordSkills: (cardIds: number[]) =>
@@ -505,8 +514,19 @@ export function pendingReviewCount(): number {
   return readPending().length;
 }
 
+// Ratings of extra practice (QueueItem.extra), by card and mode: each screen sends its own rating,
+// and this marks it as extra on its way, once, so the server leaves the schedule alone.
+const extraTasks = new Set<string>();
+
+/** These items of a session are extra practice; their ratings go out marked so (submitReview). */
+export function markExtra(items: readonly { card: { id: number }; mode: ReviewMode; extra?: true }[]): void {
+  for (const item of items) if (item.extra) extraTasks.add(`${item.card.id}:${item.mode}`);
+}
+
 export async function submitReview(input: ReviewInput): Promise<void> {
   forgetToday();
+  const key = `${input.cardId}:${input.mode}`;
+  if (!input.extra && extraTasks.delete(key)) input = { ...input, extra: true };
   writePending([...readPending(), input]);
   // A flush already in flight may have read the queue before this review landed.
   if (flushing) await flushing;
