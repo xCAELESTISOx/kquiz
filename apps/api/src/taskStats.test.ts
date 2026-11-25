@@ -81,3 +81,15 @@ describe("skills and trouble words in GET /stats", () => {
     expect(t.db.select().from(taskAnswers).all()).toEqual([expect.objectContaining({ logId: "ABC234", cardId: id, missed: true })]);
   });
 });
+
+describe("GET /reviews/word-skills", () => {
+  it("gives each word's answers per skill, fresh ones weighing more", async () => {
+    const t = testApp();
+    await t.signIn();
+    const id = (await t.request("/cards", { body: { korean: "물", meaning: "вода" } })).json.card.id;
+    const old = { ...task(1, id, "write", "wrong"), at: new Date(Date.UTC(2026, 8, 28, 10)).toISOString() }; // 21 days before
+    await t.request("/session-logs/ABC234", { method: "PUT", body: log([old, task(2, id, "say", "right"), task(3, id, "aloud", "wrong")]) });
+    const res = await t.request(`/reviews/word-skills?cardIds=${id},999`);
+    expect(res.json.skills).toEqual({ [id]: { write: { answers: 0.5, missed: 0.5 }, speak: { answers: 2, missed: 1 } } });
+  });
+});
