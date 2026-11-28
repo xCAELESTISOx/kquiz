@@ -24,6 +24,7 @@ It is a dark, mobile-first PWA that works in any modern browser (iPhone, Android
 |---|---|
 | `apps/web` | The PWA: React, Vite, TypeScript |
 | `apps/api` | Backend: Hono on Node, SQLite (Drizzle), FSRS, passkeys (SimpleWebAuthn), the MCP server with OAuth for Claude |
+| `packages/korean` | Korean conjugation by rule (endings, irregular verbs, grammar constructions) for the grammar mode |
 | `services/scorer` | Internal Python service (FastAPI): pronunciation scoring with a wav2vec2 phone model, and TTS |
 | `deploy` | Docker Compose, Caddy, firewall, backups and auto-update for a single server |
 
