@@ -6,6 +6,7 @@ import { AccessScreen } from "./screens/Access";
 import { PicturesScreen } from "./screens/Pictures";
 import { AddScreen } from "./screens/Add";
 import { InviteScreen } from "./screens/Invite";
+import { GrammarScreen } from "./screens/Grammar";
 import { LearnScreen } from "./screens/Learn";
 import { LeechesScreen } from "./screens/Leeches";
 import { CardScreen } from "./screens/Card";
@@ -48,6 +49,7 @@ export function App() {
     return param ? <LearnScreen key={param} id={Number(param)} /> : <LearnScreen key={`group${groupKey}`} group={group} />;
   // "Learn" on Today: new words and reviews together, a stretch of answers at a time.
   if (route === "session") return <ReviewScreen key="session" mode="mixed" all session />;
+  if (route === "grammar") return <GrammarScreen />;
   if (route === "mix") return <ReviewScreen key={`mixed${groupKey}${all ? ":all" : ""}`} mode="mixed" group={group} all={all} />;
   if (route === "speech") return <SpeechScreen key={`speech${groupKey}`} group={group} />;
   if (route === "choose") return <ChoiceScreen key={`choose${groupKey}`} group={group} />;

@@ -1,0 +1,206 @@
+/* Grammar mode (screens/Grammar.tsx): the intro of a construction and its tasks. */
+
+.grammar-card {
+  gap: 16px;
+}
+
+.grammar-card[data-result="right"] {
+  border-color: rgb(74 222 128 / 0.35);
+}
+
+.grammar-card[data-result="wrong"] {
+  border-color: rgb(248 113 113 / 0.3);
+}
+
+.grammar-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-hi);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.grammar-kicker span + span {
+  padding-left: 8px;
+  border-left: 1px solid rgb(152 164 255 / 0.3);
+  letter-spacing: 0;
+}
+
+.grammar-pattern {
+  font-size: var(--fs-2xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.grammar-explanation {
+  max-width: 34ch;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  text-wrap: pretty;
+}
+
+.grammar-sentence {
+  max-width: 30ch;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  line-height: 1.45;
+  text-wrap: balance;
+}
+
+.grammar-translation {
+  max-width: 34ch;
+  font-size: var(--fs-sm);
+  text-wrap: balance;
+}
+
+/* The word and the construction to put on it: 듣다 + -아/어야 하다. */
+.grammar-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border-strong);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.grammar-hint span[aria-hidden] {
+  color: var(--text-faint);
+}
+
+.grammar-table {
+  border-collapse: collapse;
+  min-width: min(100%, 260px);
+  font-size: var(--fs-md);
+}
+
+.grammar-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  color: var(--text-muted);
+}
+
+.grammar-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.grammar-table .grammar-table-form {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.grammar-rules {
+  display: grid;
+  gap: 4px;
+  max-width: 36ch;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  text-wrap: pretty;
+}
+
+.grammar-examples {
+  display: grid;
+  gap: 12px;
+  max-width: 34ch;
+  font-size: var(--fs-md);
+}
+
+.grammar-examples .muted {
+  font-size: var(--fs-xs);
+}
+
+.grammar-trap {
+  max-width: 34ch;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: rgb(251 191 36 / 0.08);
+  color: var(--weak);
+  font-size: var(--fs-sm);
+  text-wrap: pretty;
+}
+
+.grammar-similar {
+  max-width: 34ch;
+  font-size: var(--fs-xs);
+}
+
+/* One option per row: forms and meanings are too long for a grid. */
+.grammar-options {
+  display: grid;
+  gap: 8px;
+}
+
+.grammar-option {
+  min-height: 52px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  text-align: center;
+  transition:
+    transform var(--dur-1) var(--ease-spring),
+    opacity var(--dur-2) var(--ease),
+    background var(--dur-2) var(--ease),
+    border-color var(--dur-2) var(--ease);
+  animation: rating-in var(--dur-2) var(--ease-spring) backwards;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+.grammar-option:active:not(:disabled) {
+  transform: scale(0.97);
+  transition-duration: var(--dur-press);
+}
+
+.grammar-option:disabled {
+  cursor: default;
+}
+
+.grammar-option[data-state="right"] {
+  border-color: rgb(74 222 128 / 0.5);
+  background: rgb(74 222 128 / 0.12);
+  color: var(--ok);
+}
+
+.grammar-option[data-state="wrong"] {
+  border-color: rgb(248 113 113 / 0.5);
+  background: rgb(248 113 113 / 0.1);
+  color: var(--wrong);
+  animation: sounds-shake 360ms var(--ease-out);
+}
+
+.grammar-option[data-state="other"] {
+  opacity: 0.5;
+}
+
+.grammar-feedback {
+  max-width: 36ch;
+  margin-inline: auto;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-wrap: balance;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grammar-option,
+  .grammar-option[data-state="wrong"] {
+    animation: none;
+  }
+}

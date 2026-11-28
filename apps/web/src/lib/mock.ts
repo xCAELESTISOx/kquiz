@@ -1,3 +1,4 @@
+import { GrammarMock } from "./grammarMock";
 import { isKoreanOnly, normalizeKorean } from "./korean";
 import { fallbackTiles } from "./phrase";
 import type {
@@ -155,6 +156,7 @@ function dedupeKey(korean: string): string {
 }
 
 export class MockApi {
+  readonly grammar = new GrammarMock();
   private state: MockState;
 
   constructor(

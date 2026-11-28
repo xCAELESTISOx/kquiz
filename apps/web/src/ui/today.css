@@ -121,6 +121,20 @@
   color: currentColor;
 }
 
+/* Grammar: its own session, quieter than "Learn". */
+.button.grammar-button {
+  min-height: 52px;
+  justify-content: space-between;
+  padding-inline: 20px;
+  font-weight: 600;
+}
+
+.grammar-button-sub {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+
 .screen > .bottom-actions:has(.session-button) {
   gap: 8px;
 }
