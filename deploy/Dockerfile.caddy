@@ -4,9 +4,12 @@ RUN corepack enable
 WORKDIR /src
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY apps/web/package.json apps/web/
+COPY packages/korean/package.json packages/korean/
 RUN pnpm install --frozen-lockfile --filter @kquiz/web...
+COPY packages/korean packages/korean
 COPY apps/web apps/web
-RUN pnpm --filter @kquiz/web build
+# The trailing ... builds what the web app depends on (packages/korean) first.
+RUN pnpm --filter "@kquiz/web..." build
 
 FROM caddy:2.10-alpine
 COPY deploy/Caddyfile /etc/caddy/Caddyfile

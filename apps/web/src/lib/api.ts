@@ -1,3 +1,4 @@
+import type { GrammarPoint } from "./grammar";
 import { MockApi } from "./mock";
 import { wasHiddenSince, whenVisible } from "./resume";
 import type { PackEntry } from "./picturePack";
@@ -276,6 +277,40 @@ const recentQueues = new Map<string, { at: number; promise: Promise<{ items: Que
 
 // Families change only when cards are added or edited, rarely mid-session; a reload refreshes them.
 const families = new Map<string, Promise<Family[]>>();
+
+export interface GrammarAnswerInput {
+  id: string;
+  pointId: number;
+  sentenceId?: number;
+  task: "understand" | "choose" | "build" | "type";
+  phase: "learn" | "check" | "review" | "fix" | "extra";
+  outcome: "right" | "soft" | "wrong";
+  cls?: string;
+  answeredAt: string;
+  elapsedMs?: number;
+}
+
+export interface GrammarStats {
+  total: number;
+  learned: number;
+  learning: number;
+  checking: number;
+  pool: number;
+  dueNow: number;
+  tasks: { task: string; answers: number; right: number }[];
+  classes: { cls: string; answers: number; right: number }[];
+  missed: { id: number; pattern: string; meaning: string; wrong: number; answers: number }[];
+  learnedDays: { day: string; learned: number }[];
+}
+
+export const grammarApi = {
+  list: () => request<{ points: GrammarPoint[] }>("GET", "/grammar", { fallback: (m) => m.grammar.list() }),
+  stats: () => request<GrammarStats>("GET", "/grammar/stats", { fallback: (m) => m.grammar.stats() }),
+  startLearning: (id: number) =>
+    request<{ point: GrammarPoint }>("POST", `/grammar/${id}/learning`, { body: {}, accept: [409], resend: true, fallback: (m) => m.grammar.start(id) }),
+  answer: (answers: GrammarAnswerInput[]) =>
+    request<{ applied: number; points: GrammarPoint[] }>("POST", "/grammar/answers", { body: { answers }, resend: true, fallback: (m) => m.grammar.answer(answers) }),
+};
 
 export const api = {
   async addCard(card: NewCard): Promise<AddCardResult> {

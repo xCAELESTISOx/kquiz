@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { api, auth, lastToday, pendingReviewCount, remembered, rememberToday } from "../lib/api";
+import { api, auth, grammarApi, lastToday, pendingReviewCount, remembered, rememberToday, type GrammarStats } from "../lib/api";
 import { wordsWord } from "../lib/plural";
 import { bootDeadline, hideSplash, splashShown } from "../lib/splash";
 import type { QueueItem, Stats, StatsOverview } from "../lib/types";
@@ -47,6 +47,7 @@ export function TodayScreen() {
   const [error, setError] = useState<string>();
   const [leeches, setLeeches] = useState(() => remembered.leeches()?.items.length ?? 0);
   const [owner, setOwner] = useState(() => remembered.authStatus()?.user?.role === "owner");
+  const [grammar, setGrammar] = useState<GrammarStats>();
 
   useEffect(() => {
     document.title = "KQuiz";
@@ -68,6 +69,8 @@ export function TodayScreen() {
       },
     );
     api.leeches().then(({ items }) => setLeeches(items.length), () => {});
+    // Grammar has its own session; its button shows only once there is grammar.
+    grammarApi.stats().then(setGrammar, () => {});
     auth.status().then((s) => setOwner(s.user?.role === "owner"), () => {});
   }, []);
 
@@ -170,6 +173,20 @@ export function TodayScreen() {
               ]
                 .filter(Boolean)
                 .join(" · ")}
+            </span>
+          </a>
+        )}
+        {grammar && grammar.total > 0 && !fresh && (
+          <a className="button grammar-button" href="#/grammar">
+            <span>Grammar</span>
+            <span className="grammar-button-sub">
+              {[
+                grammar.dueNow > 0 && `review ${grammar.dueNow}`,
+                grammar.learning + grammar.checking > 0 && `learning ${grammar.learning + grammar.checking}`,
+                grammar.pool > 0 && `queued ${grammar.pool}`,
+              ]
+                .filter(Boolean)
+                .join(" · ") || "all learned"}
             </span>
           </a>
         )}
