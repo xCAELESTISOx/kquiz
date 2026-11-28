@@ -18,7 +18,8 @@ export type ConjClass =
   | "eu" // ㅡ drops: 쓰다 → 써요
   | "ha"; // 하다 → 해요
 
-export type Pos = "verb" | "adjective" | "copula";
+/** noun: the construction goes on a noun with particles (-을/를 앞두고, -에 따르면). */
+export type Pos = "verb" | "adjective" | "copula" | "noun";
 
 /** Words that are irregular in a way the spelling doesn't show. */
 const LISTED: Record<string, ConjClass> = {};

@@ -4,7 +4,9 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { beforeEach, describe, expect, it } from "vitest";
 import { CLAUDE_REDIRECT_URIS, createMcpApp, isLoopback } from "./app.js";
 import { MemoryOAuthStore } from "./oauth-store.js";
-import { MemoryCardStore, MemoryDrillStore } from "./store.js";
+import { MemoryCardStore, MemoryDrillStore, type GrammarStore } from "./store.js";
+import { openDb } from "../db/client.js";
+import { sqliteGrammar } from "../storage/mcp.js";
 
 const ORIGIN = "https://kquiz.test";
 const REDIRECT = CLAUDE_REDIRECT_URIS[0]!;
@@ -20,6 +22,7 @@ let friendCards: MemoryCardStore;
 let friendActive: boolean;
 let oauth: MemoryOAuthStore;
 let app: ReturnType<typeof createMcpApp>;
+let grammar: GrammarStore;
 
 beforeEach(() => {
   clock = Date.parse("2026-10-19T10:00:00Z");
@@ -29,9 +32,10 @@ beforeEach(() => {
   friendCards = new MemoryCardStore();
   friendActive = true;
   oauth = new MemoryOAuthStore();
+  grammar = sqliteGrammar(openDb(":memory:"), 1);
   app = createMcpApp({
     publicUrl: ORIGIN,
-    stores: (userId) => (userId === 1 ? { cards, drills, logs } : friendActive ? { cards: friendCards } : null),
+    stores: (userId) => (userId === 1 ? { cards, drills, logs, grammar } : friendActive ? { cards: friendCards } : null),
     oauth,
     owner: { session: async () => session, loginUrl: (r) => `/login?return_to=${encodeURIComponent(r)}` },
     maxClients: 3,
@@ -263,20 +267,36 @@ describe("mcp tools", () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
       "add_cards",
+      "add_grammar",
       "add_phrases",
       "add_sound_drills",
       "find_cards",
+      "find_grammar",
       "get_leeches",
       "get_session_log",
       "get_stats",
       "get_weak_sounds",
       "link_similar",
+      "link_similar_grammar",
       "list_session_logs",
       "list_sound_drills",
       "set_roots",
       "update_card",
+      "update_grammar",
     ]);
     expect(client.getInstructions()).toContain("Hangul");
+  });
+
+  it("adds grammar and shows each sentence as the app builds it", async () => {
+    const client = await mcpClient((await connect()).access_token);
+    const sentences = ["듣다", "돕다", "가다", "모르다"].map((l) => ({ ko: `내일까지 {${l}}.`, translation: "до завтра" }));
+    const added = parse(await client.callTool({ name: "add_grammar", arguments: { points: [{ pattern: "-아/어야 하다", meaning: "надо", sentences }] } }));
+    expect(added.created[0].sentences).toEqual(["내일까지 들어야 합니다.", "내일까지 도와야 합니다.", "내일까지 가야 합니다.", "내일까지 몰라야 합니다."]);
+    const found = parse(await client.callTool({ name: "find_grammar", arguments: { query: "надо" } }));
+    expect(found.points[0]).toMatchObject({ pattern: "-아/어야 하다", status: "pool" });
+    expect(found.points[0].sentences[0]).toEqual({ ko: "내일까지 {듣다}.", shown: "내일까지 들어야 합니다.", translation: "до завтра" });
+    const updated = parse(await client.callTool({ name: "update_grammar", arguments: { id: found.points[0].id, meaning: "надо, должен" } }));
+    expect(updated).toEqual({ ok: true });
   });
 
   it("reads a session log by the id the user pasted, or the latest", async () => {

@@ -10,6 +10,7 @@ import type { Db } from "./db/client.js";
 import { cardRoutes } from "./routes/cards.js";
 import { exportRoutes } from "./routes/export.js";
 import { pictureRoutes } from "./routes/pictures.js";
+import { grammarRoutes } from "./routes/grammar.js";
 import { practiceRoutes } from "./routes/practice.js";
 import { reviewRoutes } from "./routes/reviews.js";
 import { scoreRoutes } from "./routes/score.js";
@@ -59,6 +60,8 @@ export function createApp({ db, config, setupCode, webauthn, scorer, now = () =>
   app.use("/practice/*", requireSession(db, config.secureCookies, now));
   app.use("/users/*", requireSession(db, config.secureCookies, now));
   app.use("/session-logs/*", requireSession(db, config.secureCookies, now));
+  app.use("/grammar", requireSession(db, config.secureCookies, now));
+  app.use("/grammar/*", requireSession(db, config.secureCookies, now));
   app.use("/pictures/*", requireSession(db, config.secureCookies, now));
   app.route("/cards", cardRoutes(db, now, config.timeZone));
   app.route("/reviews", reviewRoutes(db, now, config.timeZone));
@@ -69,6 +72,7 @@ export function createApp({ db, config, setupCode, webauthn, scorer, now = () =>
   app.route("/users", userRoutes(db, config, now));
   app.route("/session-logs", sessionLogRoutes(db, now));
   app.route("/pictures", pictureRoutes(db, now));
+  app.route("/grammar", grammarRoutes(db, now));
   app.route("/score", scoreRoutes(db, scorer ?? httpScorer(config.scorerUrl), now));
 
   app.notFound((c) => c.json({ error: "not_found" }, 404));

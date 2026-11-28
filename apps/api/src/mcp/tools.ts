@@ -3,7 +3,8 @@ import { z } from "zod";
 import { CARD_KINDS, EXAMPLES_PER_CARD, MAX_PARTS, MAX_ROOTS, newCardSchema, normalizeKorean, phrasePartSchema, REGISTERS, rootSchema, type NewCard, type Root } from "../cards.js";
 import { MAX_DRILLS_PER_CALL, newDrillSchema } from "../practice.js";
 import { MAX_SIMILAR, similarNoteSchema } from "../similar.js";
-import type { CardStore, DrillStore, NewDrill, PictureStore, SessionLogStore, SharingStore, SimilarPair } from "./store.js";
+import { MAX_POINTS_PER_CALL, MAX_SENTENCES, MIN_SENTENCES } from "../grammar.js";
+import type { CardStore, DrillStore, GrammarStore, NewDrill, PictureStore, SessionLogStore, SharingStore, SimilarPair } from "./store.js";
 
 export const MAX_CARDS_PER_CALL = 50;
 
@@ -30,7 +31,8 @@ When the user asks to fix hard cards, call get_leeches and rework each with upda
 Older cards may have no roots yet: when the user asks to fill them in, page through find_cards with without_roots and send them with set_roots, 50 at a time, until none are left.
 Words can have a picture, shown when the word is met and in tasks asked by its translation; a picture helps the user remember more than words do. A word takes the picture library's picture for it on its own (find_cards shows picture.from "library"). When the user asks for a picture, or a word has none and they want one, find a clear, simple picture of the meaning on the web (an illustration or a photo of just that thing or action, no watermark) and set it with set_picture by its https address; any shape works. When you have the picture itself (the user gave you one, or you have a picture pack's file), send it as data, base64, instead. Say has_text when the Korean word is written on it (a sign, a label), so the app hides it while the word is recalled. set_picture with library goes back to the library's picture, with remove leaves the word without one.
 When the user asks for practice on sounds they confuse (ㄱ/ㅋ/ㄲ, ㅓ/ㅗ…), add listening drills with add_sound_drills.
-Set phrases learned whole (안녕히 가세요, 잘 먹겠습니다, 화장실이 어디예요?) go in with add_phrases, not add_cards. A phrase has no examples: instead parts breaks it into its pieces in order, exactly as written in the phrase, each with its dictionary form (base) when that differs and a short gloss, e.g. 어떻게 지내요? → [{"ko":"어떻게","meaning":"how"},{"ko":"지내요","base":"지내다","meaning":"to get along"}]. The app links each piece to the user's card for that word and builds the phrase from these pieces, mixed with wrong ones, in reviews (translation → Korean, and by ear). register is how polite it is: formal (합쇼체), polite (해요체) or casual (반말); notes say when it is said and the reply it usually gets. Keep the phrase in the form it is really said, not the dictionary form. When editing a phrase with update_card, send parts instead of examples.`;
+Set phrases learned whole (안녕히 가세요, 잘 먹겠습니다, 화장실이 어디예요?) go in with add_phrases, not add_cards. A phrase has no examples: instead parts breaks it into its pieces in order, exactly as written in the phrase, each with its dictionary form (base) when that differs and a short gloss, e.g. 어떻게 지내요? → [{"ko":"어떻게","meaning":"how"},{"ko":"지내요","base":"지내다","meaning":"to get along"}]. The app links each piece to the user's card for that word and builds the phrase from these pieces, mixed with wrong ones, in reviews (translation → Korean, and by ear). register is how polite it is: formal (합쇼체), polite (해요체) or casual (반말); notes say when it is said and the reply it usually gets. Keep the phrase in the form it is really said, not the dictionary form. When editing a phrase with update_card, send parts instead of examples.
+Grammar is a separate mode: constructions (grammar points) go in with add_grammar, never as cards. Leave out the plain present, past and future, which the user knows. pattern is the construction as textbooks write it: "-아/어야 하다", "-(으)ㄹ 수 있다", "-는/(으)ㄴ 줄 알다", "못", "-을/를 앞두고" (a noun construction), "만에". The app conjugates by rule, so never write the finished form in a sentence: put the word the construction goes on in braces, in its dictionary form, where the form goes: "외국인등록증을 {가져가다} ." for -아/어야 하다 becomes 외국인등록증을 가져가야 합니다. Words after the braces stay as written. The sentence ends in 합니다체 unless final says otherwise ({"style":"polite"} for 해요체, {"style":"plain"} for news style, {"tense":"past"}, or {"ending":"아/어서"} when the construction sits mid-sentence and the sentence goes on); a question mark makes it a question. Write sentences in 합니다체 where it is natural. pos is verb by default: give adjective for adjectives (it changes -는/(으)ㄴ), copula for a noun + 이다 ({학생이다}), noun for noun constructions. cls only for a word whose irregular class the app would get wrong (묻다 "bury" regular, 이르다 "arrive" reo). Give ${MIN_SENTENCES}–${MAX_SENTENCES} sentences, about 8: varied words and situations from the user's life, with the user's own words where you can (find_cards), and different verbs including irregular ones; the app rotates them. meaning is a short label of the sense ("надо, должен"); explanation 1–3 short lines on when it is used; trap the typical mistake as "✗ … ✓ …". goal recognize is for constructions the user only needs to understand when reading (news style); their sentences may have no braces. The result shows every sentence as the app will build it: read them and fix any that came out wrong with update_grammar. Link constructions easy to mix up (-고 / -아/어서, 안 / 못) with link_similar_grammar.`;
 
 const cardInput = z.object({
   korean: z.string(),
@@ -155,7 +157,7 @@ async function addAll<T extends { korean: string; similar?: { korean: string; no
   });
 }
 
-export function createMcpServer(store: CardStore, drills?: DrillStore, sharing?: SharingStore, logs?: SessionLogStore, pictures?: PictureStore): McpServer {
+export function createMcpServer(store: CardStore, drills?: DrillStore, sharing?: SharingStore, logs?: SessionLogStore, pictures?: PictureStore, grammar?: GrammarStore): McpServer {
   const server = new McpServer({ name: "kquiz", version: "0.1.0" }, { instructions });
 
   server.registerTool(
@@ -326,6 +328,8 @@ export function createMcpServer(store: CardStore, drills?: DrillStore, sharing?:
   if (logs) registerLogTools(server, logs);
   if (pictures) registerPictureTools(server, pictures);
 
+
+  if (grammar) registerGrammarTools(server, grammar);
   return server;
 }
 
@@ -469,5 +473,87 @@ function registerDrillTools(server: McpServer, drills: DrillStore) {
       annotations: { readOnlyHint: true },
     },
     async () => json({ drills: await drills.list() }),
+  );
+}
+
+const grammarSentenceInput = z.object({
+  ko: z.string().describe("The sentence, with the word the construction goes on in braces in its dictionary form: 회의에 {가다}."),
+  translation: z.string().describe("Its translation, in the deck's language"),
+  pos: z.enum(["verb", "adjective", "copula", "noun"]).optional().describe("Of the word in braces; verb by default"),
+  cls: z.enum(["regular", "b", "b-o", "d", "s", "h", "reu", "reo", "u", "l", "eu", "ha"]).optional().describe("Only to override the irregular class the app works out"),
+  pattern: z.string().optional().describe("The construction for this sentence when it differs from the point's, e.g. -(으)ㄴ for the past of -는"),
+  final: z
+    .object({
+      style: z.enum(["formal", "polite", "plain"]).optional(),
+      tense: z.enum(["present", "past"]).optional(),
+      question: z.boolean().optional(),
+      ending: z.string().optional().describe("Another ending for the last predicate, e.g. 아/어서 or 았/었는데"),
+    })
+    .optional()
+    .describe("How the sentence ends: 합니다체 present by default"),
+});
+
+const grammarInput = z.object({
+  pattern: z.string().describe("The construction as textbooks write it: -아/어야 하다"),
+  meaning: z.string().describe("A short label of its sense"),
+  goal: z.enum(["use", "recognize"]).optional().describe("use (default): to speak with; recognize: only to understand when reading"),
+  explanation: z.string().optional(),
+  trap: z.string().optional().describe("The typical mistake: ✗ … ✓ …"),
+  tags: z.array(z.string()).optional(),
+  sentences: z.array(grammarSentenceInput).min(MIN_SENTENCES).max(MAX_SENTENCES),
+});
+
+function registerGrammarTools(server: McpServer, grammar: GrammarStore) {
+  server.registerTool(
+    "add_grammar",
+    {
+      title: "Add grammar",
+      description: `Adds up to ${MAX_POINTS_PER_CALL} grammar constructions to the grammar mode's pool, learned in the order added. Each needs ${MIN_SENTENCES}–${MAX_SENTENCES} sentences with the word in braces (see the server instructions). Returns created ones with every sentence as the app builds it, duplicates (same pattern) and rejected ones with the reason.`,
+      inputSchema: { points: z.array(grammarInput).min(1).max(MAX_POINTS_PER_CALL) },
+      annotations: { destructiveHint: false, idempotentHint: true },
+    },
+    async ({ points }) => json(await grammar.add(points)),
+  );
+
+  server.registerTool(
+    "find_grammar",
+    {
+      title: "Find grammar",
+      description: "Lists the user's grammar constructions, matching a pattern or meaning substring or a tag, with their status (pool, learning, checking, learned), sentences (as written and as built) and similar ones.",
+      inputSchema: {
+        query: z.string().trim().max(100).optional(),
+        tag: z.string().trim().max(40).optional(),
+        limit: z.number().int().min(1).max(100).default(50),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ query, tag, limit }) => json({ points: await grammar.find({ text: query || undefined, tag: tag || undefined, limit }) }),
+  );
+
+  server.registerTool(
+    "update_grammar",
+    {
+      title: "Update grammar",
+      description: "Edits one construction found with find_grammar. Only the given fields change; sentences, when given, replace all of its sentences (send the ones to keep too). An empty string clears explanation or trap. Its learning progress and schedule stay.",
+      inputSchema: { id: z.number().int().positive(), ...grammarInput.partial().shape },
+      annotations: { destructiveHint: false, idempotentHint: true },
+    },
+    async ({ id, ...patch }) => json(await grammar.update(id, patch)),
+  );
+
+  server.registerTool(
+    "link_similar_grammar",
+    {
+      title: "Link similar grammar",
+      description: "Links pairs of the user's constructions easy to mix up (-고 / -아/어서, 안 / 못), named by pattern, with a note on how they differ; with remove takes a link off. Once both are learned, the app asks which one fits a sentence.",
+      inputSchema: {
+        pairs: z
+          .array(z.object({ pattern: z.string(), other: z.string(), note: z.string().max(300).optional(), remove: z.boolean().optional() }))
+          .min(1)
+          .max(MAX_POINTS_PER_CALL),
+      },
+      annotations: { destructiveHint: false, idempotentHint: true },
+    },
+    async ({ pairs }) => json(await grammar.linkSimilar(pairs)),
   );
 }

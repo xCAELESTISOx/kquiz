@@ -398,3 +398,115 @@ export const taskAnswers = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.logId, t.n] }), index("task_answers_user").on(t.userId, t.answeredAt)],
 );
+
+// Grammar mode (grammar.ts): constructions learned like words, with their own ladder, schedule and
+// stats. A sentence keeps only the slot (dictionary form + how it is used); the finished form is
+// built by rule (@kquiz/korean), never stored.
+export const grammarPoints = sqliteTable(
+  "grammar_points",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: userId(),
+    // As textbooks write it: -아/어야 하다, -(으)ㄹ 수 있다, 못, -을/를 앞두고.
+    pattern: text("pattern").notNull(),
+    meaning: text("meaning").notNull(),
+    // use: for speaking, learned up to typing the form; recognize: only to understand when reading.
+    goal: text("goal", { enum: ["use", "recognize"] }).notNull().default("use"),
+    explanation: text("explanation"),
+    // A typical mistake, "✗ … ✓ …".
+    trap: text("trap"),
+    tags: text("tags", { mode: "json" }).$type<string[]>().notNull().default(sql`'[]'`),
+    // Like new words: waiting in the pool (learning_at null), on the ladder, waiting for the check,
+    // then learned (learned_at, and a grammar_states row).
+    learningAt: timestamp("learning_at"),
+    learnStep: integer("learn_step").notNull().default(0),
+    learnPassedAt: timestamp("learn_passed_at"),
+    learnedAt: timestamp("learned_at"),
+    createdAt: timestamp("created_at").notNull(),
+    updatedAt: timestamp("updated_at").notNull(),
+  },
+  (t) => [uniqueIndex("grammar_points_user_pattern").on(t.userId, t.pattern)],
+);
+
+export const grammarSentences = sqliteTable(
+  "grammar_sentences",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    pointId: integer("point_id")
+      .notNull()
+      .references(() => grammarPoints.id, { onDelete: "cascade" }),
+    // The sentence around the slot. A sentence without a slot (lemma null) is only read.
+    before: text("before").notNull(),
+    after: text("after").notNull().default(""),
+    lemma: text("lemma"),
+    pos: text("pos", { enum: ["verb", "adjective", "copula", "noun"] }),
+    // Conjugation class when the built-in one is wrong for this word (묻다 "bury", 이르다 "arrive").
+    cls: text("cls"),
+    // The construction on this sentence when it differs from the point's (-(으)ㄴ for the past of -는).
+    pattern: text("pattern"),
+    // How the last predicate ends: { style, tense, question, ending } (@kquiz/korean Final).
+    final: text("final", { mode: "json" }).$type<Record<string, unknown>>(),
+    translation: text("translation").notNull(),
+    createdAt: timestamp("created_at").notNull(),
+  },
+  (t) => [index("grammar_sentences_point").on(t.pointId)],
+);
+
+// Constructions easy to mix up (-고 / -아서, 안 / 못), linked both ways, the smaller id first.
+export const grammarSimilar = sqliteTable(
+  "grammar_similar",
+  {
+    pointId: integer("point_id")
+      .notNull()
+      .references(() => grammarPoints.id, { onDelete: "cascade" }),
+    otherId: integer("other_id")
+      .notNull()
+      .references(() => grammarPoints.id, { onDelete: "cascade" }),
+    note: text("note"),
+  },
+  (t) => [primaryKey({ columns: [t.pointId, t.otherId] })],
+);
+
+export const grammarStates = sqliteTable(
+  "grammar_states",
+  {
+    pointId: integer("point_id")
+      .primaryKey()
+      .references(() => grammarPoints.id, { onDelete: "cascade" }),
+    due: timestamp("due").notNull(),
+    stability: real("stability").notNull(),
+    difficulty: real("difficulty").notNull(),
+    elapsedDays: integer("elapsed_days").notNull(),
+    scheduledDays: integer("scheduled_days").notNull(),
+    learningSteps: integer("learning_steps").notNull(),
+    reps: integer("reps").notNull(),
+    lapses: integer("lapses").notNull(),
+    state: integer("state").notNull(),
+    lastReview: timestamp("last_review"),
+  },
+  (t) => [index("grammar_states_due").on(t.due)],
+);
+
+// Every grammar task answered: the ladder, checks, reviews and practice. The source of the
+// schedule's history and of the grammar stats (by task and by conjugation class).
+export const grammarAnswers = sqliteTable(
+  "grammar_answers",
+  {
+    // UUID from the client, so a resent answer counts once.
+    id: text("id").primaryKey(),
+    userId: userId(),
+    pointId: integer("point_id")
+      .notNull()
+      .references(() => grammarPoints.id, { onDelete: "cascade" }),
+    sentenceId: integer("sentence_id"),
+    task: text("task").notNull(),
+    // learn (ladder), check, review (FSRS), fix (mistakes at the end), extra (off the schedule).
+    phase: text("phase", { enum: ["learn", "check", "review", "fix", "extra"] }).notNull(),
+    outcome: text("outcome", { enum: ["right", "soft", "wrong"] }).notNull(),
+    // The conjugation class of the slot's word, for "where you slip" (regular, b, d, l…).
+    cls: text("cls"),
+    answeredAt: timestamp("answered_at").notNull(),
+    elapsedMs: integer("elapsed_ms"),
+  },
+  (t) => [index("grammar_answers_user").on(t.userId, t.answeredAt), index("grammar_answers_point").on(t.pointId)],
+);
