@@ -119,3 +119,21 @@ describe("rule", () => {
     expect(rule({ lemma: "먹다" })).toBeNull();
   });
 });
+
+describe("nouns", () => {
+  const n = (lemma: string, pattern: string, final: Final = {}) => build({ lemma, pos: "noun" }, pattern, final).form;
+  it("picks the particle by the last syllable", () => {
+    expect(n("선거", "-을/를 앞두고")).toBe("선거를 앞두고");
+    expect(n("발표", "-에 따르면")).toBe("발표에 따르면");
+    expect(n("예산안", "-을/를 둘러싸고")).toBe("예산안을 둘러싸고");
+    expect(n("1년", "만에")).toBe("1년 만에");
+    expect(n("서울", "-(으)로")).toBe("서울로");
+    expect(n("부산", "-(으)로")).toBe("부산으로");
+    expect(n("학교", "-(으)로")).toBe("학교로");
+    expect(n("한국 사람", "-(이)라고 하다", { style: "polite", tense: "past" })).toBe("한국 사람이라고 했어요");
+  });
+  it("offers the other one of the pair as a mistake", () => {
+    expect(mistakes({ lemma: "선거", pos: "noun" }, "-을/를 앞두고")).toEqual([{ form: "선거을 앞두고", kind: "particle" }]);
+    expect(mistakes({ lemma: "부산", pos: "noun" }, "-(으)로")).toEqual([{ form: "부산로", kind: "particle" }]);
+  });
+});

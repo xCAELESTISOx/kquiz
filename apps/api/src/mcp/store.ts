@@ -119,6 +119,14 @@ export interface PictureChange {
   hasText?: boolean;
 }
 
+/** Grammar constructions (apps/api/src/grammar.ts). Inputs are checked there, not by the tool. */
+export interface GrammarStore {
+  add(inputs: unknown[]): Promise<{ created: { id: number; pattern: string; sentences: string[] }[]; duplicates: { id: number; pattern: string }[]; rejected: { pattern: string; reason: string }[] }>;
+  find(query: { text?: string; tag?: string; limit: number }): Promise<unknown[]>;
+  update(id: number, patch: unknown): Promise<{ ok: true; sentences?: string[] } | { ok: false; reason: string }>;
+  linkSimilar(pairs: { pattern: string; other: string; note?: string; remove?: boolean }[]): Promise<unknown>;
+}
+
 export interface PictureStore {
   /** The card's picture afterwards, or an error message for the user. */
   set(id: string, change: PictureChange): Promise<{ ok: true; picture: StoredCard["picture"] | null } | { ok: false; error: string }>;

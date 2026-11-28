@@ -77,6 +77,7 @@ export interface Built extends Form {
  */
 export function build(word: Word, pattern: string, final: Final = {}): Built {
   const p = parse(pattern);
+  if (word.pos === "noun") return buildNoun(word.lemma, p, final, false);
   const parts: Form[] = [];
   const joins: string[] = [];
   let prefix = p.prefix.join(" ");
@@ -116,6 +117,39 @@ export function build(word: Word, pattern: string, final: Final = {}): Built {
   return { ...built, spacing: spacing.filter((s) => s !== built.form) };
 }
 
+/**
+ * A particle on a noun, with the 받침 pairs chosen by the noun: 회의를 / 선거을 → 선거를,
+ * 발표에 따르면, 1년 만에, 서울로 / 부산으로. `wrong` picks the other one of each pair.
+ */
+export function particle(noun: string, token: string, wrong = false): string {
+  const t = token.replace(/^-/, "");
+  const last = lastSyllable(noun);
+  // Digits and Latin letters: read as written is unknown, so take the consonant forms as a guess.
+  const final = last ? Boolean(last.final) !== wrong : !wrong;
+  const pair = t.match(/^(을\/를|를\/을|이\/가|가\/이|은\/는|는\/은|과\/와|와\/과)(.*)$/);
+  if (pair) {
+    const [a, b] = pair[1]!.split("/") as [string, string];
+    const consonant = "을이은과".includes(a) ? a : b;
+    const vowel = consonant === a ? b : a;
+    return noun + (final ? consonant : vowel) + pair[2];
+  }
+  let m: RegExpMatchArray | null;
+  if ((m = t.match(/^\(으\)로(.*)$/))) {
+    const ro = last?.final === "ㄹ" ? !wrong : !final;
+    return noun + (ro ? "로" : "으로") + m[1];
+  }
+  if ((m = t.match(/^\(이\)(.*)$/))) return noun + (final ? "이" : "") + m[1];
+  return noun + t;
+}
+
+function buildNoun(noun: string, p: Parsed, final: Final, wrong: boolean): Built {
+  // With no "-" ending the words follow the noun: 1년 만에.
+  const head = (p.ending ? [...p.prefix, particle(noun, p.ending, wrong), ...p.rest] : [noun, ...p.prefix]).join(" ");
+  if (!p.aux) return { form: head, alts: [], spacing: [] };
+  const helper = finish(auxWord(p.aux), final);
+  return { form: `${head} ${helper.form}`, alts: helper.alts.map((a) => `${head} ${a}`), spacing: [] };
+}
+
 /** 먹어 봤습니다 → 먹어봤습니다. */
 function joinLast(s: string): string {
   const i = s.lastIndexOf(" ");
@@ -135,7 +169,8 @@ export type MistakeKind =
   | "not-irregular" // a regular word treated as irregular: 입다 → 이워야
   | "harmony" // the wrong one of 아/어: 들아야
   | "eu" // 으 left out after a consonant: 먹세요
-  | "l"; // ㄹ kept or 으 added on a ㄹ stem: 살는, 살으세요
+  | "l" // ㄹ kept or 으 added on a ㄹ stem: 살는, 살으세요
+  | "particle"; // the wrong one of a particle pair: 선거을
 
 export interface Mistake {
   form: string;
@@ -161,6 +196,10 @@ export function mistakes(word: Word, pattern: string, final: Final = {}): Mistak
       // Some wrong shapes can't even be written (먹 + ㄹ); skip them.
     }
   };
+  if (word.pos === "noun") {
+    const f = buildNoun(word.lemma, parse(pattern), final, true).form;
+    return taken.has(f) ? [] : [{ form: f, kind: "particle" }];
+  }
   if (word.pos === "copula") return out;
   const cls = word.cls ?? safeClass(word.lemma);
   if (!cls) return out;
@@ -188,6 +227,7 @@ export function check(answer: string, built: Built): Check {
 
 /** One line on how the word changes, for the intro table and for feedback on a mistake. */
 export function rule(word: Word): string | null {
+  if (word.pos === "noun") return null;
   const cls = word.pos === "copula" ? "regular" : (word.cls ?? safeClass(word.lemma));
   const show = (e: string) => inflect(word, e).form;
   const ex = () => `${word.lemma} → ${show("요")}, ${show("(으)ㄴ")}`;

@@ -10,7 +10,7 @@ import { cards, oauthClients, oauthCodes, oauthGrants, phoneStats, reviewLog, us
 import { activeUser } from "../users.js";
 import type { OwnerAuth, UserStores } from "../mcp/app.js";
 import type { OAuthStore } from "../mcp/oauth-store.js";
-import type { CardQuery, CardStore, DrillStore, Member, NewDrill, PictureChange, PictureStore, SessionLogStore, SharingStore, ShareResult, SimilarPair, SimilarResult } from "../mcp/store.js";
+import type { CardQuery, CardStore, DrillStore, GrammarStore, Member, NewDrill, PictureChange, PictureStore, SessionLogStore, SharingStore, ShareResult, SimilarPair, SimilarResult } from "../mcp/store.js";
 import { fetchPicture, PictureError, processPicture, setCardPicture, setPictureHasText } from "../pictures.js";
 import { linkSimilar, unlinkSimilar, withSimilar } from "../similar.js";
 import { findLeeches } from "../leeches.js";
@@ -18,6 +18,7 @@ import { listSessionLogs, recentSessionLogs, sessionLog } from "../sessionLogs.j
 import { addDrills, listDrills } from "../practice.js";
 import { getStats } from "../reviewStore.js";
 import { statsOverview, zoneOffset } from "../statsStore.js";
+import { addGrammar, findGrammar, linkSimilarGrammar, updateGrammar } from "../grammar.js";
 
 export type StoredCard = NewCard & {
   id: string;
@@ -455,6 +456,15 @@ function sqliteSessionLogs(db: Db, userId: number): SessionLogStore {
   };
 }
 
+export function sqliteGrammar(db: Db, userId: number): GrammarStore {
+  return {
+    add: async (inputs) => addGrammar(db, userId, inputs),
+    find: async (query) => findGrammar(db, userId, query),
+    update: async (id, patch) => updateGrammar(db, userId, id, patch),
+    linkSimilar: async (pairs) => linkSimilarGrammar(db, userId, pairs),
+  };
+}
+
 export function sqliteStores(db: Db, timeZone: string): UserStores {
   return (userId) => {
     const user = activeUser(db, userId);
@@ -464,6 +474,7 @@ export function sqliteStores(db: Db, timeZone: string): UserStores {
       drills: new SqliteDrillStore(db, userId),
       logs: sqliteSessionLogs(db, userId),
       pictures: new SqlitePictureStore(db, userId),
+      grammar: sqliteGrammar(db, userId),
       ...(user.role === "owner" ? { sharing: new SqliteSharingStore(db, userId) } : {}),
     };
   };

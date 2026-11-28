@@ -5,9 +5,12 @@ RUN corepack enable
 WORKDIR /src
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY apps/api/package.json apps/api/
+COPY packages/korean/package.json packages/korean/
 RUN pnpm install --frozen-lockfile --filter @kquiz/api...
+COPY packages/korean packages/korean
 COPY apps/api apps/api
-RUN pnpm --filter @kquiz/api build \
+# The trailing ... builds what the API depends on (packages/korean) first.
+RUN pnpm --filter "@kquiz/api..." build \
  && pnpm --filter @kquiz/api deploy --legacy --prod /out \
  && rm -rf /out/src
 
