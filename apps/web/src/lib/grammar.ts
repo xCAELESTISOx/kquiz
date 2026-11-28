@@ -257,7 +257,8 @@ export function formationRows(point: GrammarPoint, max = 4): { lemma: string; fo
   for (const s of point.sentences) {
     if (!s.slot || seen.has(s.slot.lemma)) continue;
     seen.add(s.slot.lemma);
-    const slot = { ...s.slot, pattern: point.pattern, final: { style: "formal" as const } };
+    // The sentence's own pattern: a point may cover a few related forms (-는 / -(으)ㄴ / -(으)ㄹ).
+    const slot = { ...s.slot, final: { style: "formal" as const } };
     try {
       const cls = classOf(slot) ?? slot.pos;
       const word = { lemma: slot.lemma, pos: slot.pos, ...(slot.cls ? { cls: slot.cls as never } : {}) };
